@@ -1,0 +1,92 @@
+import 'models.dart';
+import 'theme.dart';
+
+class SampleData {
+  static final List<Client> clients = [
+    const Client(id: 1, initials: 'AC', color: AppColors.purple, name: 'Acme Corp', contact: 'Jean Dupont', email: 'jean@acmecorp.com', phone: '01 23 45 67 88', totalFacture: 12450000, status: 'actif', address: '14 Rue de la Paix, 75001 Paris, France'),
+    const Client(id: 2, initials: 'GT', color: AppColors.blue, name: 'Global Tech', contact: 'Sarah Smith', email: 's.smith@globaltech.fr', phone: '06 12 34 56 78', totalFacture: 8900000, status: 'actif', address: '45 Avenue des Champs, Lyon, France'),
+    const Client(id: 3, initials: 'DS', color: AppColors.emerald, name: 'Design Studio', contact: 'Marc Lévy', email: 'contact@designstudio.io', phone: '07 88 99 80 91', totalFacture: 3200000, status: 'attente', address: '8 Rue Créative, Plateau, Abidjan, CI'),
+    const Client(id: 4, initials: 'IN', color: AppColors.orange, name: 'Innovate SAS', contact: 'Julie Martin', email: 'j.martin@innovate.fr', phone: '01 99 88 77 66', totalFacture: 15780000, status: 'actif', address: '22 Boulevard de l\'Innovation, Bordeaux, France'),
+    const Client(id: 5, initials: 'UJ', color: AppColors.red, name: 'Université Jean Lorougon Guédé', contact: 'Prof. Koné', email: 'kone@ujlg.ci', phone: '07 00 11 22 33', totalFacture: 0, status: 'cours', address: 'BP 150, Daloa, Côte d\'Ivoire'),
+    const Client(id: 6, initials: 'SA', color: AppColors.purple, name: 'Société Anonyme X', contact: 'Dir. Général', email: 'dg@sax.ci', phone: '07 44 55 66 77', totalFacture: 450000, status: 'actif', address: 'Zone Industrielle, Yopougon, Abidjan, CI'),
+    const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, status: 'actif', address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
+  ];
+
+  static final Map<String, List<DocumentItem>> documents = {
+    'proforma': [
+      const DocumentItem(id: 1, numero: 'KLR-P008-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', objet: 'Maintenance parc inf...', montant: 0, statut: 'cours'),
+      const DocumentItem(id: 2, numero: 'KLR-P007-100126', date: '10/01/2026', clientId: 2, client: 'Client B', objet: 'Développement Appl...', montant: 1500000, statut: 'validee'),
+      const DocumentItem(id: 3, numero: 'KLR-P006-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', objet: 'Audit Sécurité Réseau', montant: 450000, statut: 'annulee'),
+    ],
+    'facture': [
+      const DocumentItem(id: 1, numero: 'KLR-F001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
+      const DocumentItem(id: 2, numero: 'KLR-F003-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Développement logiciel', montant: 5200000, statut: 'validee'),
+      const DocumentItem(id: 3, numero: 'KLR-F002-050326', date: '05/03/2026', clientId: 2, client: 'Global Tech', objet: 'Support technique', montant: 1800000, statut: 'validee'),
+    ],
+    'bl': [
+      const DocumentItem(id: 1, numero: 'KLR-B001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
+      const DocumentItem(id: 2, numero: 'KLR-B002-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Matériel informatique', montant: 5200000, statut: 'validee'),
+    ],
+  };
+
+  static final List<Employee> employees = [
+    const Employee(id: 1, nom: 'Koffi Lambert', initiales: 'KL', role: 'Directeur Tech', dept: 'Direction', statut: 'actif', projets: 4, taches: 12, perf: 96, phone: '+225 07 09 71 45 57', email: 'kl@klrtech.ci', color: AppColors.primary),
+    const Employee(id: 2, nom: 'Amine Benjelloun', initiales: 'AB', role: 'Développeur Senior', dept: 'Développement', statut: 'actif', projets: 3, taches: 18, perf: 88, phone: '+225 07 11 22 33 44', email: 'ab@klrtech.ci', color: AppColors.blue),
+    const Employee(id: 3, nom: 'Sara El Mansouri', initiales: 'SM', role: 'Comptable', dept: 'Finance', statut: 'actif', projets: 2, taches: 9, perf: 91, phone: '+225 07 55 66 77 88', email: 'sm@klrtech.ci', color: AppColors.purple),
+    const Employee(id: 4, nom: 'Moussa Diallo', initiales: 'MD', role: 'Chef de Projet', dept: 'Gestion', statut: 'actif', projets: 5, taches: 21, perf: 84, phone: '+225 05 01 02 03 04', email: 'md@klrtech.ci', color: AppColors.emerald),
+    const Employee(id: 5, nom: 'Aïcha Koné', initiales: 'AK', role: 'Designer UI/UX', dept: 'Design', statut: 'conge', projets: 1, taches: 4, perf: 79, phone: '+225 07 99 88 77 66', email: 'ak@klrtech.ci', color: AppColors.orange),
+    const Employee(id: 6, nom: 'Jean-Luc Traoré', initiales: 'JT', role: 'Développeur Backend', dept: 'Développement', statut: 'actif', projets: 3, taches: 15, perf: 85, phone: '+225 07 22 33 44 55', email: 'jt@klrtech.ci', color: AppColors.teal),
+    const Employee(id: 7, nom: 'Fatou Sy', initiales: 'FS', role: 'Commerciale', dept: 'Commercial', statut: 'mission', projets: 2, taches: 7, perf: 77, phone: '+225 07 66 77 88 99', email: 'fs@klrtech.ci', color: AppColors.red),
+  ];
+
+  static final List<Department> departments = [
+    const Department(nom: 'Développement', membres: 2, color: AppColors.blue, bg: AppColors.blueBg, projets: 3, chef: 'Amine Benjelloun'),
+    const Department(nom: 'Design', membres: 1, color: AppColors.orange, bg: AppColors.orangeBg, projets: 1, chef: 'Aïcha Koné'),
+    const Department(nom: 'Finance', membres: 1, color: AppColors.purple, bg: AppColors.purpleBg, projets: 2, chef: 'Sara El Mansouri'),
+    const Department(nom: 'Gestion', membres: 1, color: AppColors.emerald, bg: AppColors.greenBg, projets: 5, chef: 'Moussa Diallo'),
+    const Department(nom: 'Commercial', membres: 1, color: AppColors.red, bg: AppColors.redBg, projets: 2, chef: 'Fatou Sy'),
+    const Department(nom: 'Direction', membres: 1, color: AppColors.primary, bg: AppColors.redBg, projets: 4, chef: 'Koffi Lambert'),
+  ];
+
+  static final List<DimeEntry> dimeHistory = [
+    const DimeEntry(mois: 'Janvier 2026', revenu: 12450000, dime: 1245000, statut: 'paye', date: '03/02/2026'),
+    const DimeEntry(mois: 'Février 2026', revenu: 9800000, dime: 980000, statut: 'paye', date: '05/03/2026'),
+    const DimeEntry(mois: 'Mars 2026', revenu: 15600000, dime: 1560000, statut: 'paye', date: '02/04/2026'),
+    const DimeEntry(mois: 'Avril 2026', revenu: 11200000, dime: 1120000, statut: 'paye', date: '04/05/2026'),
+    const DimeEntry(mois: 'Mai 2026', revenu: 13950000, dime: 1395000, statut: 'paye', date: '06/06/2026'),
+    const DimeEntry(mois: 'Juin 2026', revenu: 18000000, dime: 1800000, statut: 'attente'),
+  ];
+
+  static final List<FactureEntry> factureHistory = [
+    const FactureEntry(num: 'KLR-F001-240426', client: "Advans Côte d'Ivoire", montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
+    const FactureEntry(num: 'KLR-F003-180326', client: 'Acme Corp', montant: 5200000, statut: 'paye', echeance: '18/04/2026'),
+    const FactureEntry(num: 'KLR-F002-050326', client: 'Global Tech', montant: 1800000, statut: 'paye', echeance: '05/04/2026'),
+    const FactureEntry(num: 'KLR-F004-010426', client: 'Design Studio', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
+  ];
+
+  static List<Task> get initialTasks => [
+    Task(id: 1, texte: 'Générer la facture Advans', assignee: 'Koffi Lambert', priorite: 'haute', done: false),
+    Task(id: 2, texte: 'Relancer Tech Corp (J+15)', assignee: 'Sara El Mansouri', priorite: 'haute', done: false),
+    Task(id: 3, texte: 'Valider le BL #KLR-B001', assignee: 'Koffi Lambert', priorite: 'normale', done: true),
+    Task(id: 4, texte: 'Préparer rapport mensuel', assignee: 'Sara El Mansouri', priorite: 'basse', done: false),
+  ];
+
+  static List<Note> get initialNotes => [
+    Note(id: 1, titre: 'Réunion client Advans', contenu: "Points abordés :\n• Budget validé\n• Livraison prévue fin mai\n• Contacter M. Diallo pour suivi", color: AppColors.blue, date: "Aujourd'hui"),
+    Note(id: 2, titre: 'Idées refonte dashboard', contenu: "- Ajouter graphe donut CA\n- Bouton export en haut\n- Notifications en temps réel", color: AppColors.orange, date: 'Hier'),
+    Note(id: 3, titre: 'Conditions TVA', contenu: "Rappel : TVA à 5% sur tous les documents. Vérifier avec comptable pour les cas d'exonération.", color: AppColors.emerald, date: '28 Avr'),
+  ];
+
+  static final List<ActivityItem> activities = [
+    const ActivityItem(id: 1, type: 'facture', titre: 'Facture #KLR-F001-240426 générée', desc: "Client : Advans Côte d'Ivoire — 3 517 500 FCFA", auteur: 'Koffi Lambert', initiales: 'KL', time: "Aujourd'hui, 09:14", color: AppColors.primary),
+    const ActivityItem(id: 2, type: 'paiement', titre: 'Paiement reçu — 5 200 000 FCFA', desc: 'Via virement bancaire · Acme Corp', auteur: 'Sara El Mansouri', initiales: 'SM', time: "Aujourd'hui, 08:40", color: AppColors.purple),
+    const ActivityItem(id: 3, type: 'projet', titre: 'Tâche "API OAuth2" marquée terminée', desc: 'Projet Alpha · Développement API Connecteurs', auteur: 'Amine Benjelloun', initiales: 'AB', time: 'Hier, 17:22', color: AppColors.blue),
+    const ActivityItem(id: 4, type: 'client', titre: 'Nouveau client ajouté — Société Sahel Innov', desc: 'Secteur : Technologie · Statut : Actif', auteur: 'Fatou Sy', initiales: 'FS', time: 'Hier, 15:05', color: AppColors.red),
+    const ActivityItem(id: 5, type: 'document', titre: 'Proforma #KLR-P008-160226 envoyée par email', desc: "Destinataire : Université Jean Lorougon Guédé", auteur: 'Koffi Lambert', initiales: 'KL', time: 'Hier, 11:30', color: AppColors.primary),
+    const ActivityItem(id: 6, type: 'projet', titre: 'Nouveau projet créé — Module CRM', desc: 'Chef de projet : Moussa Diallo · Priorité haute', auteur: 'Moussa Diallo', initiales: 'MD', time: '28 Avr, 16:00', color: AppColors.emerald),
+    const ActivityItem(id: 7, type: 'paiement', titre: 'Rappel de paiement envoyé', desc: 'Facture #4402 · Tech Corp — J+15', auteur: 'Sara El Mansouri', initiales: 'SM', time: '28 Avr, 10:15', color: AppColors.purple),
+    const ActivityItem(id: 8, type: 'equipe', titre: 'Jean-Luc Traoré assigné au Projet Alpha', desc: 'Rôle : Développeur Backend', auteur: 'Koffi Lambert', initiales: 'KL', time: '27 Avr, 14:20', color: AppColors.primary),
+    const ActivityItem(id: 9, type: 'document', titre: 'BL #KLR-B001-240426 validé', desc: "Client : Advans Côte d'Ivoire", auteur: 'Koffi Lambert', initiales: 'KL', time: '27 Avr, 09:00', color: AppColors.primary),
+    const ActivityItem(id: 10, type: 'facture', titre: 'Facture #KLR-F003-180326 marquée payée', desc: 'Acme Corp — 5 200 000 FCFA', auteur: 'Sara El Mansouri', initiales: 'SM', time: '25 Avr, 11:00', color: AppColors.purple),
+  ];
+}
