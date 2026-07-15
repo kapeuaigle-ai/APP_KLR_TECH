@@ -7,6 +7,7 @@ import '../core/app_state.dart';
 import '../core/data.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 class SuiviScreen extends StatefulWidget {
   const SuiviScreen({super.key});
@@ -54,76 +55,105 @@ class _FacturesTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final factures = SampleData.factureHistory;
+    final factures = context.watch<AppState>().factures;
     final totalPaye = factures.where((f) => f.statut == 'paye').fold<double>(0, (s, f) => s + f.montant);
     final totalAttente = factures.where((f) => f.statut == 'cours').fold<double>(0, (s, f) => s + f.montant);
     final totalRetard = factures.where((f) => f.statut == 'retard').fold<double>(0, (s, f) => s + f.montant);
 
     return Column(children: [
-      Row(children: [
-        Expanded(child: StatCard(label: 'ENCAISSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
+      StatGrid(cards: [
+        StatCard(label: 'ENCAISSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'EN ATTENTE', value: Fmt.millions(totalAttente), unit: 'FCFA')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'EN RETARD', value: Fmt.millions(totalRetard), unit: 'FCFA', red: true)),
+            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'EN ATTENTE', value: Fmt.millions(totalAttente), unit: 'FCFA'),
+        StatCard(label: 'EN RETARD', value: Fmt.millions(totalRetard), unit: 'FCFA', red: true),
       ]),
       const SizedBox(height: 20),
 
       CardBox(
         padding: EdgeInsets.zero,
-        child: Column(children: [
-          Container(
-            color: AppColors.bg,
-            child: const Row(children: [
-              Expanded(flex: 3, child: ThCell('N° FACTURE')),
-              Expanded(flex: 4, child: ThCell('CLIENT')),
-              Expanded(flex: 3, child: ThCell('MONTANT')),
-              Expanded(flex: 2, child: ThCell('STATUT')),
-              Expanded(flex: 3, child: ThCell('ÉCHÉANCE')),
-              SizedBox(width: 60),
-            ]),
-          ),
-          const Divider(height: 1, color: AppColors.border),
-          ...factures.asMap().entries.map((e) {
-            final f = e.value;
-            final isLast = e.key == factures.length - 1;
-            return Container(
-              decoration: BoxDecoration(
-                border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
-              ),
-              child: Row(children: [
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  child: Text(f.num, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                )),
-                Expanded(flex: 4, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(f.client, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
-                )),
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(Fmt.money(f.montant), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-                )),
-                Expanded(flex: 2, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: StatusBadge(status: f.statut),
-                )),
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(f.echeance, style: GoogleFonts.dmSans(fontSize: 13, color: f.statut == 'retard' ? AppColors.red : AppColors.text2)),
-                )),
-                SizedBox(width: 60, child: IconButton(
-                  icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
-                  onPressed: () {},
-                  padding: const EdgeInsets.all(6),
-                )),
+        child: HScrollTable(
+          minWidth: 820,
+          child: Column(children: [
+            Container(
+              color: AppColors.bg,
+              child: const Row(children: [
+                Expanded(flex: 3, child: ThCell('N° FACTURE')),
+                Expanded(flex: 4, child: ThCell('CLIENT')),
+                Expanded(flex: 3, child: ThCell('MONTANT')),
+                Expanded(flex: 2, child: ThCell('STATUT')),
+                Expanded(flex: 3, child: ThCell('ÉCHÉANCE')),
+                SizedBox(width: 60),
               ]),
-            );
-          }),
-        ]),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            ...factures.asMap().entries.map((e) {
+              final f = e.value;
+              final isLast = e.key == factures.length - 1;
+              return Container(
+                decoration: BoxDecoration(
+                  border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
+                ),
+                child: Row(children: [
+                  Expanded(flex: 3, child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                    child: Text(f.num, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  )),
+                  Expanded(flex: 4, child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(f.client, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+                  )),
+                  Expanded(flex: 3, child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(Fmt.money(f.montant), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                  )),
+                  Expanded(flex: 2, child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: StatusBadge(status: f.statut),
+                  )),
+                  Expanded(flex: 3, child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20),
+                    child: Text(f.echeance, style: GoogleFonts.dmSans(fontSize: 13, color: f.statut == 'retard' ? AppColors.red : AppColors.text2)),
+                  )),
+                  SizedBox(width: 60, child: PopupMenuButton<String>(
+                    tooltip: 'Actions',
+                    icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
+                    padding: const EdgeInsets.all(6),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    color: Colors.white,
+                    onSelected: (action) {
+                      if (action == 'paid') {
+                        context.read<AppState>().markFacturePaid(f.num);
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                          content: Text('Facture ${f.num} marquée comme payée.', style: const TextStyle(fontSize: 13)),
+                          backgroundColor: AppColors.green,
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          margin: const EdgeInsets.all(16),
+                        ));
+                      }
+                    },
+                    itemBuilder: (ctx) => [
+                      if (f.statut != 'paye')
+                        PopupMenuItem(value: 'paid', child: Row(children: [
+                          const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
+                          const SizedBox(width: 8),
+                          Text('Marquer payée', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                        ]))
+                      else
+                        PopupMenuItem(enabled: false, child: Row(children: [
+                          const Icon(Icons.check_circle, size: 15, color: AppColors.green),
+                          const SizedBox(width: 8),
+                          Text('Déjà payée', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3)),
+                        ])),
+                    ],
+                  )),
+                ]),
+              );
+            }),
+          ]),
+        ),
       ),
     ]);
   }
@@ -141,21 +171,21 @@ class _DimeTab extends StatelessWidget {
     final totalPaye = history.where((d) => d.statut == 'paye').fold<double>(0, (s, d) => s + d.dime);
 
     return Column(children: [
-      Row(children: [
-        Expanded(child: StatCard(label: 'REVENU TOTAL (2026)', value: Fmt.millions(totalRevenu), unit: 'FCFA')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.millions(totalDime), unit: 'FCFA', red: true)),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
+      StatGrid(cards: [
+        StatCard(label: 'REVENU TOTAL (2026)', value: Fmt.millions(totalRevenu), unit: 'FCFA'),
+        StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
+        StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
+            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
       ]),
       const SizedBox(height: 20),
 
       CardBox(
         padding: EdgeInsets.zero,
-        child: Column(children: [
+        child: HScrollTable(
+          minWidth: 760,
+          child: Column(children: [
           Container(
             color: AppColors.bg,
             child: const Row(children: [
@@ -199,7 +229,8 @@ class _DimeTab extends StatelessWidget {
               ]),
             );
           }),
-        ]),
+          ]),
+        ),
       ),
     ]);
   }
@@ -218,7 +249,6 @@ class _TachesTabState extends State<_TachesTab> {
   String _assignee = 'Koffi Lambert';
   String _priorite = 'normale';
 
-  static const _members = ['Koffi Lambert', 'Sara El Mansouri', 'Moussa Diallo', 'Amine Benjelloun'];
   static const _priorites = ['haute', 'normale', 'basse'];
   static const _priorityColors = {'haute': AppColors.red, 'normale': AppColors.blue, 'basse': AppColors.text3};
   static const _priorityLabels = {'haute': 'Haute', 'normale': 'Normale', 'basse': 'Basse'};
@@ -234,10 +264,15 @@ class _TachesTabState extends State<_TachesTab> {
     final state = context.watch<AppState>();
     final tasks = state.tasks;
     final done = tasks.where((t) => t.done).length;
+    // Membres assignables : les collaborateurs actuels
+    final members = state.employees.map((e) => e.nom).toList();
+    if (members.isEmpty) members.add('Moi');
+    if (!members.contains(_assignee)) _assignee = members.first;
 
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Task list
-      Expanded(child: Column(children: [
+    return ResponsiveSplit(
+      sideWidth: 300,
+      breakpoint: 760,
+      main: Column(children: [
         CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Row(children: [
             Text('Tâches en cours', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
@@ -254,11 +289,10 @@ class _TachesTabState extends State<_TachesTab> {
               child: Center(child: Text('Aucune tâche', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
             ),
         ])),
-      ])),
-      const SizedBox(width: 16),
+      ]),
 
       // Add task form
-      SizedBox(width: 300, child: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      side: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Nouvelle tâche', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 16),
         TextField(
@@ -288,7 +322,7 @@ class _TachesTabState extends State<_TachesTab> {
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             isDense: true,
           ),
-          items: _members.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
+          items: members.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
           onChanged: (v) => setState(() => _assignee = v!),
         ),
         const SizedBox(height: 12),
@@ -324,8 +358,8 @@ class _TachesTabState extends State<_TachesTab> {
             }
           },
         )),
-      ]))),
-    ]);
+      ])),
+    );
   }
 }
 
@@ -389,43 +423,44 @@ class _NotesTabState extends State<_NotesTab> {
   @override
   Widget build(BuildContext context) {
     final notes = context.watch<AppState>().notes;
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      // Notes grid using Wrap — avoids Expanded constraint issues
-      Expanded(child: Wrap(
-        spacing: 16,
-        runSpacing: 16,
-        children: [
-          ...notes.map((n) => SizedBox(
-            width: 240,
-            height: 180,
-            child: _NoteCard(note: n, onTap: () => setState(() => _editing = n)),
-          )),
-          SizedBox(
-            width: 240,
-            height: 180,
-            child: _AddNoteCard(onTap: () => setState(() => _editing = Note(
-              id: DateTime.now().millisecondsSinceEpoch,
-              titre: '', contenu: '', color: AppColors.blue, date: "Aujourd'hui",
-            ))),
-          ),
-        ],
-      )),
-      if (_editing != null) ...[
-        const SizedBox(width: 16),
-        SizedBox(width: 300, child: _NoteEditor(
-          note: _editing!,
-          onSave: (n) {
-            context.read<AppState>().saveNote(n);
-            setState(() => _editing = null);
-          },
-          onDelete: () {
-            context.read<AppState>().deleteNote(_editing!.id);
-            setState(() => _editing = null);
-          },
-          onClose: () => setState(() => _editing = null),
+    // Notes grid using Wrap — avoids Expanded constraint issues
+    final grid = Wrap(
+      spacing: 16,
+      runSpacing: 16,
+      children: [
+        ...notes.map((n) => SizedBox(
+          width: 240,
+          height: 180,
+          child: _NoteCard(note: n, onTap: () => setState(() => _editing = n)),
         )),
+        SizedBox(
+          width: 240,
+          height: 180,
+          child: _AddNoteCard(onTap: () => setState(() => _editing = Note(
+            id: DateTime.now().millisecondsSinceEpoch,
+            titre: '', contenu: '', color: AppColors.blue, date: "Aujourd'hui",
+          ))),
+        ),
       ],
-    ]);
+    );
+    if (_editing == null) return grid;
+    return ResponsiveSplit(
+      sideWidth: 300,
+      breakpoint: 760,
+      main: grid,
+      side: _NoteEditor(
+        note: _editing!,
+        onSave: (n) {
+          context.read<AppState>().saveNote(n);
+          setState(() => _editing = null);
+        },
+        onDelete: () {
+          context.read<AppState>().deleteNote(_editing!.id);
+          setState(() => _editing = null);
+        },
+        onClose: () => setState(() => _editing = null),
+      ),
+    );
   }
 }
 
@@ -451,26 +486,28 @@ class _NoteCardState extends State<_NoteCard> {
         onTap: widget.onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          padding: const EdgeInsets.all(16),
+          clipBehavior: Clip.antiAlias,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border(
-              top: BorderSide(color: n.color, width: 3),
-              left: BorderSide(color: AppColors.border),
-              right: BorderSide(color: AppColors.border),
-              bottom: BorderSide(color: AppColors.border),
-            ),
+            border: Border.all(color: AppColors.border),
             boxShadow: _hovered ? [BoxShadow(color: n.color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))] : [],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(n.titre.isEmpty ? 'Sans titre' : n.titre, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis),
-            const SizedBox(height: 6),
-            // Expanded : le contenu occupe tout l'espace disponible
-            // et la date reste collée en bas de la carte
-            Expanded(child: Text(n.contenu, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.5), maxLines: 5, overflow: TextOverflow.ellipsis)),
-            const SizedBox(height: 8),
-            Text(n.date, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+            // Bandeau d'accent coloré en haut de la carte
+            Container(height: 3, color: n.color),
+            Expanded(child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Text(n.titre.isEmpty ? 'Sans titre' : n.titre, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis),
+                const SizedBox(height: 6),
+                // Expanded : le contenu occupe tout l'espace disponible
+                // et la date reste collée en bas de la carte
+                Expanded(child: Text(n.contenu, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.5), maxLines: 5, overflow: TextOverflow.ellipsis)),
+                const SizedBox(height: 8),
+                Text(n.date, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+              ]),
+            )),
           ]),
         ),
       ),

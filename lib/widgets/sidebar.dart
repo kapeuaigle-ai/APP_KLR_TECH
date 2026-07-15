@@ -6,7 +6,9 @@ import '../core/models.dart';
 import '../core/app_state.dart';
 
 class Sidebar extends StatelessWidget {
-  const Sidebar({super.key});
+  /// Mode compact (icônes seules) pour les écrans étroits.
+  final bool compact;
+  const Sidebar({super.key, this.compact = false});
 
   static const _navItems = [
     (NavScreen.dashboard, 'Dashboard', Icons.grid_view_rounded),
@@ -24,29 +26,29 @@ class Sidebar extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return Container(
-      width: 210,
+      width: compact ? 64 : 210,
       color: AppColors.sidebar,
       child: Column(
         children: [
-          _Logo(),
+          _Logo(compact: compact),
           Expanded(
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              children: _navItems.where((item) {
-                // Hide "Équipes" in mono-user mode
-                if (state.isMonoUser && item.$1 == NavScreen.equipes) return false;
-                return true;
-              }).map((item) {
+              children: _navItems.map((item) {
                 final (screen, label, icon) = item;
-                final active = state.screen == screen && !state.creating;
+                // Gantt est accessible depuis Projets : le met en surbrillance aussi
+                final active = (state.screen == screen ||
+                        (screen == NavScreen.projets && state.screen == NavScreen.gantt)) &&
+                    !state.creating;
                 return _NavItem(
                   screen: screen, label: label, icon: icon, active: active,
+                  compact: compact,
                   onTap: () => state.navigate(screen),
                 );
               }).toList(),
             ),
           ),
-          _UserProfile(),
+          _UserProfile(compact: compact),
         ],
       ),
     );
@@ -54,8 +56,17 @@ class Sidebar extends StatelessWidget {
 }
 
 class _Logo extends StatelessWidget {
+  final bool compact;
+  const _Logo({this.compact = false});
+
   @override
   Widget build(BuildContext context) {
+    if (compact) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 20),
+        child: CustomPaint(size: const Size(30, 30), painter: _DiamondPainter()),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
       child: Row(
@@ -109,9 +120,13 @@ class _NavItem extends StatefulWidget {
   final String label;
   final IconData icon;
   final bool active;
+  final bool compact;
   final VoidCallback onTap;
 
-  const _NavItem({required this.screen, required this.label, required this.icon, required this.active, required this.onTap});
+  const _NavItem({
+    required this.screen, required this.label, required this.icon,
+    required this.active, required this.onTap, this.compact = false,
+  });
 
   @override
   State<_NavItem> createState() => _NavItemState();
@@ -122,7 +137,7 @@ class _NavItemState extends State<_NavItem> {
 
   @override
   Widget build(BuildContext context) {
-    return MouseRegion(
+    final item = MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
       child: GestureDetector(
@@ -130,39 +145,72 @@ class _NavItemState extends State<_NavItem> {
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
           margin: const EdgeInsets.only(bottom: 2),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          padding: EdgeInsets.symmetric(horizontal: widget.compact ? 4 : 8, vertical: 9),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             color: widget.active
                 ? AppColors.primary.withOpacity(0.12)
                 : _hovered ? Colors.white.withOpacity(0.05) : Colors.transparent,
-            border: Border(
-              left: BorderSide(
-                color: widget.active ? AppColors.primary : Colors.transparent,
-                width: 3,
-              ),
-            ),
           ),
           child: Row(
+            mainAxisAlignment: widget.compact ? MainAxisAlignment.center : MainAxisAlignment.start,
             children: [
+              // Barre d'accent (marqueur d'onglet actif)
+              if (!widget.compact) ...[
+                AnimatedContainer(
+                  duration: const Duration(milliseconds: 150),
+                  width: 3, height: 16,
+                  decoration: BoxDecoration(
+                    color: widget.active ? AppColors.primary : Colors.transparent,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                const SizedBox(width: 9),
+              ],
               Icon(widget.icon, size: 16, color: widget.active ? Colors.white : const Color(0xFF8B92A5)),
-              const SizedBox(width: 10),
-              Text(widget.label, style: GoogleFonts.dmSans(
-                color: widget.active ? Colors.white : const Color(0xFF8B92A5),
-                fontSize: 13.5,
-                fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-              )),
+              if (!widget.compact) ...[
+                const SizedBox(width: 10),
+                Text(widget.label, style: GoogleFonts.dmSans(
+                  color: widget.active ? Colors.white : const Color(0xFF8B92A5),
+                  fontSize: 13.5,
+                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                )),
+              ],
             ],
           ),
         ),
       ),
     );
+    if (widget.compact) {
+      return Tooltip(message: widget.label, child: item);
+    }
+    return item;
   }
 }
 
 class _UserProfile extends StatelessWidget {
+  final bool compact;
+  const _UserProfile({this.compact = false});
+
   @override
   Widget build(BuildContext context) {
+    final avatar = Container(
+      width: 34, height: 34,
+      decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
+      alignment: Alignment.center,
+      child: Text('KL', style: GoogleFonts.dmSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
+    );
+
+    if (compact) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07))),
+        ),
+        child: Tooltip(message: 'Kapeu Aigle — Directeur Tech', child: avatar),
+      );
+    }
+
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
@@ -170,12 +218,7 @@ class _UserProfile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 34, height: 34,
-            decoration: const BoxDecoration(color: AppColors.primary, shape: BoxShape.circle),
-            alignment: Alignment.center,
-            child: Text('KL', style: GoogleFonts.dmSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
-          ),
+          avatar,
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -186,7 +229,6 @@ class _UserProfile extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.logout_rounded, color: Color(0xFF6B7280), size: 14),
         ],
       ),
     );

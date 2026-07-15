@@ -58,10 +58,9 @@ class _ActivitesScreenState extends State<ActivitesScreen> {
                 borderRadius: BorderRadius.circular(10),
                 border: Border.all(color: AppColors.border),
               ),
-              child: Row(children: _types.map((t) => Padding(
-                padding: const EdgeInsets.only(right: 4),
-                child: AppFilterChip(label: t.$2, active: _filter == t.$1, onTap: () => setState(() => _filter = t.$1)),
-              )).toList()),
+              child: Wrap(spacing: 4, runSpacing: 4, children: _types.map((t) =>
+                AppFilterChip(label: t.$2, active: _filter == t.$1, onTap: () => setState(() => _filter = t.$1)),
+              ).toList()),
             ),
             const SizedBox(height: 20),
 

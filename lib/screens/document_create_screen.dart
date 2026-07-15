@@ -8,6 +8,7 @@ import '../core/app_state.dart';
 import '../core/utils.dart';
 import '../core/pdf_generator.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 // ─────────────────────────────────────────────────────────
 //  Main Screen
@@ -200,9 +201,12 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
             ]),
             const SizedBox(height: 24),
 
-            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            ResponsiveSplit(
+              sideWidth: 530,
+              breakpoint: 1050,
+              spacing: 20,
               // ── Form ────────────────────────────────────
-              Expanded(child: _FormPanel(
+              main: _FormPanel(
                 type: _type,
                 onTypeChange: (t) => setState(() => _type = t),
                 clientCtrl: _clientCtrl,
@@ -220,26 +224,22 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
                   if (c.address.isNotEmpty) _clientAddrCtrl.text = c.address;
                   setState(() {});
                 },
-              )),
-              const SizedBox(width: 20),
-              // ── Preview ─────────────────────────────────
-              SizedBox(
-                width: 530,
-                child: _A4Preview(
-                  type: _type,
-                  settings: state.settings,
-                  client: _clientCtrl.text,
-                  clientAddr: _clientAddrCtrl.text,
-                  objet: _objetCtrl.text,
-                  lines: List.from(_lines),
-                  tva: _tvaEnabled,
-                  ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
-                  conditions: state.settings.conditions,
-                  onPrint: () => _print(state.settings),
-                  onDownload: _downloading ? null : () => _download(state.settings),
-                ),
               ),
-            ]),
+              // ── Preview ─────────────────────────────────
+              side: _A4Preview(
+                type: _type,
+                settings: state.settings,
+                client: _clientCtrl.text,
+                clientAddr: _clientAddrCtrl.text,
+                objet: _objetCtrl.text,
+                lines: List.from(_lines),
+                tva: _tvaEnabled,
+                ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
+                conditions: state.settings.conditions,
+                onPrint: () => _print(state.settings),
+                onDownload: _downloading ? null : () => _download(state.settings),
+              ),
+            ),
           ],
         ),
       ),
@@ -950,22 +950,30 @@ class _InfoBox extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(10),
+      clipBehavior: Clip.antiAlias,
       decoration: BoxDecoration(
         color: const Color(0xFFF7F7F7),
         borderRadius: BorderRadius.circular(4),
-        border: Border(left: BorderSide(color: highlight ? AppColors.primary : AppColors.text3, width: 2)),
       ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(label, style: GoogleFonts.dmSans(fontSize: 8, fontWeight: FontWeight.w800,
-            color: highlight ? AppColors.primary : AppColors.text3, letterSpacing: 0.8)),
-        const SizedBox(height: 4),
-        ...lines.asMap().entries.map((e) => Text(e.value, style: GoogleFonts.dmSans(
-          fontSize: e.key == 0 ? 10 : 8.5,
-          fontWeight: e.key == 0 ? FontWeight.w700 : FontWeight.w400,
-          color: AppColors.text1, height: 1.5,
-        ))),
-      ]),
+      child: IntrinsicHeight(child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(width: 2, color: highlight ? AppColors.primary : AppColors.text3),
+          Expanded(child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(label, style: GoogleFonts.dmSans(fontSize: 8, fontWeight: FontWeight.w800,
+                  color: highlight ? AppColors.primary : AppColors.text3, letterSpacing: 0.8)),
+              const SizedBox(height: 4),
+              ...lines.asMap().entries.map((e) => Text(e.value, style: GoogleFonts.dmSans(
+                fontSize: e.key == 0 ? 10 : 8.5,
+                fontWeight: e.key == 0 ? FontWeight.w700 : FontWeight.w400,
+                color: AppColors.text1, height: 1.5,
+              ))),
+            ]),
+          )),
+        ],
+      )),
     );
   }
 }

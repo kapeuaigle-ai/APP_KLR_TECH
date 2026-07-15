@@ -6,6 +6,7 @@ import '../core/models.dart';
 import '../core/app_state.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 class ClientsScreen extends StatefulWidget {
   const ClientsScreen({super.key});
@@ -29,6 +30,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
     final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
     final actifs = clients.where((c) => c.status == 'actif').length;
+    final pctActifs = clients.isEmpty ? 0 : ((actifs / clients.length) * 100).round();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
@@ -43,20 +45,18 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 const SizedBox(height: 3),
                 Text('Gérez votre portefeuille clients et leur historique.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
-              PrimaryBtn(label: '+ Nouveau client', icon: Icons.add, onTap: () {}),
+              PrimaryBtn(label: 'Nouveau client', icon: Icons.add, onTap: () => showClientDialog(context)),
             ]),
             const SizedBox(height: 24),
 
             // Stat cards
-            Row(children: [
-              Expanded(child: StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires')),
-              const SizedBox(width: 16),
-              Expanded(child: StatCard(label: 'CLIENTS ACTIFS', value: '$actifs',
+            StatGrid(cards: [
+              StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires'),
+              StatCard(label: 'CLIENTS ACTIFS', value: '$actifs',
                 badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                   decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-                  child: Text('${((actifs / clients.length) * 100).round()}%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
-              const SizedBox(width: 16),
-              Expanded(child: StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA')),
+                  child: Text('$pctActifs%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+              StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA'),
             ]),
             const SizedBox(height: 20),
 
@@ -69,24 +69,29 @@ class _ClientsScreenState extends State<ClientsScreen> {
                   child: Row(children: [
                     Text('${filtered.length} client${filtered.length > 1 ? 's' : ''}', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text1)),
                     const Spacer(),
-                    SearchField(placeholder: 'Rechercher un client...', onChanged: (v) => setState(() => _search = v), maxWidth: 280),
+                    Flexible(child: SearchField(placeholder: 'Rechercher un client...', onChanged: (v) => setState(() => _search = v), maxWidth: 280)),
                   ]),
                 ),
                 const Divider(height: 1, color: AppColors.border),
-                Container(
-                  color: AppColors.bg,
-                  child: const Row(children: [
-                    Expanded(flex: 4, child: ThCell('CLIENT')),
-                    Expanded(flex: 3, child: ThCell('CONTACT')),
-                    Expanded(flex: 4, child: ThCell('EMAIL')),
-                    Expanded(flex: 3, child: ThCell('TÉLÉPHONE')),
-                    Expanded(flex: 3, child: ThCell('CA TOTAL')),
-                    Expanded(flex: 2, child: ThCell('STATUT')),
-                    SizedBox(width: 48),
+                HScrollTable(
+                  minWidth: 900,
+                  child: Column(children: [
+                    Container(
+                      color: AppColors.bg,
+                      child: const Row(children: [
+                        Expanded(flex: 4, child: ThCell('CLIENT')),
+                        Expanded(flex: 3, child: ThCell('CONTACT')),
+                        Expanded(flex: 4, child: ThCell('EMAIL')),
+                        Expanded(flex: 3, child: ThCell('TÉLÉPHONE')),
+                        Expanded(flex: 3, child: ThCell('CA TOTAL')),
+                        Expanded(flex: 2, child: ThCell('STATUT')),
+                        SizedBox(width: 48),
+                      ]),
+                    ),
+                    const Divider(height: 1, color: AppColors.border),
+                    ...filtered.asMap().entries.map((e) => _ClientRow(client: e.value, isLast: e.key == filtered.length - 1)),
                   ]),
                 ),
-                const Divider(height: 1, color: AppColors.border),
-                ...filtered.asMap().entries.map((e) => _ClientRow(client: e.value, isLast: e.key == filtered.length - 1)),
                 if (filtered.isEmpty)
                   Padding(
                     padding: const EdgeInsets.all(40),
@@ -101,6 +106,137 @@ class _ClientsScreenState extends State<ClientsScreen> {
   }
 }
 
+// ── Dialogue Ajouter / Modifier un client ─────────────────
+void showClientDialog(BuildContext context, {Client? existing}) {
+  final nameCtrl = TextEditingController(text: existing?.name ?? '');
+  final contactCtrl = TextEditingController(text: existing?.contact ?? '');
+  final emailCtrl = TextEditingController(text: existing?.email ?? '');
+  final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
+  final addressCtrl = TextEditingController(text: existing?.address ?? '');
+  String status = existing?.status ?? 'actif';
+
+  const colors = [AppColors.purple, AppColors.blue, AppColors.emerald, AppColors.orange, AppColors.red, AppColors.teal];
+
+  String initialsFor(String name) {
+    final words = name.trim().split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.isEmpty) return '?';
+    if (words.length == 1) return words[0].substring(0, words[0].length.clamp(0, 2)).toUpperCase();
+    return (words[0][0] + words[1][0]).toUpperCase();
+  }
+
+  showDialog(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setState) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(existing == null ? 'Nouveau client' : 'Modifier le client',
+          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: SizedBox(
+        width: 420,
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _DialogField(label: 'NOM DE L\'ENTREPRISE *', ctrl: nameCtrl, hint: 'Ex : Acme Corp'),
+            const SizedBox(height: 12),
+            _DialogField(label: 'CONTACT', ctrl: contactCtrl, hint: 'Nom du contact'),
+            const SizedBox(height: 12),
+            _DialogField(label: 'EMAIL', ctrl: emailCtrl, hint: 'email@exemple.com'),
+            const SizedBox(height: 12),
+            _DialogField(label: 'TÉLÉPHONE', ctrl: phoneCtrl, hint: '+225 ...'),
+            const SizedBox(height: 12),
+            _DialogField(label: 'ADRESSE', ctrl: addressCtrl, hint: 'Adresse complète', maxLines: 2),
+            const SizedBox(height: 12),
+            Text('STATUT', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Row(children: [
+              for (final s in [('actif', 'Actif'), ('attente', 'En attente'), ('cours', 'En cours')])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setState(() => status = s.$1),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: status == s.$1 ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: status == s.$1 ? AppColors.primary : AppColors.border),
+                      ),
+                      child: Text(s.$2, style: GoogleFonts.dmSans(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: status == s.$1 ? AppColors.primary : AppColors.text2)),
+                    ),
+                  ),
+                ),
+            ]),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        PrimaryBtn(
+          label: existing == null ? 'Ajouter' : 'Enregistrer',
+          icon: existing == null ? Icons.add : Icons.save_outlined,
+          onTap: () {
+            final name = nameCtrl.text.trim();
+            if (name.isEmpty) return;
+            final state = context.read<AppState>();
+            final client = Client(
+              id: existing?.id ?? DateTime.now().millisecondsSinceEpoch,
+              initials: initialsFor(name),
+              color: existing?.color ?? colors[state.clients.length % colors.length],
+              name: name,
+              contact: contactCtrl.text.trim(),
+              email: emailCtrl.text.trim(),
+              phone: phoneCtrl.text.trim(),
+              totalFacture: existing?.totalFacture ?? 0,
+              status: status,
+              address: addressCtrl.text.trim(),
+            );
+            if (existing == null) {
+              state.addClient(client);
+            } else {
+              state.updateClient(client);
+            }
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ],
+    )),
+  );
+}
+
+class _DialogField extends StatelessWidget {
+  final String label, hint;
+  final TextEditingController ctrl;
+  final int maxLines;
+  const _DialogField({required this.label, required this.ctrl, required this.hint, this.maxLines = 1});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text(label, style: AppTheme.label),
+      const SizedBox(height: 6),
+      TextField(
+        controller: ctrl,
+        maxLines: maxLines,
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+        decoration: InputDecoration(
+          hintText: hint,
+          hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
+          filled: true, fillColor: AppColors.bg,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+          enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+          focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          isDense: true,
+        ),
+      ),
+    ]);
+  }
+}
+
 class _ClientRow extends StatefulWidget {
   final Client client;
   final bool isLast;
@@ -112,6 +248,32 @@ class _ClientRow extends StatefulWidget {
 
 class _ClientRowState extends State<_ClientRow> {
   bool _hovered = false;
+
+  void _confirmDelete(BuildContext context, Client c) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Supprimer le client ?', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+        content: Text('« ${c.name} » sera retiré de votre portefeuille. Cette action est irréversible.',
+            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<AppState>().deleteClient(c.id);
+              Navigator.of(ctx).pop();
+            },
+            child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -154,10 +316,31 @@ class _ClientRowState extends State<_ClientRow> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: StatusBadge(status: c.status),
           )),
-          SizedBox(width: 48, child: IconButton(
+          SizedBox(width: 48, child: PopupMenuButton<String>(
+            tooltip: 'Actions',
             icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
-            onPressed: () {},
             padding: const EdgeInsets.all(6),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            color: Colors.white,
+            onSelected: (action) {
+              if (action == 'edit') {
+                showClientDialog(context, existing: c);
+              } else if (action == 'delete') {
+                _confirmDelete(context, c);
+              }
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: 'edit', child: Row(children: [
+                const Icon(Icons.edit_outlined, size: 15, color: AppColors.text2),
+                const SizedBox(width: 8),
+                Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+              ])),
+              PopupMenuItem(value: 'delete', child: Row(children: [
+                const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
+                const SizedBox(width: 8),
+                Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
+              ])),
+            ],
           )),
         ]),
       ),

@@ -6,6 +6,7 @@ import '../core/models.dart';
 import '../core/app_state.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 class DocumentsListScreen extends StatefulWidget {
   const DocumentsListScreen({super.key});
@@ -60,15 +61,26 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             const SizedBox(height: 20),
 
             // Stats
-            Row(children: [
-              _StatPill(label: 'TOTAL', value: Fmt.money(total), color: AppColors.primary),
-              const SizedBox(width: 12),
-              _StatPill(label: 'VALIDÉS', value: '$validated', color: AppColors.green),
-              const SizedBox(width: 12),
-              _StatPill(label: 'EN COURS', value: '$pending', color: AppColors.orange),
-              const Spacer(),
-              SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280),
-            ]),
+            LayoutBuilder(builder: (context, constraints) {
+              final narrow = constraints.maxWidth < 760;
+              final pills = [
+                _StatPill(label: 'TOTAL', value: Fmt.money(total), color: AppColors.primary),
+                _StatPill(label: 'VALIDÉS', value: '$validated', color: AppColors.green),
+                _StatPill(label: 'EN COURS', value: '$pending', color: AppColors.orange),
+              ];
+              final search = SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280);
+              if (narrow) {
+                return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [...pills, search]);
+              }
+              return Row(children: [
+                pills[0], const SizedBox(width: 12),
+                pills[1], const SizedBox(width: 12),
+                pills[2],
+                const Spacer(),
+                search,
+              ]);
+            }),
             const SizedBox(height: 16),
 
             // Filter chips
@@ -84,32 +96,35 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             // Table
             CardBox(
               padding: EdgeInsets.zero,
-              child: Column(children: [
-                // Table header
-                Container(
-                  decoration: const BoxDecoration(
-                    color: AppColors.bg,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+              child: HScrollTable(
+                minWidth: 900,
+                child: Column(children: [
+                  // Table header
+                  Container(
+                    decoration: const BoxDecoration(
+                      color: AppColors.bg,
+                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                    ),
+                    child: Row(children: [
+                      const Expanded(flex: 3, child: ThCell('NUMÉRO')),
+                      const Expanded(flex: 2, child: ThCell('DATE')),
+                      const Expanded(flex: 4, child: ThCell('CLIENT')),
+                      const Expanded(flex: 4, child: ThCell('OBJET')),
+                      const Expanded(flex: 3, child: ThCell('MONTANT')),
+                      const Expanded(flex: 2, child: ThCell('STATUT')),
+                      const SizedBox(width: 60),
+                    ]),
                   ),
-                  child: Row(children: [
-                    const Expanded(flex: 3, child: ThCell('NUMÉRO')),
-                    const Expanded(flex: 2, child: ThCell('DATE')),
-                    const Expanded(flex: 4, child: ThCell('CLIENT')),
-                    const Expanded(flex: 4, child: ThCell('OBJET')),
-                    const Expanded(flex: 3, child: ThCell('MONTANT')),
-                    const Expanded(flex: 2, child: ThCell('STATUT')),
-                    const SizedBox(width: 60),
-                  ]),
-                ),
-                const Divider(height: 1, color: AppColors.border),
-                if (filtered.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Center(child: Text('Aucun document trouvé', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
-                  )
-                else
-                  ...filtered.asMap().entries.map((e) => _DocRow(doc: e.value, isLast: e.key == filtered.length - 1)),
-              ]),
+                  const Divider(height: 1, color: AppColors.border),
+                  if (filtered.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.all(40),
+                      child: Center(child: Text('Aucun document trouvé', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
+                    )
+                  else
+                    ...filtered.asMap().entries.map((e) => _DocRow(doc: e.value, type: type, isLast: e.key == filtered.length - 1)),
+                ]),
+              ),
             ),
           ],
         ),
@@ -180,8 +195,9 @@ class _StatPill extends StatelessWidget {
 
 class _DocRow extends StatefulWidget {
   final DocumentItem doc;
+  final String type;
   final bool isLast;
-  const _DocRow({required this.doc, required this.isLast});
+  const _DocRow({required this.doc, required this.type, required this.isLast});
 
   @override
   State<_DocRow> createState() => _DocRowState();
@@ -189,6 +205,75 @@ class _DocRow extends StatefulWidget {
 
 class _DocRowState extends State<_DocRow> {
   bool _hovered = false;
+
+  void _showDetails(BuildContext context) {
+    final doc = widget.doc;
+    const typeLabels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Row(children: [
+          Expanded(child: Text(doc.numero, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary))),
+          StatusBadge(status: doc.statut),
+        ]),
+        content: SizedBox(
+          width: 380,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (final item in [
+              ('Type', typeLabels[widget.type] ?? widget.type),
+              ('Date', doc.date),
+              ('Client', doc.client),
+              ('Objet', doc.objet),
+              ('Montant', doc.montant > 0 ? Fmt.money(doc.montant) : '—'),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  SizedBox(width: 90, child: Text(item.$1, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3))),
+                  Expanded(child: Text(item.$2, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1))),
+                ]),
+              ),
+            const SizedBox(height: 8),
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 8),
+            Text('CHANGER LE STATUT', style: AppTheme.label),
+            const SizedBox(height: 8),
+            Row(children: [
+              for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      context.read<AppState>().setDocumentStatus(widget.type, doc.id, s.$1);
+                      Navigator.of(ctx).pop();
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: doc.statut == s.$1 ? s.$3.withOpacity(0.12) : AppColors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
+                      ),
+                      child: Text(s.$2, style: GoogleFonts.dmSans(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
+                    ),
+                  ),
+                ),
+            ]),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Fermer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -230,8 +315,9 @@ class _DocRowState extends State<_DocRow> {
           )),
           SizedBox(width: 60, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             IconButton(
+              tooltip: 'Voir le document',
               icon: const Icon(Icons.remove_red_eye_outlined, size: 15, color: AppColors.text3),
-              onPressed: () {},
+              onPressed: () => _showDetails(context),
               padding: const EdgeInsets.all(6),
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),

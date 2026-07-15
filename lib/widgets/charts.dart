@@ -70,33 +70,72 @@ class _DonutPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
-// ── Line / Area Chart ─────────────────────────────────────
-class LineAreaChart extends StatelessWidget {
+// ── Line / Area Chart (interactif : survol + infobulle) ───
+class LineAreaChart extends StatefulWidget {
   final List<double> values;
+  final List<String> labels;
   final Color color;
-  const LineAreaChart({super.key, required this.values, this.color = AppColors.primary});
+  final String Function(double)? tooltipFormatter;
+  const LineAreaChart({
+    super.key, required this.values, this.labels = const [],
+    this.color = AppColors.primary, this.tooltipFormatter,
+  });
+
+  @override
+  State<LineAreaChart> createState() => _LineAreaChartState();
+}
+
+class _LineAreaChartState extends State<LineAreaChart> {
+  int? _hoverIndex;
+
+  int _nearestIndex(double dx, double width) {
+    final n = widget.values.length;
+    if (n <= 1) return 0;
+    final t = ((dx - 10) / (width - 20)).clamp(0.0, 1.0);
+    return (t * (n - 1)).round().clamp(0, n - 1);
+  }
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      painter: _LineAreaPainter(values, color),
-      child: const SizedBox.expand(),
-    );
+    return LayoutBuilder(builder: (context, constraints) {
+      return MouseRegion(
+        onHover: (e) => setState(() => _hoverIndex = _nearestIndex(e.localPosition.dx, constraints.maxWidth)),
+        onExit: (_) => setState(() => _hoverIndex = null),
+        child: GestureDetector(
+          onTapDown: (d) => setState(() => _hoverIndex = _nearestIndex(d.localPosition.dx, constraints.maxWidth)),
+          child: CustomPaint(
+            painter: _LineAreaPainter(
+              widget.values, widget.color,
+              hoverIndex: _hoverIndex,
+              labels: widget.labels,
+              tooltipFormatter: widget.tooltipFormatter,
+            ),
+            child: const SizedBox.expand(),
+          ),
+        ),
+      );
+    });
   }
 }
 
 class _LineAreaPainter extends CustomPainter {
   final List<double> values;
   final Color color;
-  _LineAreaPainter(this.values, this.color);
+  final int? hoverIndex;
+  final List<String> labels;
+  final String Function(double)? tooltipFormatter;
+  _LineAreaPainter(this.values, this.color, {this.hoverIndex, this.labels = const [], this.tooltipFormatter});
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.isEmpty) return;
-    final minV = 6.0, maxV = 25.0;
+    // Échelle calculée à partir des données (avec marge)
+    final lo = values.reduce(min), hi = values.reduce(max);
+    final span = (hi - lo).abs() < 0.001 ? 1.0 : hi - lo;
+    final minV = lo - span * 0.15, maxV = hi + span * 0.15;
     final W = size.width, H = size.height;
 
-    double px(int i) => (i / (values.length - 1)) * (W - 20) + 10;
+    double px(int i) => values.length == 1 ? W / 2 : (i / (values.length - 1)) * (W - 20) + 10;
     double py(double v) => H - ((v - minV) / (maxV - minV)) * H * 0.85 - 10;
 
     final pts = [for (var i = 0; i < values.length; i++) Offset(px(i), py(values[i]))];
@@ -128,10 +167,57 @@ class _LineAreaPainter extends CustomPainter {
     for (final p in pts) {
       canvas.drawCircle(p, 3.5, Paint()..color = color);
     }
+
+    // ── Survol : ligne guide + point agrandi + infobulle ──
+    final hi2 = hoverIndex;
+    if (hi2 != null && hi2 >= 0 && hi2 < pts.length) {
+      final p = pts[hi2];
+
+      // Ligne guide verticale
+      canvas.drawLine(
+        Offset(p.dx, 0), Offset(p.dx, H),
+        Paint()..color = color.withOpacity(0.25)..strokeWidth = 1,
+      );
+
+      // Point agrandi (halo blanc + couleur)
+      canvas.drawCircle(p, 7, Paint()..color = Colors.white);
+      canvas.drawCircle(p, 5.5, Paint()..color = color);
+
+      // Infobulle
+      final label = hi2 < labels.length ? labels[hi2] : '';
+      final valueTxt = tooltipFormatter?.call(values[hi2]) ?? values[hi2].toStringAsFixed(1);
+      final tp = TextPainter(
+        text: TextSpan(children: [
+          if (label.isNotEmpty)
+            TextSpan(text: '$label\n', style: GoogleFonts.dmSans(
+              fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.75))),
+          TextSpan(text: valueTxt, style: GoogleFonts.dmSans(
+            fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
+        ]),
+        textDirection: TextDirection.ltr,
+        textAlign: TextAlign.center,
+      )..layout();
+
+      const padH = 10.0, padV = 6.0;
+      final boxW = tp.width + padH * 2, boxH = tp.height + padV * 2;
+      var boxX = p.dx - boxW / 2;
+      var boxY = p.dy - boxH - 14;
+      boxX = boxX.clamp(2.0, W - boxW - 2);
+      if (boxY < 2) boxY = p.dy + 14;
+
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromLTWH(boxX, boxY, boxW, boxH), const Radius.circular(7));
+      canvas.drawRRect(rrect, Paint()
+        ..color = Colors.black.withOpacity(0.15)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
+      canvas.drawRRect(rrect, Paint()..color = const Color(0xFF1F2433));
+      tp.paint(canvas, Offset(boxX + padH, boxY + padV));
+    }
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  bool shouldRepaint(covariant _LineAreaPainter old) =>
+      old.hoverIndex != hoverIndex || old.values != values || old.color != color;
 }
 
 // ── Bar + Line combo ──────────────────────────────────────

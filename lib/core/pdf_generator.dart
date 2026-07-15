@@ -445,6 +445,187 @@ class PdfGenerator {
     }
   }
 
+  // ── Rapport financier ─────────────────────────────────
+  static Future<List<int>> generateRapport({
+    required AppSettings settings,
+    required List<DimeEntry> dime,
+    required List<Client> clients,
+    required List<FactureEntry> factures,
+  }) async {
+    final doc = pw.Document(title: 'Rapport financier');
+
+    pw.Font bold, reg;
+    try {
+      bold = await PdfGoogleFonts.dMSansBold();
+      reg  = await PdfGoogleFonts.dMSansRegular();
+    } catch (_) {
+      bold = pw.Font.helveticaBold();
+      reg  = pw.Font.helvetica();
+    }
+
+    final totalRevenu = dime.fold<double>(0, (s, d) => s + d.revenu);
+    final totalDime = dime.fold<double>(0, (s, d) => s + d.dime);
+    final totalPaye = factures.where((f) => f.statut == 'paye').fold<double>(0, (s, f) => s + f.montant);
+    final totalRetard = factures.where((f) => f.statut == 'retard').fold<double>(0, (s, f) => s + f.montant);
+    final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
+    final topClients = clients.where((c) => c.totalFacture > 0).toList()
+      ..sort((a, b) => b.totalFacture.compareTo(a.totalFacture));
+
+    pw.Widget kpi(String label, String value) => pw.Expanded(
+      child: pw.Container(
+        margin: const pw.EdgeInsets.only(right: 8),
+        padding: const pw.EdgeInsets.all(10),
+        decoration: pw.BoxDecoration(
+          color: _bgBox,
+          borderRadius: pw.BorderRadius.circular(6),
+          border: pw.Border.all(color: _border),
+        ),
+        child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Text(label, style: _ts(7, color: _grey3, font: bold, spacing: 0.6)),
+          pw.SizedBox(height: 4),
+          pw.Text(value, style: _ts(12, font: bold)),
+        ]),
+      ),
+    );
+
+    pw.Widget sectionTitle(String t) => pw.Padding(
+      padding: const pw.EdgeInsets.only(top: 16, bottom: 8),
+      child: pw.Text(t, style: _ts(12, font: bold, color: _red)),
+    );
+
+    pw.Widget cell(String t, {bool head = false, bool right = false}) => pw.Padding(
+      padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      child: pw.Text(t,
+        style: _ts(8.5, font: head ? bold : reg, color: head ? PdfColors.white : _grey1),
+        textAlign: right ? pw.TextAlign.right : pw.TextAlign.left),
+    );
+
+    doc.addPage(pw.MultiPage(
+      pageFormat: PdfPageFormat.a4,
+      margin: const pw.EdgeInsets.fromLTRB(32, 28, 32, 28),
+      build: (ctx) => [
+        // En-tête
+        pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+            pw.Text(settings.company, style: _ts(14, font: bold)),
+            pw.Text(settings.address, style: _ts(8, color: _grey2)),
+            pw.Text('RC : ${settings.rc}   IF : ${settings.ifNum}', style: _ts(8, color: _grey2)),
+          ]),
+          pw.Spacer(),
+          pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
+            pw.Text('RAPPORT FINANCIER', style: _ts(14, font: bold, color: _red)),
+            pw.Text('Édité le ${_dateStr()}', style: _ts(8, color: _grey2)),
+          ]),
+        ]),
+        pw.SizedBox(height: 14),
+        pw.Divider(color: _border, height: 1),
+
+        // KPIs
+        sectionTitle('Synthèse'),
+        pw.Row(children: [
+          kpi('REVENU TOTAL', '${Fmt.number(totalRevenu)} FCFA'),
+          kpi('DÎME (10%)', '${Fmt.number(totalDime)} FCFA'),
+          kpi('ENCAISSÉ', '${Fmt.number(totalPaye)} FCFA'),
+          kpi('EN RETARD', '${Fmt.number(totalRetard)} FCFA'),
+        ]),
+
+        // Dîme mensuelle
+        sectionTitle('Revenus et dîme par mois'),
+        pw.Table(
+          border: pw.TableBorder.all(color: _border, width: 0.5),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(3),
+            1: const pw.FlexColumnWidth(3),
+            2: const pw.FlexColumnWidth(3),
+            3: const pw.FlexColumnWidth(2),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: _red),
+              children: [
+                cell('Mois', head: true),
+                cell('Revenu net', head: true, right: true),
+                cell('Dîme (10%)', head: true, right: true),
+                cell('Statut', head: true),
+              ],
+            ),
+            ...dime.asMap().entries.map((e) => pw.TableRow(
+              decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
+              children: [
+                cell(e.value.mois),
+                cell(Fmt.number(e.value.revenu), right: true),
+                cell(Fmt.number(e.value.dime), right: true),
+                cell(e.value.statut == 'paye' ? 'Versée' : 'En attente'),
+              ],
+            )),
+          ],
+        ),
+
+        // Top clients
+        sectionTitle('Top clients par chiffre d\'affaires'),
+        pw.Table(
+          border: pw.TableBorder.all(color: _border, width: 0.5),
+          columnWidths: {
+            0: const pw.FlexColumnWidth(4),
+            1: const pw.FlexColumnWidth(3),
+            2: const pw.FlexColumnWidth(2),
+          },
+          children: [
+            pw.TableRow(
+              decoration: const pw.BoxDecoration(color: _red),
+              children: [
+                cell('Client', head: true),
+                cell('CA facturé', head: true, right: true),
+                cell('Part', head: true, right: true),
+              ],
+            ),
+            ...topClients.take(8).toList().asMap().entries.map((e) => pw.TableRow(
+              decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
+              children: [
+                cell(e.value.name),
+                cell(Fmt.number(e.value.totalFacture), right: true),
+                cell(totalCA > 0 ? '${(e.value.totalFacture / totalCA * 100).round()}%' : '—', right: true),
+              ],
+            )),
+          ],
+        ),
+      ],
+      footer: (ctx) => pw.Container(
+        alignment: pw.Alignment.center,
+        padding: const pw.EdgeInsets.only(top: 8),
+        child: pw.Text(
+          '${settings.company.toUpperCase()}  |  RC : ${settings.rc}  |  IF : ${settings.ifNum}  —  Page ${ctx.pageNumber}/${ctx.pagesCount}',
+          style: _ts(6.5, color: _grey3),
+        ),
+      ),
+    ));
+
+    return doc.save();
+  }
+
+  /// Enregistre un rapport PDF via la boîte de dialogue (ou Téléchargements).
+  static Future<String?> saveRapport(List<int> bytes) async {
+    final now = DateTime.now();
+    final d = '${now.day.toString().padLeft(2,'0')}'
+              '${now.month.toString().padLeft(2,'0')}'
+              '${now.year}';
+    final filename = 'KLR-Rapport-$d.pdf';
+    try {
+      final chosen = await FilePicker.platform.saveFile(
+        dialogTitle: 'Enregistrer le rapport PDF',
+        fileName: filename,
+      );
+      if (chosen != null) {
+        final dest = chosen.toLowerCase().endsWith('.pdf') ? chosen : '$chosen.pdf';
+        await File(dest).writeAsBytes(bytes);
+        return dest;
+      }
+      return null;
+    } catch (_) {
+      return _saveToDownloads(bytes, filename);
+    }
+  }
+
   /// Enregistre dans le dossier Téléchargements et retourne le chemin.
   static Future<String> _saveToDownloads(
       List<int> bytes, String filename) async {

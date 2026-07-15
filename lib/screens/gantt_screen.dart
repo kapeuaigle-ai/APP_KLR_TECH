@@ -1,8 +1,12 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
+import '../core/models.dart';
+import '../core/app_state.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 class GanttScreen extends StatelessWidget {
   const GanttScreen({super.key});
@@ -31,30 +35,34 @@ class GanttScreen extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text('Vue chronologique des projets sur 6 mois.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
-              SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined, onTap: () {}),
+              SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
+                  onTap: () => context.read<AppState>().navigate(NavScreen.projets)),
             ]),
             const SizedBox(height: 24),
 
             CardBox(
               padding: const EdgeInsets.all(20),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                // Month headers
-                Row(children: [
-                  const SizedBox(width: 200),
-                  ...List.generate(_months.length, (i) => Expanded(
-                    child: Text(_months[i], style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.text3), textAlign: TextAlign.center),
+              child: HScrollTable(
+                minWidth: 700,
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  // Month headers
+                  Row(children: [
+                    const SizedBox(width: 200),
+                    ...List.generate(_months.length, (i) => Expanded(
+                      child: Text(_months[i], style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.text3), textAlign: TextAlign.center),
+                    )),
+                  ]),
+                  const SizedBox(height: 8),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 8),
+
+                  // Project rows
+                  ..._projects.map((p) => Padding(
+                    padding: const EdgeInsets.only(bottom: 14),
+                    child: _GanttRow(project: p, totalMonths: _months.length),
                   )),
                 ]),
-                const SizedBox(height: 8),
-                const Divider(color: AppColors.border),
-                const SizedBox(height: 8),
-
-                // Project rows
-                ..._projects.map((p) => Padding(
-                  padding: const EdgeInsets.only(bottom: 14),
-                  child: _GanttRow(project: p, totalMonths: _months.length),
-                )),
-              ]),
+              ),
             ),
           ],
         ),

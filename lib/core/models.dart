@@ -30,9 +30,9 @@ class DocumentItem {
   final String client;
   final String objet;
   final double montant;
-  final String statut; // 'cours' | 'validee' | 'annulee'
+  String statut; // 'cours' | 'validee' | 'annulee'
 
-  const DocumentItem({
+  DocumentItem({
     required this.id, required this.numero, required this.date,
     required this.clientId, required this.client, required this.objet,
     required this.montant, required this.statut,
@@ -96,10 +96,10 @@ class FactureEntry {
   final String num;
   final String client;
   final double montant;
-  final String statut;
+  String statut;
   final String echeance;
 
-  const FactureEntry({
+  FactureEntry({
     required this.num, required this.client, required this.montant,
     required this.statut, required this.echeance,
   });
@@ -181,13 +181,11 @@ class AppSettings {
   String startNum;
   double tva;
   String conditions;
-  bool monoUser;
 
   AppSettings({
     required this.company, required this.rc, required this.ifNum,
     required this.address, required this.ice, required this.prefix,
     required this.startNum, required this.tva, required this.conditions,
-    this.monoUser = false,
   });
 }
 

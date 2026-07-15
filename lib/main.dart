@@ -50,19 +50,23 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.bg,
-      body: Row(
-        children: [
-          const Sidebar(),
-          Expanded(
-            child: Column(
-              children: [
-                const AppHeader(),
-                const Expanded(child: _ContentArea()),
-              ],
+      body: LayoutBuilder(builder: (context, constraints) {
+        // Sidebar compacte (icônes seules) sur écran étroit
+        final compact = constraints.maxWidth < 900;
+        return Row(
+          children: [
+            Sidebar(compact: compact),
+            Expanded(
+              child: Column(
+                children: [
+                  const AppHeader(),
+                  const Expanded(child: _ContentArea()),
+                ],
+              ),
             ),
-          ),
-        ],
-      ),
+          ],
+        );
+      }),
     );
   }
 }

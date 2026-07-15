@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/data.dart';
+import '../core/app_state.dart';
 import '../core/utils.dart';
+import '../core/pdf_generator.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
+import '../widgets/responsive.dart';
 
 class RapportsScreen extends StatefulWidget {
   const RapportsScreen({super.key});
@@ -15,6 +19,44 @@ class RapportsScreen extends StatefulWidget {
 
 class _RapportsScreenState extends State<RapportsScreen> {
   int _tab = 0;
+  bool _exporting = false;
+
+  Future<void> _exportPdf() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    final state = context.read<AppState>();
+    try {
+      final bytes = await PdfGenerator.generateRapport(
+        settings: state.settings,
+        dime: SampleData.dimeHistory,
+        clients: state.clients,
+        factures: state.factures,
+      );
+      final path = await PdfGenerator.saveRapport(bytes);
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Rapport PDF enregistré :\n$path', style: const TextStyle(fontSize: 13)),
+          backgroundColor: AppColors.green,
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          margin: const EdgeInsets.all(16),
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Erreur lors de l\'export : $e', style: const TextStyle(fontSize: 13)),
+          backgroundColor: AppColors.red,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          margin: const EdgeInsets.all(16),
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +73,11 @@ class _RapportsScreenState extends State<RapportsScreen> {
                 const SizedBox(height: 3),
                 Text('Analyses financières, clients et projets.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
-              SecondaryBtn(label: 'Exporter PDF', icon: Icons.download_outlined, onTap: () {}),
+              SecondaryBtn(
+                label: _exporting ? 'Export en cours...' : 'Exporter PDF',
+                icon: Icons.download_outlined,
+                onTap: _exportPdf,
+              ),
             ]),
             const SizedBox(height: 24),
 
@@ -59,25 +105,24 @@ class _FinancierTab extends StatelessWidget {
     final totalDime = dime.fold<double>(0, (s, d) => s + d.dime);
 
     return Column(children: [
-      Row(children: [
-        Expanded(child: StatCard(label: 'CA ANNUEL 2026', value: '81,0', unit: 'M FCFA',
+      StatGrid(cards: [
+        StatCard(label: 'CA ANNUEL 2026', value: '81,0', unit: 'M FCFA',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('↗ +12%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'REVENU TOTAL', value: Fmt.millions(totalRevenu), unit: 'FCFA')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'DÎME TOTALE', value: Fmt.millions(totalDime), unit: 'FCFA', red: true)),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'TAUX RECOUVREMENT', value: '87', unit: '%',
+            child: Text('↗ +12%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'REVENU TOTAL', value: Fmt.millions(totalRevenu), unit: 'FCFA'),
+        StatCard(label: 'DÎME TOTALE', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
+        StatCard(label: 'TAUX RECOUVREMENT', value: '87', unit: '%',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Bon', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
+            child: Text('Bon', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
       ]),
       const SizedBox(height: 20),
 
-      Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Expanded(child: CardBox(
+      ResponsiveSplit(
+        sideWidth: 300,
+        breakpoint: 820,
+        main: CardBox(
           padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('Évolution mensuelle du CA', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
@@ -95,9 +140,8 @@ class _FinancierTab extends StatelessWidget {
               _Legend(color: AppColors.primary, label: 'Dîme (×10)'),
             ]),
           ]),
-        )),
-        const SizedBox(width: 16),
-        SizedBox(width: 300, child: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        ),
+        side: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text('Répartition par statut', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
           const SizedBox(height: 16),
           const Center(child: DonutChart(segments: [
@@ -116,8 +160,8 @@ class _FinancierTab extends StatelessWidget {
                 Text(s.$2, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: s.$3)),
               ]),
             ),
-        ]))),
-      ]),
+        ])),
+      ),
     ]);
   }
 }
@@ -143,18 +187,15 @@ class _ClientsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clients = SampleData.clients;
+    final clients = context.watch<AppState>().clients;
     final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
 
     return Column(children: [
-      Row(children: [
-        Expanded(child: StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'CLIENTS ACTIFS', value: '${clients.where((c) => c.status == 'actif').length}')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'CA MOY./CLIENT', value: Fmt.millions(totalCA / clients.length), unit: 'FCFA')),
+      StatGrid(cards: [
+        StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires'),
+        StatCard(label: 'CLIENTS ACTIFS', value: '${clients.where((c) => c.status == 'actif').length}'),
+        StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA'),
+        StatCard(label: 'CA MOY./CLIENT', value: Fmt.millions(clients.isEmpty ? 0 : totalCA / clients.length), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
 
@@ -166,7 +207,7 @@ class _ClientsTab extends StatelessWidget {
                 ..sort((a, b) => b.totalFacture.compareTo(a.totalFacture));
               final top = sorted.take(5).toList();
               return top.map((c) {
-                final pct = (c.totalFacture / totalCA * 100).round();
+                final pct = totalCA > 0 ? (c.totalFacture / totalCA * 100).round() : 0;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -207,17 +248,14 @@ class _ProjetsTab extends StatelessWidget {
     final inProgress = _projets.where((p) => p.$4 == 'En cours').length;
 
     return Column(children: [
-      Row(children: [
-        Expanded(child: StatCard(label: 'TOTAL PROJETS', value: '${_projets.length}')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'EN COURS', value: '$inProgress')),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'TERMINÉS', value: '$done',
+      StatGrid(cards: [
+        StatCard(label: 'TOTAL PROJETS', value: '${_projets.length}'),
+        StatCard(label: 'EN COURS', value: '$inProgress'),
+        StatCard(label: 'TERMINÉS', value: '$done',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('${(done / _projets.length * 100).round()}%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green))))),
-        const SizedBox(width: 16),
-        Expanded(child: StatCard(label: 'TAUX COMPLÉTION', value: '${(_projets.fold<int>(0, (s, p) => s + p.$3) / _projets.length).round()}', unit: '%')),
+            child: Text('${(done / _projets.length * 100).round()}%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'TAUX COMPLÉTION', value: '${(_projets.fold<int>(0, (s, p) => s + p.$3) / _projets.length).round()}', unit: '%'),
       ]),
       const SizedBox(height: 20),
 

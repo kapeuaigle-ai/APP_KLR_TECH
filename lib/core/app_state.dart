@@ -12,6 +12,8 @@ class AppState extends ChangeNotifier {
   late AppSettings settings;
   late List<Task> tasks;
   late List<Note> notes;
+  late List<Employee> employees;
+  late List<FactureEntry> factures;
 
   AppState() {
     clients = List.from(SampleData.clients);
@@ -33,21 +35,13 @@ class AppState extends ChangeNotifier {
     );
     tasks = SampleData.initialTasks;
     notes = SampleData.initialNotes;
+    employees = List.from(SampleData.employees);
+    factures = List.from(SampleData.factureHistory);
   }
 
   NavScreen get screen => _screen;
   String get docType => _docType;
   bool get creating => _creating;
-  bool get isMonoUser => settings.monoUser;
-
-  void setMonoUser(bool v) {
-    settings.monoUser = v;
-    // If switching to mono-user and currently on Équipes screen, redirect to dashboard
-    if (v && _screen == NavScreen.equipes) {
-      _screen = NavScreen.dashboard;
-    }
-    notifyListeners();
-  }
 
   void navigate(NavScreen s) {
     _screen = s;
@@ -58,6 +52,46 @@ class AppState extends ChangeNotifier {
   void setDocType(String t) { _docType = t; notifyListeners(); }
   void setCreating(bool v) { _creating = v; notifyListeners(); }
 
+  // ── Clients ────────────────────────────────────────────
+  void addClient(Client c) {
+    clients.add(c);
+    notifyListeners();
+  }
+
+  void updateClient(Client c) {
+    final idx = clients.indexWhere((x) => x.id == c.id);
+    if (idx >= 0) {
+      clients[idx] = c;
+      notifyListeners();
+    }
+  }
+
+  void deleteClient(int id) {
+    clients.removeWhere((x) => x.id == id);
+    notifyListeners();
+  }
+
+  // ── Employés ───────────────────────────────────────────
+  void addEmployee(Employee e) {
+    employees.add(e);
+    notifyListeners();
+  }
+
+  void deleteEmployee(int id) {
+    employees.removeWhere((x) => x.id == id);
+    notifyListeners();
+  }
+
+  // ── Factures (suivi) ───────────────────────────────────
+  void markFacturePaid(String num) {
+    final f = factures.where((x) => x.num == num);
+    if (f.isNotEmpty) {
+      f.first.statut = 'paye';
+      notifyListeners();
+    }
+  }
+
+  // ── Tâches ─────────────────────────────────────────────
   void toggleTask(int id) {
     final t = tasks.firstWhere((x) => x.id == id);
     t.done = !t.done;
@@ -74,6 +108,7 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Notes ──────────────────────────────────────────────
   void saveNote(Note n) {
     final idx = notes.indexWhere((x) => x.id == n.id);
     if (idx >= 0) notes[idx] = n; else notes.add(n);
@@ -85,13 +120,23 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  // ── Paramètres ─────────────────────────────────────────
   void updateSettings(AppSettings s) {
     settings = s;
     notifyListeners();
   }
 
+  // ── Documents ──────────────────────────────────────────
   void addDocument(String type, DocumentItem doc) {
     documents[type]?.add(doc);
     notifyListeners();
+  }
+
+  void setDocumentStatus(String type, int id, String statut) {
+    final doc = documents[type]?.where((d) => d.id == id);
+    if (doc != null && doc.isNotEmpty) {
+      doc.first.statut = statut;
+      notifyListeners();
+    }
   }
 }

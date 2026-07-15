@@ -123,20 +123,26 @@ class StatCard extends StatelessWidget {
           const SizedBox(height: 10),
           // ── Valeur principale en bas ─────────────────
           Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(value, style: GoogleFonts.dmSans(
-                fontSize: 24, fontWeight: FontWeight.w800,
-                color: red ? Colors.white : AppColors.text1,
-                letterSpacing: -0.5,
+              Flexible(child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerLeft,
+                child: Text(value, style: GoogleFonts.dmSans(
+                  fontSize: 24, fontWeight: FontWeight.w800,
+                  color: red ? Colors.white : AppColors.text1,
+                  letterSpacing: -0.5,
+                )),
               )),
               if (unit != null) ...[
                 const SizedBox(width: 6),
-                Text(unit!, style: GoogleFonts.dmSans(
-                  fontSize: 12, fontWeight: FontWeight.w500,
-                  color: red ? Colors.white.withOpacity(0.65) : AppColors.text3,
-                )),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(unit!, style: GoogleFonts.dmSans(
+                    fontSize: 12, fontWeight: FontWeight.w500,
+                    color: red ? Colors.white.withOpacity(0.65) : AppColors.text3,
+                  )),
+                ),
               ],
             ],
           ),

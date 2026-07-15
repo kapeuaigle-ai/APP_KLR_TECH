@@ -14,18 +14,18 @@ class SampleData {
 
   static final Map<String, List<DocumentItem>> documents = {
     'proforma': [
-      const DocumentItem(id: 1, numero: 'KLR-P008-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', objet: 'Maintenance parc inf...', montant: 0, statut: 'cours'),
-      const DocumentItem(id: 2, numero: 'KLR-P007-100126', date: '10/01/2026', clientId: 2, client: 'Client B', objet: 'Développement Appl...', montant: 1500000, statut: 'validee'),
-      const DocumentItem(id: 3, numero: 'KLR-P006-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', objet: 'Audit Sécurité Réseau', montant: 450000, statut: 'annulee'),
+      DocumentItem(id: 1, numero: 'KLR-P008-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', objet: 'Maintenance parc inf...', montant: 0, statut: 'cours'),
+      DocumentItem(id: 2, numero: 'KLR-P007-100126', date: '10/01/2026', clientId: 2, client: 'Client B', objet: 'Développement Appl...', montant: 1500000, statut: 'validee'),
+      DocumentItem(id: 3, numero: 'KLR-P006-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', objet: 'Audit Sécurité Réseau', montant: 450000, statut: 'annulee'),
     ],
     'facture': [
-      const DocumentItem(id: 1, numero: 'KLR-F001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
-      const DocumentItem(id: 2, numero: 'KLR-F003-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Développement logiciel', montant: 5200000, statut: 'validee'),
-      const DocumentItem(id: 3, numero: 'KLR-F002-050326', date: '05/03/2026', clientId: 2, client: 'Global Tech', objet: 'Support technique', montant: 1800000, statut: 'validee'),
+      DocumentItem(id: 1, numero: 'KLR-F001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
+      DocumentItem(id: 2, numero: 'KLR-F003-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Développement logiciel', montant: 5200000, statut: 'validee'),
+      DocumentItem(id: 3, numero: 'KLR-F002-050326', date: '05/03/2026', clientId: 2, client: 'Global Tech', objet: 'Support technique', montant: 1800000, statut: 'validee'),
     ],
     'bl': [
-      const DocumentItem(id: 1, numero: 'KLR-B001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
-      const DocumentItem(id: 2, numero: 'KLR-B002-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Matériel informatique', montant: 5200000, statut: 'validee'),
+      DocumentItem(id: 1, numero: 'KLR-B001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
+      DocumentItem(id: 2, numero: 'KLR-B002-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Matériel informatique', montant: 5200000, statut: 'validee'),
     ],
   };
 
@@ -58,10 +58,10 @@ class SampleData {
   ];
 
   static final List<FactureEntry> factureHistory = [
-    const FactureEntry(num: 'KLR-F001-240426', client: "Advans Côte d'Ivoire", montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
-    const FactureEntry(num: 'KLR-F003-180326', client: 'Acme Corp', montant: 5200000, statut: 'paye', echeance: '18/04/2026'),
-    const FactureEntry(num: 'KLR-F002-050326', client: 'Global Tech', montant: 1800000, statut: 'paye', echeance: '05/04/2026'),
-    const FactureEntry(num: 'KLR-F004-010426', client: 'Design Studio', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
+    FactureEntry(num: 'KLR-F001-240426', client: "Advans Côte d'Ivoire", montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
+    FactureEntry(num: 'KLR-F003-180326', client: 'Acme Corp', montant: 5200000, statut: 'paye', echeance: '18/04/2026'),
+    FactureEntry(num: 'KLR-F002-050326', client: 'Global Tech', montant: 1800000, statut: 'paye', echeance: '05/04/2026'),
+    FactureEntry(num: 'KLR-F004-010426', client: 'Design Studio', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
   ];
 
   static List<Task> get initialTasks => [

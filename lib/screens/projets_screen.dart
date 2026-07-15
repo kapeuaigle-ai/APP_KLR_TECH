@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
+import '../core/app_state.dart';
 import '../widgets/common.dart';
 
 // ── Drag payload ──────────────────────────────────────────
@@ -52,6 +54,93 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
     });
   }
 
+  // ── Dialogue "Nouveau projet" ───────────────────────────
+  void _showAddProjectDialog(int colIndex) {
+    final titleCtrl = TextEditingController();
+    final descCtrl = TextEditingController();
+    String tag = 'Dev';
+
+    InputDecoration deco(String hint) => InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
+      filled: true, fillColor: AppColors.bg,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      isDense: true,
+    );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Nouveau projet — ${_columns[colIndex].title}',
+            style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
+        content: SizedBox(
+          width: 420,
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('TITRE *', style: AppTheme.label),
+            const SizedBox(height: 6),
+            TextField(controller: titleCtrl, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1), decoration: deco('Nom du projet')),
+            const SizedBox(height: 12),
+            Text('DESCRIPTION', style: AppTheme.label),
+            const SizedBox(height: 6),
+            TextField(controller: descCtrl, maxLines: 2, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1), decoration: deco('Description courte')),
+            const SizedBox(height: 12),
+            Text('CATÉGORIE', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Row(children: [
+              for (final t in ['Dev', 'Design', 'Infra', 'Admin'])
+                Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: GestureDetector(
+                    onTap: () => setDialogState(() => tag = t),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: tag == t ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: tag == t ? AppColors.primary : AppColors.border),
+                      ),
+                      child: Text(t, style: GoogleFonts.dmSans(
+                        fontSize: 12, fontWeight: FontWeight.w600,
+                        color: tag == t ? AppColors.primary : AppColors.text2)),
+                    ),
+                  ),
+                ),
+            ]),
+          ]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+          ),
+          PrimaryBtn(
+            label: 'Créer',
+            icon: Icons.add,
+            onTap: () {
+              final title = titleCtrl.text.trim();
+              if (title.isEmpty) return;
+              setState(() {
+                _columns[colIndex].cards.add(ProjectCard(
+                  tag: tag,
+                  title: title,
+                  desc: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
+                  assignees: const ['KL'],
+                  subtasks: '0/0',
+                ));
+              });
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ],
+      )),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -65,9 +154,10 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
               const SizedBox(height: 3),
               Text('Tableau Kanban de suivi de vos projets.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
             ])),
-            SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded, onTap: () {}),
+            SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
+                onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
             const SizedBox(width: 12),
-            PrimaryBtn(label: 'Nouveau projet', icon: Icons.add, onTap: () {}),
+            PrimaryBtn(label: 'Nouveau projet', icon: Icons.add, onTap: () => _showAddProjectDialog(0)),
           ]),
           const SizedBox(height: 24),
 
@@ -82,6 +172,7 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
                     col: e.value,
                     colIndex: e.key,
                     onDrop: (data) => _moveCard(data, e.key),
+                    onAdd: () => _showAddProjectDialog(e.key),
                   ),
                 )).toList(),
               ),
@@ -106,7 +197,8 @@ class _KanbanColumnWidget extends StatefulWidget {
   final _KanbanCol col;
   final int colIndex;
   final ValueChanged<_DragData> onDrop;
-  const _KanbanColumnWidget({required this.col, required this.colIndex, required this.onDrop});
+  final VoidCallback onAdd;
+  const _KanbanColumnWidget({required this.col, required this.colIndex, required this.onDrop, required this.onAdd});
 
   @override
   State<_KanbanColumnWidget> createState() => _KanbanColumnWidgetState();
@@ -156,7 +248,17 @@ class _KanbanColumnWidgetState extends State<_KanbanColumnWidget> {
                     child: Text('${widget.col.cards.length}', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text2)),
                   ),
                   const Spacer(),
-                  const Icon(Icons.add, size: 16, color: AppColors.text3),
+                  Tooltip(
+                    message: 'Ajouter un projet dans « ${widget.col.title} »',
+                    child: InkWell(
+                      onTap: widget.onAdd,
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.all(3),
+                        child: Icon(Icons.add, size: 16, color: AppColors.text2),
+                      ),
+                    ),
+                  ),
                 ]),
               ),
               const SizedBox(height: 12),
