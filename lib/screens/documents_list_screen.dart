@@ -34,7 +34,6 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
       return matchSearch && matchFilter;
     }).toList();
 
-    final total = allDocs.fold<double>(0, (s, d) => s + d.montant);
     final validated = allDocs.where((d) => d.statut == 'validee').length;
     final pending = allDocs.where((d) => d.statut == 'cours').length;
 
@@ -62,9 +61,8 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
 
             // Stats
             LayoutBuilder(builder: (context, constraints) {
-              final narrow = constraints.maxWidth < 760;
+              final narrow = constraints.maxWidth < 640;
               final pills = [
-                _StatPill(label: 'TOTAL', value: Fmt.money(total), color: AppColors.primary),
                 _StatPill(label: 'VALIDÉS', value: '$validated', color: AppColors.green),
                 _StatPill(label: 'EN COURS', value: '$pending', color: AppColors.orange),
               ];
@@ -75,8 +73,7 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
               }
               return Row(children: [
                 pills[0], const SizedBox(width: 12),
-                pills[1], const SizedBox(width: 12),
-                pills[2],
+                pills[1],
                 const Spacer(),
                 search,
               ]);
@@ -97,7 +94,7 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             CardBox(
               padding: EdgeInsets.zero,
               child: HScrollTable(
-                minWidth: 900,
+                minWidth: 1020,
                 child: Column(children: [
                   // Table header
                   Container(
@@ -107,7 +104,7 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
                     ),
                     child: Row(children: [
                       const Expanded(flex: 3, child: ThCell('NUMÉRO')),
-                      const Expanded(flex: 2, child: ThCell('DATE')),
+                      const Expanded(flex: 3, child: ThCell('DATE')),
                       const Expanded(flex: 4, child: ThCell('CLIENT')),
                       const Expanded(flex: 4, child: ThCell('OBJET')),
                       const Expanded(flex: 3, child: ThCell('MONTANT')),
@@ -291,23 +288,23 @@ class _DocRowState extends State<_DocRow> {
         child: Row(children: [
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-            child: Text(doc.numero, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(doc.date, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
-          )),
-          Expanded(flex: 4, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(doc.client, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
-          )),
-          Expanded(flex: 4, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(doc.objet, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2), overflow: TextOverflow.ellipsis),
+            child: Text(doc.numero, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
           )),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(doc.montant > 0 ? Fmt.money(doc.montant) : '—', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            child: Text(doc.date, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+          )),
+          Expanded(flex: 4, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(doc.client, maxLines: 1, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
+          )),
+          Expanded(flex: 4, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(doc.objet, maxLines: 1, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2), overflow: TextOverflow.ellipsis),
+          )),
+          Expanded(flex: 3, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Text(doc.montant > 0 ? Fmt.money(doc.montant) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
           )),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),

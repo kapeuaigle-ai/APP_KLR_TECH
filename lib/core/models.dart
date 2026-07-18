@@ -109,12 +109,12 @@ class FactureEntry {
 class Task {
   final int id;
   String texte;
-  String assignee;
+  String titre;
   String priorite; // 'haute' | 'normale' | 'basse'
   bool done;
 
   Task({
-    required this.id, required this.texte, required this.assignee,
+    required this.id, required this.texte, required this.titre,
     required this.priorite, this.done = false,
   });
 }
@@ -173,20 +173,28 @@ class ProjectCard {
 // ── App Settings ─────────────────────────────────────────
 class AppSettings {
   String company;
-  String rc;
-  String ifNum;
   String address;
-  String ice;
+  String bp;
+  String rccm;
+  String regime;
+  String tel;
+  String email;
   String prefix;
   String startNum;
   double tva;
   String conditions;
 
   AppSettings({
-    required this.company, required this.rc, required this.ifNum,
-    required this.address, required this.ice, required this.prefix,
+    required this.company, required this.address, required this.bp,
+    required this.rccm, required this.regime, required this.tel,
+    required this.email, required this.prefix,
     required this.startNum, required this.tva, required this.conditions,
   });
+
+  /// Ligne légale affichée en pied de page des documents.
+  String get footerLine =>
+      '$company $address - $bp - RCCM: $rccm '
+      'Régime d\'imposition $regime - Tel: $tel - Email: $email';
 }
 
 // ── Document Line Item ───────────────────────────────────

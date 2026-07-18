@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -201,9 +202,11 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
             ]),
             const SizedBox(height: 24),
 
-            ResponsiveSplit(
-              sideWidth: 530,
-              breakpoint: 1050,
+            // L'aperçu reste à droite et rétrécit avec l'écran (l'A4 est en
+            // AspectRatio) ; il ne passe dessous que sur écran étroit.
+            LayoutBuilder(builder: (context, constraints) => ResponsiveSplit(
+              sideWidth: math.min(530, constraints.maxWidth * 0.44),
+              breakpoint: 700,
               spacing: 20,
               // ── Form ────────────────────────────────────
               main: _FormPanel(
@@ -239,7 +242,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
                 onPrint: () => _print(state.settings),
                 onDownload: _downloading ? null : () => _download(state.settings),
               ),
-            ),
+            )),
           ],
         ),
       ),
@@ -273,6 +276,9 @@ class _FormPanel extends StatelessWidget {
     required this.onLineChanged, required this.clients,
     required this.onClientSelected,
   });
+
+  // Le BL ne comporte aucun prix : ni P.U., ni montant, ni totaux.
+  bool get _isBl => type == 'bl';
 
   @override
   Widget build(BuildContext context) {
@@ -308,21 +314,26 @@ class _FormPanel extends StatelessWidget {
             style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 14),
         Row(children: [
-          const SizedBox(width: 44, child: _ColHead('N°')),
-          const SizedBox(width: 8),
+          if (_isBl) ...[
+            const SizedBox(width: 44, child: _ColHead('N°')),
+            const SizedBox(width: 8),
+          ],
           const Expanded(child: _ColHead('DÉSIGNATION')),
           const SizedBox(width: 8),
           const SizedBox(width: 50, child: _ColHead('QTÉ')),
-          const SizedBox(width: 8),
-          const SizedBox(width: 96, child: _ColHead('P.U. (FCFA)')),
-          const SizedBox(width: 8),
-          const SizedBox(width: 96, child: _ColHead('MONTANT')),
+          if (!_isBl) ...[
+            const SizedBox(width: 8),
+            const SizedBox(width: 96, child: _ColHead('P.U. (FCFA)')),
+            const SizedBox(width: 8),
+            const SizedBox(width: 96, child: _ColHead('MONTANT')),
+          ],
           const SizedBox(width: 28),
         ]),
         const SizedBox(height: 6),
         ...lines.asMap().entries.map((e) => _LineRow(
           key: ValueKey(e.key),
           line: e.value,
+          isBl: _isBl,
           onRemove: () => onRemoveLine(e.key),
           onChanged: onLineChanged,
         )),
@@ -336,13 +347,15 @@ class _FormPanel extends StatelessWidget {
                 style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.primary, fontWeight: FontWeight.w600)),
           ]),
         ),
-        const SizedBox(height: 14),
-        const Divider(color: AppColors.border),
-        const SizedBox(height: 10),
-        _TotalRow(label: 'SOUS-TOTAL HT', value: Fmt.money(ht)),
-        if (tva) ...[const SizedBox(height: 5), _TotalRow(label: 'TVA (5%)', value: Fmt.money(tvaAmt))],
-        const SizedBox(height: 5),
-        _TotalRow(label: 'TOTAL TTC', value: Fmt.money(ttc), bold: true),
+        if (!_isBl) ...[
+          const SizedBox(height: 14),
+          const Divider(color: AppColors.border),
+          const SizedBox(height: 10),
+          _TotalRow(label: 'SOUS-TOTAL HT', value: Fmt.money(ht)),
+          if (tva) ...[const SizedBox(height: 5), _TotalRow(label: 'TVA (5%)', value: Fmt.money(tvaAmt))],
+          const SizedBox(height: 5),
+          _TotalRow(label: 'TOTAL TTC', value: Fmt.money(ttc), bold: true),
+        ],
       ])),
     ]);
   }
@@ -504,9 +517,10 @@ class _TotalRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────
 class _LineRow extends StatefulWidget {
   final LineItem line;
+  final bool isBl;
   final VoidCallback onRemove;
   final VoidCallback onChanged;
-  const _LineRow({super.key, required this.line, required this.onRemove, required this.onChanged});
+  const _LineRow({super.key, required this.line, required this.isBl, required this.onRemove, required this.onChanged});
 
   @override
   State<_LineRow> createState() => _LineRowState();
@@ -553,28 +567,32 @@ class _LineRowState extends State<_LineRow> {
   Widget build(BuildContext context) {
     final line = widget.line;
     return _cell(Row(children: [
-      SizedBox(width: 44, child: Container(
-        height: 36, alignment: Alignment.center,
-        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
-        child: Text(line.ref, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text2)),
-      )),
-      const SizedBox(width: 8),
+      if (widget.isBl) ...[
+        SizedBox(width: 44, child: Container(
+          height: 36, alignment: Alignment.center,
+          decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
+          child: Text(line.ref, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text2)),
+        )),
+        const SizedBox(width: 8),
+      ],
       Expanded(child: _tf(_desCtrl, hint: 'Désignation du produit/service',
           onChanged: (v) { line.designation = v; widget.onChanged(); })),
       const SizedBox(width: 8),
       SizedBox(width: 50, child: _tf(_qteCtrl, numeric: true,
           onChanged: (v) { line.qte = int.tryParse(v) ?? 1; widget.onChanged(); })),
-      const SizedBox(width: 8),
-      SizedBox(width: 96, child: _tf(_puCtrl, hint: '0', numeric: true,
-          onChanged: (v) { line.pu = double.tryParse(v) ?? 0; widget.onChanged(); })),
-      const SizedBox(width: 8),
-      SizedBox(width: 96, child: Container(
-        height: 36, alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
-        child: Text(Fmt.number(line.total),
-            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-      )),
+      if (!widget.isBl) ...[
+        const SizedBox(width: 8),
+        SizedBox(width: 96, child: _tf(_puCtrl, hint: '0', numeric: true,
+            onChanged: (v) { line.pu = double.tryParse(v) ?? 0; widget.onChanged(); })),
+        const SizedBox(width: 8),
+        SizedBox(width: 96, child: Container(
+          height: 36, alignment: Alignment.centerRight,
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
+          child: Text(Fmt.number(line.total),
+              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+        )),
+      ],
       const SizedBox(width: 8),
       GestureDetector(onTap: widget.onRemove, child: const Icon(Icons.close, size: 16, color: AppColors.text3)),
     ]));
@@ -614,6 +632,9 @@ class _A4Preview extends StatelessWidget {
     required this.conditions,
     this.onPrint, this.onDownload,
   });
+
+  // Le BL ne comporte aucun prix : ni P.U., ni montant, ni totaux.
+  bool get _isBl => type == 'bl';
 
   String get _typeLabel {
     if (type == 'proforma') return 'FACTURE PROFORMA';
@@ -707,7 +728,7 @@ class _A4Preview extends StatelessWidget {
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Expanded(child: _InfoBox(
                     label: 'DE :',
-                    lines: [settings.company, settings.address, 'BP : ${settings.rc}'],
+                    lines: [settings.company, settings.address, settings.bp],
                   )),
                   const SizedBox(width: 12),
                   Expanded(child: _InfoBox(
@@ -752,10 +773,11 @@ class _A4Preview extends StatelessWidget {
                 tva: tva,
                 ht: ht, tvaAmt: tvaAmt, ttc: ttc,
                 showTotals: isLast,
+                isBl: _isBl,
               ),
 
               // ── Totaux + montant en lettres (dernière page) ─
-              if (isLast && ttc > 0) ...[
+              if (isLast && ttc > 0 && !_isBl) ...[
                 const SizedBox(height: 10),
                 Text(
                   'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
@@ -786,23 +808,23 @@ class _A4Preview extends StatelessWidget {
                     children: [
                       Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                         Text('Conditions de règlement :',
-                            style: GoogleFonts.dmSans(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                        const SizedBox(height: 4),
+                            style: GoogleFonts.dmSans(fontSize: 7.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                        const SizedBox(height: 3),
                         ...conditions.split('\n').where((l) => l.trim().isNotEmpty).map((l) => Padding(
-                          padding: const EdgeInsets.only(bottom: 2),
+                          padding: const EdgeInsets.only(bottom: 1),
                           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Text('• ', style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2)),
+                            Text('• ', style: GoogleFonts.dmSans(fontSize: 7.5, color: AppColors.text2)),
                             Expanded(child: Text(l.trim(),
-                                style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2, height: 1.4))),
+                                style: GoogleFonts.dmSans(fontSize: 7.5, color: AppColors.text2, height: 1.25))),
                           ]),
                         )),
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 5),
                         Text(
                           'Tout produit, sauf mention contraire, bénéficie d\'une période de garantie contre tout vice de '
                           'fabrication (retour atelier sans frais de réparation ou échange standard dans la limite des stocks '
                           'disponibles) soumise à l\'expertise constructeur, à compter de la date de facturation et à condition '
                           'qu\'il soit tenu en bon état et que les étiquettes de code ne soient pas retirées ou déchirées.',
-                          style: GoogleFonts.dmSans(fontSize: 7, color: AppColors.text3, height: 1.4),
+                          style: GoogleFonts.dmSans(fontSize: 6, color: AppColors.text3, height: 1.25),
                         ),
                       ])),
                       const SizedBox(width: 16),
@@ -824,7 +846,7 @@ class _A4Preview extends StatelessWidget {
                                   color: Colors.white,
                                   padding: const EdgeInsets.symmetric(horizontal: 6),
                                   child: Text('Signature', style: GoogleFonts.dmSans(
-                                      fontSize: 8.5, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                                      fontSize: 7.5, fontWeight: FontWeight.w600, color: AppColors.text3)),
                                 ),
                               ),
                             ),
@@ -843,9 +865,7 @@ class _A4Preview extends StatelessWidget {
             padding: const EdgeInsets.symmetric(vertical: 7, horizontal: 16),
             color: const Color(0xFFF8F8F8),
             child: Text(
-              '${settings.company.toUpperCase()}  |  ABIDJAN, CÔTE D\'IVOIRE  |  '
-              'TÉL : +225 07 08 71 45 57  |  EMAIL : klr.tech@gmail.com  |  '
-              'RC : ${settings.rc}  |  IF : ${settings.ifNum}',
+              settings.footerLine,
               style: GoogleFonts.dmSans(fontSize: 6.5, color: AppColors.text3, letterSpacing: 0.4),
               textAlign: TextAlign.center,
             ),
@@ -983,7 +1003,8 @@ class _PreviewTable extends StatelessWidget {
   final bool tva;
   final double ht, tvaAmt, ttc;
   final bool showTotals;
-  const _PreviewTable({required this.lines, required this.tva, required this.ht, required this.tvaAmt, required this.ttc, this.showTotals = true});
+  final bool isBl;
+  const _PreviewTable({required this.lines, required this.tva, required this.ht, required this.tvaAmt, required this.ttc, required this.isBl, this.showTotals = true});
 
   @override
   Widget build(BuildContext context) {
@@ -992,15 +1013,19 @@ class _PreviewTable extends StatelessWidget {
       Container(
         color: AppColors.primary,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-        child: Row(children: const [
-          SizedBox(width: 28, child: _TH('Réf')),
-          SizedBox(width: 8),
-          Expanded(child: _TH('Désignation')),
-          SizedBox(width: 30, child: _TH('Qté', right: true)),
-          SizedBox(width: 8),
-          SizedBox(width: 70, child: _TH('P.U (FCFA)', right: true)),
-          SizedBox(width: 8),
-          SizedBox(width: 65, child: _TH('Montant', right: true)),
+        child: Row(children: [
+          if (isBl) ...[
+            const SizedBox(width: 28, child: _TH('Réf')),
+            const SizedBox(width: 8),
+          ],
+          const Expanded(child: _TH('Désignation')),
+          const SizedBox(width: 30, child: _TH('Qté', right: true)),
+          if (!isBl) ...[
+            const SizedBox(width: 8),
+            const SizedBox(width: 70, child: _TH('P.U (FCFA)', right: true)),
+            const SizedBox(width: 8),
+            const SizedBox(width: 65, child: _TH('Montant', right: true)),
+          ],
         ]),
       ),
       // Data rows
@@ -1011,19 +1036,23 @@ class _PreviewTable extends StatelessWidget {
           color: even ? const Color(0xFFFAFAFA) : Colors.white,
           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            SizedBox(width: 28, child: Text(l.ref, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2))),
-            const SizedBox(width: 8),
+            if (isBl) ...[
+              SizedBox(width: 28, child: Text(l.ref, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2))),
+              const SizedBox(width: 8),
+            ],
             Expanded(child: Text(l.designation, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text1, height: 1.3))),
             SizedBox(width: 30, child: Text('${l.qte}', style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2), textAlign: TextAlign.right)),
-            const SizedBox(width: 8),
-            SizedBox(width: 70, child: Text(Fmt.number(l.pu), style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2), textAlign: TextAlign.right)),
-            const SizedBox(width: 8),
-            SizedBox(width: 65, child: Text(Fmt.number(l.total), style: GoogleFonts.dmSans(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.text1), textAlign: TextAlign.right)),
+            if (!isBl) ...[
+              const SizedBox(width: 8),
+              SizedBox(width: 70, child: Text(Fmt.number(l.pu), style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2), textAlign: TextAlign.right)),
+              const SizedBox(width: 8),
+              SizedBox(width: 65, child: Text(Fmt.number(l.total), style: GoogleFonts.dmSans(fontSize: 8.5, fontWeight: FontWeight.w700, color: AppColors.text1), textAlign: TextAlign.right)),
+            ],
           ]),
         );
       }),
-      // Totaux — uniquement sur la dernière page
-      if (showTotals) ...[
+      // Totaux — uniquement sur la dernière page, jamais sur un BL
+      if (showTotals && !isBl) ...[
         const SizedBox(height: 8),
         Align(alignment: Alignment.centerRight, child: SizedBox(width: 200, child: Column(children: [
           _PTotal(label: 'Sous-total HT', value: Fmt.number(ht)),

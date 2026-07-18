@@ -25,12 +25,20 @@ class StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cfg = (config ?? _doc)[status] ?? const _BadgeCfg(AppColors.text2, AppColors.grayBg, '—');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-      decoration: BoxDecoration(color: cfg.bg, borderRadius: BorderRadius.circular(20)),
-      child: Text(cfg.label, style: GoogleFonts.dmSans(
-        fontSize: 11, fontWeight: FontWeight.w600, color: cfg.color,
-      )),
+    // FittedBox : le libellé reste toujours sur une seule ligne,
+    // quitte à se réduire légèrement dans une colonne étroite.
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(color: cfg.bg, borderRadius: BorderRadius.circular(20)),
+          child: Text(cfg.label, maxLines: 1, style: GoogleFonts.dmSans(
+            fontSize: 11, fontWeight: FontWeight.w600, color: cfg.color,
+          )),
+        ),
+      ),
     );
   }
 }

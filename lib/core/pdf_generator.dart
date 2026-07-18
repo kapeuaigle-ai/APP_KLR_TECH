@@ -152,7 +152,7 @@ class PdfGenerator {
 
   // ── Tableau + totaux ──────────────────────────────────
   static pw.Widget _table(List<LineItem> lines, bool tva,
-      double ht, double tvaAmt, double ttc, bool showTotals,
+      double ht, double tvaAmt, double ttc, bool showTotals, bool isBl,
       pw.Font bold, pw.Font reg) {
     return pw.Column(children: [
       // Header rouge
@@ -160,14 +160,18 @@ class PdfGenerator {
         color: _red,
         padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         child: pw.Row(children: [
-          pw.SizedBox(width: 24, child: pw.Text('Réf',        style: _ts(8, color: PdfColors.white, font: bold))),
-          pw.SizedBox(width: 8),
+          if (isBl) ...[
+            pw.SizedBox(width: 24, child: pw.Text('Réf',      style: _ts(8, color: PdfColors.white, font: bold))),
+            pw.SizedBox(width: 8),
+          ],
           pw.Expanded(           child: pw.Text('Désignation',style: _ts(8, color: PdfColors.white, font: bold))),
           pw.SizedBox(width: 30, child: pw.Text('Qté',        style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
-          pw.SizedBox(width: 8),
-          pw.SizedBox(width: 68, child: pw.Text('P.U (FCFA)', style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
-          pw.SizedBox(width: 8),
-          pw.SizedBox(width: 62, child: pw.Text('Montant',    style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
+          if (!isBl) ...[
+            pw.SizedBox(width: 8),
+            pw.SizedBox(width: 68, child: pw.Text('P.U (FCFA)', style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
+            pw.SizedBox(width: 8),
+            pw.SizedBox(width: 62, child: pw.Text('Montant',    style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
+          ],
         ]),
       ),
       // Lignes
@@ -177,19 +181,23 @@ class PdfGenerator {
           color: e.key % 2 == 0 ? _rowAlt : PdfColors.white,
           padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            pw.SizedBox(width: 24, child: pw.Text(l.ref, style: _ts(8.5, color: _grey2))),
-            pw.SizedBox(width: 8),
+            if (isBl) ...[
+              pw.SizedBox(width: 24, child: pw.Text(l.ref, style: _ts(8.5, color: _grey2))),
+              pw.SizedBox(width: 8),
+            ],
             pw.Expanded(child: pw.Text(l.designation, style: _ts(8.5))),
             pw.SizedBox(width: 30, child: pw.Text('${l.qte}', style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
-            pw.SizedBox(width: 8),
-            pw.SizedBox(width: 68, child: pw.Text(Fmt.number(l.pu),    style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
-            pw.SizedBox(width: 8),
-            pw.SizedBox(width: 62, child: pw.Text(Fmt.number(l.total), style: _ts(8.5, font: bold),    textAlign: pw.TextAlign.right)),
+            if (!isBl) ...[
+              pw.SizedBox(width: 8),
+              pw.SizedBox(width: 68, child: pw.Text(Fmt.number(l.pu),    style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
+              pw.SizedBox(width: 8),
+              pw.SizedBox(width: 62, child: pw.Text(Fmt.number(l.total), style: _ts(8.5, font: bold),    textAlign: pw.TextAlign.right)),
+            ],
           ]),
         );
       }),
-      // Totaux (dernière page uniquement)
-      if (showTotals) ...[
+      // Totaux (dernière page uniquement, jamais sur un BL)
+      if (showTotals && !isBl) ...[
         pw.SizedBox(height: 8),
         pw.Align(alignment: pw.Alignment.centerRight, child: pw.SizedBox(width: 195, child: pw.Column(children: [
           _ptRow('Sous-total HT', Fmt.number(ht), reg),
@@ -234,23 +242,23 @@ class PdfGenerator {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text('Conditions de règlement :',
-                style: _ts(8.5, font: bold)),
-            pw.SizedBox(height: 4),
+                style: _ts(7.5, font: bold)),
+            pw.SizedBox(height: 3),
             ...conditions.split('\n')
                 .where((l) => l.trim().isNotEmpty)
                 .map((l) => pw.Padding(
-                  padding: const pw.EdgeInsets.only(bottom: 2),
+                  padding: const pw.EdgeInsets.only(bottom: 1),
                   child: pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('• ', style: _ts(8.5, color: _grey2)),
+                      pw.Text('• ', style: _ts(7.5, color: _grey2)),
                       pw.Expanded(child:
-                          pw.Text(l.trim(), style: _ts(8.5, color: _grey2))),
+                          pw.Text(l.trim(), style: _ts(7.5, color: _grey2))),
                     ],
                   ),
                 )),
-            pw.SizedBox(height: 8),
-            pw.Text(clause, style: _ts(7, color: _grey3)),
+            pw.SizedBox(height: 5),
+            pw.Text(clause, style: _ts(6, color: _grey3)),
           ],
         )),
 
@@ -268,12 +276,12 @@ class PdfGenerator {
             ),
             borderRadius: pw.BorderRadius.circular(16),
           ),
-          padding: const pw.EdgeInsets.fromLTRB(8, 10, 8, 8),
+          padding: const pw.EdgeInsets.fromLTRB(8, 7, 8, 6),
           child: pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               pw.Text('Signature',
-                  style: _ts(8.5, color: _grey3, font: bold),
+                  style: _ts(7.5, color: _grey3, font: bold),
                   textAlign: pw.TextAlign.center),
             ],
           ),
@@ -288,9 +296,7 @@ class PdfGenerator {
     padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 16),
     color: _bgFoot,
     child: pw.Text(
-      '${s.company.toUpperCase()}  |  ABIDJAN, CÔTE D\'IVOIRE  |  '
-      'TÉL : +225 07 08 71 45 57  |  EMAIL : klr.tech@gmail.com  |  '
-      'RC : ${s.rc}  |  IF : ${s.ifNum}',
+      s.footerLine,
       style: _ts(6, color: _grey3, spacing: 0.3),
       textAlign: pw.TextAlign.center,
     ),
@@ -350,7 +356,7 @@ class PdfGenerator {
                   // Info boxes
                   pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
                     pw.Expanded(child: _infoBox('DE :', [
-                      settings.company, settings.address, 'BP : ${settings.rc}',
+                      settings.company, settings.address, settings.bp,
                     ], bold, reg)),
                     pw.SizedBox(width: 12),
                     pw.Expanded(child: _infoBox('À L\'ATTENTION DE :', [
@@ -370,10 +376,10 @@ class PdfGenerator {
                 ],
 
                 // Tableau
-                _table(pageLines, tva, ht, tvaAmt, ttc, isLast, bold, reg),
+                _table(pageLines, tva, ht, tvaAmt, ttc, isLast, type == 'bl', bold, reg),
 
-                // Montant en lettres (dernière page)
-                if (isLast && ttc > 0) ...[
+                // Montant en lettres (dernière page, jamais sur un BL)
+                if (isLast && ttc > 0 && type != 'bl') ...[
                   pw.SizedBox(height: 10),
                   pw.Text(
                     'Arrêté la présente facture à la somme de : '
@@ -509,7 +515,7 @@ class PdfGenerator {
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(settings.company, style: _ts(14, font: bold)),
             pw.Text(settings.address, style: _ts(8, color: _grey2)),
-            pw.Text('RC : ${settings.rc}   IF : ${settings.ifNum}', style: _ts(8, color: _grey2)),
+            pw.Text('RCCM : ${settings.rccm}   Régime d\'imposition : ${settings.regime}', style: _ts(8, color: _grey2)),
           ]),
           pw.Spacer(),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
@@ -594,7 +600,7 @@ class PdfGenerator {
         alignment: pw.Alignment.center,
         padding: const pw.EdgeInsets.only(top: 8),
         child: pw.Text(
-          '${settings.company.toUpperCase()}  |  RC : ${settings.rc}  |  IF : ${settings.ifNum}  —  Page ${ctx.pageNumber}/${ctx.pagesCount}',
+          '${settings.company.toUpperCase()}  |  RCCM : ${settings.rccm}  —  Page ${ctx.pageNumber}/${ctx.pagesCount}',
           style: _ts(6.5, color: _grey3),
         ),
       ),

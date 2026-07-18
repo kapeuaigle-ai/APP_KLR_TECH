@@ -203,7 +203,7 @@ class _MembresTab extends StatelessWidget {
         ),
         const Divider(height: 1, color: AppColors.border),
         HScrollTable(
-          minWidth: 980,
+          minWidth: 1040,
           child: Column(children: [
             Container(
               color: AppColors.bg,

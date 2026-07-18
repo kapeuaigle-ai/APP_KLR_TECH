@@ -80,22 +80,25 @@ class _EntrepriseTab extends StatefulWidget {
 }
 
 class _EntrepriseTabState extends State<_EntrepriseTab> {
-  late TextEditingController _company, _rc, _ifNum, _address, _ice;
+  late TextEditingController _company, _address, _bp, _rccm, _regime, _tel, _email;
 
   @override
   void initState() {
     super.initState();
     final s = context.read<AppState>().settings;
     _company = TextEditingController(text: s.company);
-    _rc = TextEditingController(text: s.rc);
-    _ifNum = TextEditingController(text: s.ifNum);
     _address = TextEditingController(text: s.address);
-    _ice = TextEditingController(text: s.ice);
+    _bp = TextEditingController(text: s.bp);
+    _rccm = TextEditingController(text: s.rccm);
+    _regime = TextEditingController(text: s.regime);
+    _tel = TextEditingController(text: s.tel);
+    _email = TextEditingController(text: s.email);
   }
 
   @override
   void dispose() {
-    _company.dispose(); _rc.dispose(); _ifNum.dispose(); _address.dispose(); _ice.dispose();
+    _company.dispose(); _address.dispose(); _bp.dispose(); _rccm.dispose();
+    _regime.dispose(); _tel.dispose(); _email.dispose();
     super.dispose();
   }
 
@@ -109,24 +112,32 @@ class _EntrepriseTabState extends State<_EntrepriseTab> {
         const SizedBox(height: 20),
         _SettingField(label: 'NOM DE L\'ENTREPRISE', ctrl: _company),
         const SizedBox(height: 14),
-        Row(children: [
-          Expanded(child: _SettingField(label: 'REGISTRE DE COMMERCE', ctrl: _rc)),
-          const SizedBox(width: 14),
-          Expanded(child: _SettingField(label: 'NUMÉRO IF', ctrl: _ifNum)),
-        ]),
-        const SizedBox(height: 14),
         _SettingField(label: 'ADRESSE', ctrl: _address),
         const SizedBox(height: 14),
-        _SettingField(label: 'ICE', ctrl: _ice),
+        Row(children: [
+          Expanded(child: _SettingField(label: 'BOÎTE POSTALE', ctrl: _bp)),
+          const SizedBox(width: 14),
+          Expanded(child: _SettingField(label: 'RCCM', ctrl: _rccm)),
+        ]),
+        const SizedBox(height: 14),
+        Row(children: [
+          Expanded(child: _SettingField(label: 'RÉGIME D\'IMPOSITION', ctrl: _regime)),
+          const SizedBox(width: 14),
+          Expanded(child: _SettingField(label: 'TÉLÉPHONE', ctrl: _tel)),
+        ]),
+        const SizedBox(height: 14),
+        _SettingField(label: 'EMAIL', ctrl: _email),
         const SizedBox(height: 20),
         Align(alignment: Alignment.centerRight, child: PrimaryBtn(label: 'Enregistrer', icon: Icons.save_outlined, onTap: () {
           final state = context.read<AppState>();
           final s = state.settings;
           s.company = _company.text;
-          s.rc = _rc.text;
-          s.ifNum = _ifNum.text;
           s.address = _address.text;
-          s.ice = _ice.text;
+          s.bp = _bp.text;
+          s.rccm = _rccm.text;
+          s.regime = _regime.text;
+          s.tel = _tel.text;
+          s.email = _email.text;
           state.updateSettings(s);
           widget.onSaved();
         })),
@@ -151,9 +162,25 @@ class _EntrepriseTabState extends State<_EntrepriseTab> {
             ]),
             const SizedBox(height: 8),
             Text(state.settings.address, style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3, height: 1.5)),
-            Text('RC : ${state.settings.rc}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
-            Text('IF : ${state.settings.ifNum}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
+            Text(state.settings.bp, style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
+            Text('RCCM : ${state.settings.rccm}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
+            Text('Régime d\'imposition : ${state.settings.regime}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
+            Text('Tel : ${state.settings.tel}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
+            Text('Email : ${state.settings.email}', style: GoogleFonts.dmSans(fontSize: 10, color: AppColors.text3)),
           ])),
+        ),
+        const SizedBox(height: 16),
+        Text('Aperçu pied de page facture', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+        const SizedBox(height: 16),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8)),
+          child: Consumer<AppState>(builder: (ctx, state, _) => Text(
+            state.settings.footerLine,
+            style: GoogleFonts.dmSans(fontSize: 9, color: AppColors.text3, height: 1.5),
+            textAlign: TextAlign.center,
+          )),
         ),
       ])),
     );

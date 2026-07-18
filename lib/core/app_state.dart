@@ -23,11 +23,13 @@ class AppState extends ChangeNotifier {
       'bl': List.from(SampleData.documents['bl']!),
     };
     settings = AppSettings(
-      company: 'KLR TECH S.A.R.L',
-      rc: '22000038',
-      ifNum: '12883445',
-      address: 'Cocody Riviera 2, Abidjan, Côte d\'Ivoire',
-      ice: '001552883000045',
+      company: 'KLR TECH SARL',
+      address: 'Abidjan Riviera 2 Lot 128 ilot 307',
+      bp: '28 BP 994 Abidjan 28',
+      rccm: 'CI-ABJ-03-2021-B1308160',
+      regime: 'TEE',
+      tel: '0708714557',
+      email: 'klr.tech8@gmail.com',
       prefix: 'KLR',
       startNum: '001',
       tva: 5,

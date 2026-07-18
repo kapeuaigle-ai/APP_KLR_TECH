@@ -74,7 +74,7 @@ class _FacturesTab extends StatelessWidget {
       CardBox(
         padding: EdgeInsets.zero,
         child: HScrollTable(
-          minWidth: 820,
+          minWidth: 940,
           child: Column(children: [
             Container(
               color: AppColors.bg,
@@ -98,7 +98,7 @@ class _FacturesTab extends StatelessWidget {
                 child: Row(children: [
                   Expanded(flex: 3, child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    child: Text(f.num, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                    child: Text(f.num, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
                   )),
                   Expanded(flex: 4, child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -106,7 +106,7 @@ class _FacturesTab extends StatelessWidget {
                   )),
                   Expanded(flex: 3, child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(Fmt.money(f.montant), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                    child: Text(Fmt.money(f.montant), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
                   )),
                   Expanded(flex: 2, child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -114,7 +114,7 @@ class _FacturesTab extends StatelessWidget {
                   )),
                   Expanded(flex: 3, child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(f.echeance, style: GoogleFonts.dmSans(fontSize: 13, color: f.statut == 'retard' ? AppColors.red : AppColors.text2)),
+                    child: Text(f.echeance, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: f.statut == 'retard' ? AppColors.red : AppColors.text2)),
                   )),
                   SizedBox(width: 60, child: PopupMenuButton<String>(
                     tooltip: 'Actions',
@@ -184,7 +184,7 @@ class _DimeTab extends StatelessWidget {
       CardBox(
         padding: EdgeInsets.zero,
         child: HScrollTable(
-          minWidth: 760,
+          minWidth: 880,
           child: Column(children: [
           Container(
             color: AppColors.bg,
@@ -212,11 +212,11 @@ class _DimeTab extends StatelessWidget {
                 )),
                 Expanded(flex: 3, child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(Fmt.money(d.revenu), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                  child: Text(Fmt.money(d.revenu), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
                 )),
                 Expanded(flex: 3, child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(Fmt.money(d.dime), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+                  child: Text(Fmt.money(d.dime), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
                 )),
                 Expanded(flex: 2, child: Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -246,7 +246,7 @@ class _TachesTab extends StatefulWidget {
 
 class _TachesTabState extends State<_TachesTab> {
   final _ctrl = TextEditingController();
-  String _assignee = 'Koffi Lambert';
+  final _titreCtrl = TextEditingController();
   String _priorite = 'normale';
 
   static const _priorites = ['haute', 'normale', 'basse'];
@@ -256,6 +256,7 @@ class _TachesTabState extends State<_TachesTab> {
   @override
   void dispose() {
     _ctrl.dispose();
+    _titreCtrl.dispose();
     super.dispose();
   }
 
@@ -264,10 +265,6 @@ class _TachesTabState extends State<_TachesTab> {
     final state = context.watch<AppState>();
     final tasks = state.tasks;
     final done = tasks.where((t) => t.done).length;
-    // Membres assignables : les collaborateurs actuels
-    final members = state.employees.map((e) => e.nom).toList();
-    if (members.isEmpty) members.add('Moi');
-    if (!members.contains(_assignee)) _assignee = members.first;
 
     return ResponsiveSplit(
       sideWidth: 300,
@@ -310,20 +307,21 @@ class _TachesTabState extends State<_TachesTab> {
           ),
         ),
         const SizedBox(height: 12),
-        Text('ASSIGNÉ À', style: AppTheme.label),
+        Text('TITRE', style: AppTheme.label),
         const SizedBox(height: 6),
-        DropdownButtonFormField<String>(
-          initialValue: _assignee,
+        TextField(
+          controller: _titreCtrl,
           style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
           decoration: InputDecoration(
+            hintText: 'Ex : Facturation, Relance client...',
+            hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
             filled: true, fillColor: AppColors.bg,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
             enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             isDense: true,
           ),
-          items: members.map((m) => DropdownMenuItem(value: m, child: Text(m))).toList(),
-          onChanged: (v) => setState(() => _assignee = v!),
         ),
         const SizedBox(height: 12),
         Text('PRIORITÉ', style: AppTheme.label),
@@ -351,10 +349,11 @@ class _TachesTabState extends State<_TachesTab> {
               context.read<AppState>().addTask(Task(
                 id: DateTime.now().millisecondsSinceEpoch,
                 texte: _ctrl.text.trim(),
-                assignee: _assignee,
+                titre: _titreCtrl.text.trim(),
                 priorite: _priorite,
               ));
               _ctrl.clear();
+              _titreCtrl.clear();
             }
           },
         )),
@@ -393,7 +392,8 @@ class _TaskItem extends StatelessWidget {
             color: task.done ? AppColors.text3 : AppColors.text1,
             decoration: task.done ? TextDecoration.lineThrough : null,
           )),
-          Text(task.assignee, style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
+          if (task.titre.isNotEmpty)
+            Text(task.titre, style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
         ])),
         Container(
           width: 8, height: 8,
@@ -420,6 +420,36 @@ class _NotesTab extends StatefulWidget {
 class _NotesTabState extends State<_NotesTab> {
   Note? _editing;
 
+  // Suppression directe depuis la carte, avec confirmation simple
+  void _confirmDeleteNote(Note n) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Supprimer cette note ?', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+        content: Text(
+          '« ${n.titre.isEmpty ? 'Sans titre' : n.titre} » sera supprimée définitivement.',
+          style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+          ),
+          TextButton(
+            onPressed: () {
+              context.read<AppState>().deleteNote(n.id);
+              if (_editing?.id == n.id) setState(() => _editing = null);
+              Navigator.of(ctx).pop();
+            },
+            child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final notes = context.watch<AppState>().notes;
@@ -431,7 +461,11 @@ class _NotesTabState extends State<_NotesTab> {
         ...notes.map((n) => SizedBox(
           width: 240,
           height: 180,
-          child: _NoteCard(note: n, onTap: () => setState(() => _editing = n)),
+          child: _NoteCard(
+            note: n,
+            onTap: () => setState(() => _editing = n),
+            onDelete: () => _confirmDeleteNote(n),
+          ),
         )),
         SizedBox(
           width: 240,
@@ -467,7 +501,8 @@ class _NotesTabState extends State<_NotesTab> {
 class _NoteCard extends StatefulWidget {
   final Note note;
   final VoidCallback onTap;
-  const _NoteCard({required this.note, required this.onTap});
+  final VoidCallback onDelete;
+  const _NoteCard({required this.note, required this.onTap, required this.onDelete});
 
   @override
   State<_NoteCard> createState() => _NoteCardState();
@@ -497,10 +532,24 @@ class _NoteCardState extends State<_NoteCard> {
             // Bandeau d'accent coloré en haut de la carte
             Container(height: 3, color: n.color),
             Expanded(child: Padding(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 16),
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(n.titre.isEmpty ? 'Sans titre' : n.titre, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis),
-                const SizedBox(height: 6),
+                Row(children: [
+                  Expanded(child: Text(n.titre.isEmpty ? 'Sans titre' : n.titre, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  // Bouton de suppression directe, toujours visible
+                  Tooltip(
+                    message: 'Supprimer la note',
+                    child: InkWell(
+                      onTap: widget.onDelete,
+                      borderRadius: BorderRadius.circular(6),
+                      child: const Padding(
+                        padding: EdgeInsets.all(4),
+                        child: Icon(Icons.delete_outline, size: 16, color: AppColors.red),
+                      ),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 4),
                 // Expanded : le contenu occupe tout l'espace disponible
                 // et la date reste collée en bas de la carte
                 Expanded(child: Text(n.contenu, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.5), maxLines: 5, overflow: TextOverflow.ellipsis)),

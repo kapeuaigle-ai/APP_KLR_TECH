@@ -65,10 +65,10 @@ class SampleData {
   ];
 
   static List<Task> get initialTasks => [
-    Task(id: 1, texte: 'Générer la facture Advans', assignee: 'Koffi Lambert', priorite: 'haute', done: false),
-    Task(id: 2, texte: 'Relancer Tech Corp (J+15)', assignee: 'Sara El Mansouri', priorite: 'haute', done: false),
-    Task(id: 3, texte: 'Valider le BL #KLR-B001', assignee: 'Koffi Lambert', priorite: 'normale', done: true),
-    Task(id: 4, texte: 'Préparer rapport mensuel', assignee: 'Sara El Mansouri', priorite: 'basse', done: false),
+    Task(id: 1, texte: 'Générer la facture Advans', titre: 'Facturation', priorite: 'haute', done: false),
+    Task(id: 2, texte: 'Relancer Tech Corp (J+15)', titre: 'Relance client', priorite: 'haute', done: false),
+    Task(id: 3, texte: 'Valider le BL #KLR-B001', titre: 'Livraison', priorite: 'normale', done: true),
+    Task(id: 4, texte: 'Préparer rapport mensuel', titre: 'Rapport', priorite: 'basse', done: false),
   ];
 
   static List<Note> get initialNotes => [

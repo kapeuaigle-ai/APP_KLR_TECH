@@ -74,7 +74,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                 ),
                 const Divider(height: 1, color: AppColors.border),
                 HScrollTable(
-                  minWidth: 900,
+                  minWidth: 1020,
                   child: Column(children: [
                     Container(
                       color: AppColors.bg,
@@ -306,11 +306,11 @@ class _ClientRowState extends State<_ClientRow> {
           )),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(c.phone, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+            child: Text(c.phone, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
           )),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            child: Text(c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
           )),
           Expanded(flex: 2, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
