@@ -170,7 +170,7 @@ class DocumentPreview extends StatelessWidget {
                   Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                     Text('Suite — $_typeLabel', style: GoogleFonts.dmSans(
                         fontSize: 9, fontWeight: FontWeight.w700, color: AppColors.text2)),
-                    Text('N°  $numero   •   Page $pageNum / $totalPages',
+                    Text('N°  $numero   -   Page $pageNum / $totalPages',
                         style: GoogleFonts.dmSans(fontSize: 8, color: AppColors.text3)),
                   ]),
                 ]),
@@ -205,7 +205,7 @@ class DocumentPreview extends StatelessWidget {
               if (!isLast)
                 Align(
                   alignment: Alignment.center,
-                  child: Text('— Page $pageNum / $totalPages —',
+                  child: Text('- Page $pageNum / $totalPages -',
                       style: GoogleFonts.dmSans(fontSize: 7.5, color: AppColors.text3)),
                 ),
 
@@ -223,7 +223,13 @@ class DocumentPreview extends StatelessWidget {
                       ...conditions.split('\n').where((l) => l.trim().isNotEmpty).map((l) => Padding(
                         padding: const EdgeInsets.only(bottom: 1),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text('• ', style: GoogleFonts.dmSans(fontSize: 7.5, color: AppColors.text2)),
+                          // Puce dessinée (cercle), identique au PDF où « • »
+                          // ne peut pas être rendu.
+                          Container(
+                            width: 2.4, height: 2.4,
+                            margin: const EdgeInsets.only(top: 3.4, right: 4),
+                            decoration: const BoxDecoration(color: AppColors.text2, shape: BoxShape.circle),
+                          ),
                           Expanded(child: Text(l.trim(),
                               style: GoogleFonts.dmSans(fontSize: 7.5, color: AppColors.text2, height: 1.25))),
                         ]),

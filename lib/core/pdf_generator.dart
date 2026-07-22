@@ -113,7 +113,7 @@ class PdfGenerator {
         pw.Spacer(),
         pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
           pw.Text('Suite — ${_typeLabel(type)}', style: _ts(8, color: _grey2, font: bold)),
-          pw.Text('N°  $numero   •   Page $page / $total', style: _ts(7.5, color: _grey3)),
+          pw.Text('N°  $numero   -   Page $page / $total', style: _ts(7.5, color: _grey3)),
         ]),
       ]),
       pw.SizedBox(height: 8),
@@ -241,7 +241,13 @@ class PdfGenerator {
                   child: pw.Row(
                     crossAxisAlignment: pw.CrossAxisAlignment.start,
                     children: [
-                      pw.Text('• ', style: _ts(7.5, color: _grey2)),
+                      // Puce dessinée (un petit cercle) : DM Sans embarqué ne
+                      // contient pas le glyphe « • », qui s'imprimerait en ▯.
+                      pw.Container(
+                        width: 2.4, height: 2.4,
+                        margin: const pw.EdgeInsets.only(top: 3.4, right: 4),
+                        decoration: const pw.BoxDecoration(color: _grey2, shape: pw.BoxShape.circle),
+                      ),
                       pw.Expanded(child:
                           pw.Text(l.trim(), style: _ts(7.5, color: _grey2))),
                     ],
@@ -407,7 +413,7 @@ class PdfGenerator {
                 // Numéro de page (pages intermédiaires)
                 if (!isLast)
                   pw.Align(alignment: pw.Alignment.center,
-                    child: pw.Text('— Page ${i + 1} / $total —',
+                    child: pw.Text('- Page ${i + 1} / $total -',
                         style: _ts(7.5, color: _grey3))),
 
                 // Conditions + Signature (dernière page)

@@ -188,7 +188,7 @@ class DocumentPagination {
 
   static double _conditionsH(DocumentContext c) {
     const leftColW = (_contentW - 16) / 2; // deux colonnes + écart 16
-    final bullet = _h('• ', 7.5);
+    const bullet = 2.4 + 4; // cercle dessiné + marge droite
     final condW = leftColW - bullet;
     var lines = 0.0;
     for (final l in c.conditions.split('\n').where((l) => l.trim().isNotEmpty)) {
