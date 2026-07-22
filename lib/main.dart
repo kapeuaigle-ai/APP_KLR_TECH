@@ -12,7 +12,6 @@ import 'screens/document_create_screen.dart';
 import 'screens/clients_screen.dart';
 import 'screens/projets_screen.dart';
 import 'screens/gantt_screen.dart';
-import 'screens/equipes_screen.dart';
 import 'screens/suivi_screen.dart';
 import 'screens/activites_screen.dart';
 import 'screens/rapports_screen.dart';
@@ -89,7 +88,6 @@ class _ContentArea extends StatelessWidget {
       NavScreen.clients        => const ClientsScreen(),
       NavScreen.projets        => const ProjetsScreen(),
       NavScreen.gantt          => const GanttScreen(),
-      NavScreen.equipes        => const EquipesScreen(),
       NavScreen.suivi          => const SuiviScreen(),
       NavScreen.activites      => const ActivitesScreen(),
       NavScreen.rapports       => const RapportsScreen(),

@@ -12,20 +12,46 @@ class SampleData {
     const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, status: 'actif', address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
   ];
 
+  // Lignes des documents d'exemple. Les montants ci-dessous sont les totaux
+  // TTC correspondants (HT × 1,05), pour que la liste et l'aperçu concordent.
+  static List<LineItem> _linesMaintenance() => [
+    LineItem(ref: '01', designation: 'Maintenance préventive parc informatique (40 postes)', qte: 40, pu: 25000),
+    LineItem(ref: '02', designation: 'Remplacement disques SSD 512 Go', qte: 12, pu: 45000),
+    LineItem(ref: '03', designation: 'Intervention technicien sur site (forfait journée)', qte: 5, pu: 75000),
+  ];
+
+  static List<LineItem> _linesDeveloppement() => [
+    LineItem(ref: '01', designation: 'Développement application de gestion — module métier', qte: 1, pu: 950000),
+    LineItem(ref: '02', designation: 'Intégration et reprise des données existantes', qte: 1, pu: 350000),
+    LineItem(ref: '03', designation: 'Formation des utilisateurs (2 sessions)', qte: 2, pu: 100000),
+  ];
+
+  static List<LineItem> _linesAudit() => [
+    LineItem(ref: '01', designation: 'Audit de sécurité du réseau — phase d\'analyse', qte: 1, pu: 300000),
+    LineItem(ref: '02', designation: 'Rapport de recommandations et plan d\'action', qte: 1, pu: 150000),
+  ];
+
+  static List<LineItem> _linesEquipements() => [
+    LineItem(ref: '01', designation: 'Switch administrable 48 ports Gigabit', qte: 4, pu: 385000),
+    LineItem(ref: '02', designation: 'Borne Wi-Fi 6 professionnelle', qte: 10, pu: 145000),
+    LineItem(ref: '03', designation: 'Onduleur rack 3000 VA', qte: 2, pu: 275000),
+    LineItem(ref: '04', designation: 'Câblage et mise en service', qte: 1, pu: 200000),
+  ];
+
   static final Map<String, List<DocumentItem>> documents = {
     'proforma': [
-      DocumentItem(id: 1, numero: 'KLR-P008-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', objet: 'Maintenance parc inf...', montant: 0, statut: 'cours'),
-      DocumentItem(id: 2, numero: 'KLR-P007-100126', date: '10/01/2026', clientId: 2, client: 'Client B', objet: 'Développement Appl...', montant: 1500000, statut: 'validee'),
-      DocumentItem(id: 3, numero: 'KLR-P006-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', objet: 'Audit Sécurité Réseau', montant: 450000, statut: 'annulee'),
+      DocumentItem(id: 1, numero: 'KLR-03-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 2010750, statut: 'cours', lines: _linesMaintenance()),
+      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 3, numero: 'KLR-01-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Audit Sécurité Réseau', montant: 472500, statut: 'annulee', lines: _linesAudit()),
     ],
+    // Générées à la validation de leur proforma : même numéro, mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-F001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
-      DocumentItem(id: 2, numero: 'KLR-F003-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Développement logiciel', montant: 5200000, statut: 'validee'),
-      DocumentItem(id: 3, numero: 'KLR-F002-050326', date: '05/03/2026', clientId: 2, client: 'Global Tech', objet: 'Support technique', montant: 1800000, statut: 'validee'),
+      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
     ],
     'bl': [
-      DocumentItem(id: 1, numero: 'KLR-B001-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", objet: 'Équipements Réseau', montant: 3517500, statut: 'cours'),
-      DocumentItem(id: 2, numero: 'KLR-B002-180326', date: '18/03/2026', clientId: 1, client: 'Acme Corp', objet: 'Matériel informatique', montant: 5200000, statut: 'validee'),
+      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 0, statut: 'validee', lines: _linesDeveloppement()),
     ],
   };
 

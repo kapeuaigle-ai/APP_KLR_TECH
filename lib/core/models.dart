@@ -28,14 +28,18 @@ class DocumentItem {
   final String date;
   final int clientId;
   final String client;
+  final String clientAddr;
   final String objet;
   final double montant;
   String statut; // 'cours' | 'validee' | 'annulee'
+  // Lignes du document — permettent de régénérer le PDF depuis la liste.
+  final List<LineItem> lines;
 
   DocumentItem({
     required this.id, required this.numero, required this.date,
     required this.clientId, required this.client, required this.objet,
     required this.montant, required this.statut,
+    this.clientAddr = '', this.lines = const [],
   });
 }
 
@@ -211,5 +215,5 @@ class LineItem {
 
 // ── Nav Screen enum ──────────────────────────────────────
 enum NavScreen {
-  dashboard, documents, clients, projets, equipes, suivi, activites, rapports, parametres, gantt, documentCreate,
+  dashboard, documents, clients, projets, suivi, activites, rapports, parametres, gantt, documentCreate,
 }

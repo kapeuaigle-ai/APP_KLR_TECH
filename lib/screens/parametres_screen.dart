@@ -259,7 +259,7 @@ class _FacturationTabState extends State<_FacturationTab> {
                 height: 38, padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
                 alignment: Alignment.centerLeft,
-                child: Text('${_prefix.text}-P${_startNum.text}-010126', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                child: Text('${_prefix.text}-${_startNum.text}-010126', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
               ),
             ]),
           ];

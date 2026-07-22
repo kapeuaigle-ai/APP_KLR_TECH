@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/pdf_generator.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
+import '../widgets/document_preview.dart';
 import '../widgets/responsive.dart';
 
 class DocumentsListScreen extends StatefulWidget {
@@ -51,7 +53,7 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
                 const SizedBox(height: 3),
                 Text('Gérez vos proformas, factures et bons de livraison.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
-              PrimaryBtn(label: 'Nouveau document', icon: Icons.add, onTap: () => state.setCreating(true)),
+              PrimaryBtn(label: 'Nouvelle Proforma', icon: Icons.add, onTap: () => state.setCreating(true)),
             ]),
             const SizedBox(height: 24),
 
@@ -203,6 +205,149 @@ class _DocRow extends StatefulWidget {
 class _DocRowState extends State<_DocRow> {
   bool _hovered = false;
 
+  // Totaux recalculés depuis les lignes enregistrées du document.
+  // Le BL ne porte aucun montant.
+  ({double ht, double tvaAmt, double ttc, bool tva}) _totals(AppSettings s) {
+    if (widget.type == 'bl') return (ht: 0, tvaAmt: 0, ttc: 0, tva: false);
+    final ht = widget.doc.lines.fold<double>(0, (sum, l) => sum + l.total);
+    final tva = s.tva > 0;
+    final tvaAmt = tva ? ht * 0.05 : 0.0;
+    return (ht: ht, tvaAmt: tvaAmt, ttc: ht + tvaAmt, tva: tva);
+  }
+
+  // Régénère le PDF du document depuis ses lignes enregistrées.
+  Future<List<int>> _buildPdf() {
+    final s = context.read<AppState>().settings;
+    final doc = widget.doc;
+    final t = _totals(s);
+    return PdfGenerator.generate(
+      settings: s,
+      type: widget.type,
+      numero: doc.numero,
+      date: doc.date,
+      client: doc.client,
+      clientAddr: doc.clientAddr,
+      objet: doc.objet,
+      lines: doc.lines,
+      tva: t.tva,
+      ht: t.ht, tvaAmt: t.tvaAmt, ttc: t.ttc,
+      conditions: s.conditions,
+    );
+  }
+
+  // ── Aperçu du document en pleine page ──────────────────
+  void _showFullDocument() {
+    final doc = widget.doc;
+    final s = context.read<AppState>().settings;
+    final t = _totals(s);
+    const typeLabels = {'proforma': 'Facture Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Dialog(
+        backgroundColor: AppColors.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 720),
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            // En-tête de la fenêtre
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('${typeLabels[widget.type] ?? widget.type}  ·  ${doc.numero}',
+                      style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.text1)),
+                  const SizedBox(height: 2),
+                  Text(doc.client, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                ])),
+                IconButton(
+                  tooltip: 'Fermer',
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.text2),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ]),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            // Document A4 défilant
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: doc.lines.isEmpty
+                    ? Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Center(child: Text(
+                          'Ce document a été créé avant l\'enregistrement du détail\ndes lignes : son contenu ne peut pas être reconstitué.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3, height: 1.5),
+                        )),
+                      )
+                    : DocumentPreview(
+                        type: widget.type,
+                        numero: doc.numero,
+                        settings: s,
+                        client: doc.client,
+                        clientAddr: doc.clientAddr,
+                        objet: doc.objet,
+                        lines: doc.lines,
+                        tva: t.tva,
+                        ht: t.ht, tvaAmt: t.tvaAmt, ttc: t.ttc,
+                        conditions: s.conditions,
+                        showToolbar: false,
+                      ),
+              ),
+            ),
+            // Actions
+            if (doc.lines.isNotEmpty) ...[
+              const Divider(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton.icon(
+                    onPressed: _printPdf,
+                    icon: const Icon(Icons.print_outlined, size: 16, color: AppColors.text2),
+                    label: Text('Imprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+                  ),
+                  TextButton.icon(
+                    onPressed: _downloadPdf,
+                    icon: const Icon(Icons.download_outlined, size: 16, color: AppColors.primary),
+                    label: Text('Télécharger PDF', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                  ),
+                ]),
+              ),
+            ],
+          ]),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _printPdf() async {
+    try {
+      await PdfGenerator.printDoc(await _buildPdf());
+    } catch (e) {
+      if (mounted) _pdfError(e);
+    }
+  }
+
+  Future<void> _downloadPdf() async {
+    try {
+      await PdfGenerator.saveWithDialog(bytes: await _buildPdf(), type: widget.type);
+    } catch (e) {
+      if (mounted) _pdfError(e);
+    }
+  }
+
+  void _pdfError(Object e) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text('Erreur PDF : $e', style: const TextStyle(fontSize: 13)),
+      backgroundColor: AppColors.primary,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      margin: const EdgeInsets.all(16),
+    ));
+  }
+
   void _showDetails(BuildContext context) {
     final doc = widget.doc;
     const typeLabels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
@@ -237,13 +382,36 @@ class _DocRowState extends State<_DocRow> {
             const SizedBox(height: 8),
             Text('CHANGER LE STATUT', style: AppTheme.label),
             const SizedBox(height: 8),
+            if (widget.type == 'proforma')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Text(
+                  'Valider une proforma génère automatiquement la facture et le bon de livraison avec le même numéro.',
+                  style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
+                ),
+              ),
             Row(children: [
               for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
                   child: GestureDetector(
                     onTap: () {
-                      context.read<AppState>().setDocumentStatus(widget.type, doc.id, s.$1);
+                      final appState = context.read<AppState>();
+                      if (widget.type == 'proforma' && s.$1 == 'validee') {
+                        final generated = appState.validateProforma(doc.id);
+                        if (generated) {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: Text('Facture et Bon de livraison ${doc.numero} générés.',
+                                style: const TextStyle(fontSize: 13)),
+                            backgroundColor: AppColors.green,
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            margin: const EdgeInsets.all(16),
+                          ));
+                        }
+                      } else {
+                        appState.setDocumentStatus(widget.type, doc.id, s.$1);
+                      }
                       Navigator.of(ctx).pop();
                     },
                     child: Container(
@@ -263,9 +431,14 @@ class _DocRowState extends State<_DocRow> {
           ]),
         ),
         actions: [
+          TextButton.icon(
+            onPressed: () { Navigator.of(ctx).pop(); _showFullDocument(); },
+            icon: const Icon(Icons.description_outlined, size: 16, color: AppColors.primary),
+            label: Text('Voir le document', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+          ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Fermer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+            child: Text('Fermer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
           ),
         ],
       ),

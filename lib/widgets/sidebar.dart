@@ -15,7 +15,6 @@ class Sidebar extends StatelessWidget {
     (NavScreen.documents, 'Documents', Icons.description_outlined),
     (NavScreen.clients, 'Clients', Icons.person_outline_rounded),
     (NavScreen.projets, 'Projets', Icons.dashboard_customize_outlined),
-    (NavScreen.equipes, 'Équipes', Icons.group_outlined),
     (NavScreen.suivi, 'Suivi', Icons.check_box_outlined),
     (NavScreen.activites, 'Activités', Icons.show_chart_rounded),
     (NavScreen.rapports, 'Rapports', Icons.bar_chart_rounded),

@@ -156,7 +156,6 @@ class _HelpBtn extends StatelessWidget {
                 ('Documents', 'Proformas, factures et bons de livraison (PDF)'),
                 ('Clients', 'Portefeuille clients et historique'),
                 ('Projets / Gantt', 'Suivi Kanban et chronologique des projets'),
-                ('Équipes', 'Collaborateurs et départements'),
                 ('Suivi', 'Factures, dîme, tâches et notes'),
                 ('Rapports', 'Analyses et export PDF'),
               ])

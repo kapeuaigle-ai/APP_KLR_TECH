@@ -12,7 +12,6 @@ class AppState extends ChangeNotifier {
   late AppSettings settings;
   late List<Task> tasks;
   late List<Note> notes;
-  late List<Employee> employees;
   late List<FactureEntry> factures;
 
   AppState() {
@@ -31,13 +30,12 @@ class AppState extends ChangeNotifier {
       tel: '0708714557',
       email: 'klr.tech8@gmail.com',
       prefix: 'KLR',
-      startNum: '001',
+      startNum: '01',
       tva: 5,
       conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
     );
     tasks = SampleData.initialTasks;
     notes = SampleData.initialNotes;
-    employees = List.from(SampleData.employees);
     factures = List.from(SampleData.factureHistory);
   }
 
@@ -70,17 +68,6 @@ class AppState extends ChangeNotifier {
 
   void deleteClient(int id) {
     clients.removeWhere((x) => x.id == id);
-    notifyListeners();
-  }
-
-  // ── Employés ───────────────────────────────────────────
-  void addEmployee(Employee e) {
-    employees.add(e);
-    notifyListeners();
-  }
-
-  void deleteEmployee(int id) {
-    employees.removeWhere((x) => x.id == id);
     notifyListeners();
   }
 
@@ -140,5 +127,37 @@ class AppState extends ChangeNotifier {
       doc.first.statut = statut;
       notifyListeners();
     }
+  }
+
+  /// Valide une proforma : elle devient une offre acceptée, et la facture
+  /// et le bon de livraison associés sont générés automatiquement avec le
+  /// même numéro et les mêmes informations. Retourne true si la facture et
+  /// le BL ont été créés (false s'ils existaient déjà).
+  bool validateProforma(int id) {
+    final matches = documents['proforma']!.where((d) => d.id == id);
+    if (matches.isEmpty) return false;
+    final p = matches.first;
+    p.statut = 'validee';
+
+    final alreadyGenerated =
+        documents['facture']!.any((d) => d.numero == p.numero);
+    if (!alreadyGenerated) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      documents['facture']!.add(DocumentItem(
+        id: now, numero: p.numero, date: p.date,
+        clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
+        objet: p.objet, montant: p.montant, statut: 'cours',
+        lines: p.lines,
+      ));
+      // Le BL ne porte aucun montant.
+      documents['bl']!.add(DocumentItem(
+        id: now + 1, numero: p.numero, date: p.date,
+        clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
+        objet: p.objet, montant: 0, statut: 'cours',
+        lines: p.lines,
+      ));
+    }
+    notifyListeners();
+    return !alreadyGenerated;
   }
 }

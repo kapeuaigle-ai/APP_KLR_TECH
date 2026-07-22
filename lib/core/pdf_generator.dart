@@ -1,9 +1,11 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'document_pagination.dart';
 import 'models.dart';
 import 'utils.dart';
 
@@ -24,27 +26,17 @@ class PdfGenerator {
   static const _border = PdfColor.fromInt(0xFFE5E7EB);
   static const _bgFoot = PdfColor.fromInt(0xFFF8F8F8);
 
-  // ── Pagination identique au preview Flutter ───────────
-  static const _singlePageMax = 13;
-  static const _firstPageMax  = 20;
-  static const _lastPageMax   = 15;
-  static const _midPageMax    = 22;
-
-  static List<List<LineItem>> _paginate(List<LineItem> lines) {
-    if (lines.isEmpty) return [[]];
-    if (lines.length <= _singlePageMax) return [List.from(lines)];
-    final pages = <List<LineItem>>[];
-    final firstCount = _firstPageMax.clamp(1, lines.length - 1);
-    pages.add(lines.sublist(0, firstCount));
-    var rem = lines.sublist(firstCount);
-    while (rem.isNotEmpty) {
-      final isLast = rem.length <= _lastPageMax;
-      final n = rem.length.clamp(0, isLast ? _lastPageMax : _midPageMax);
-      pages.add(rem.sublist(0, n));
-      rem = rem.sublist(n);
-    }
-    return pages;
-  }
+  // ── Pagination : strictement celle de l'aperçu ────────
+  // Le découpage vient de DocumentPagination, partagé avec DocumentPreview :
+  // le PDF a donc toujours le même nombre de pages et la même répartition des
+  // lignes que ce qui est affiché à l'écran. Les hauteurs sont mesurées sur la
+  // géométrie de l'aperçu (plus petite que l'A4), donc sûres pour le PDF.
+  static List<List<LineItem>> _paginate(
+    List<LineItem> lines,
+    bool isBl,
+    DocumentContext context,
+  ) =>
+      DocumentPagination.paginate(lines, isBl: isBl, context: context);
 
   // ── Helpers texte ─────────────────────────────────────
   static pw.TextStyle _ts(double sz, {
@@ -59,11 +51,11 @@ class PdfGenerator {
     return 'BON DE LIVRAISON';
   }
 
+  // Numérotation partagée proforma/facture/BL : KLR-01-180726
   static String _numero(AppSettings s, String type) {
     final n = DateTime.now();
     final d = '${n.day.toString().padLeft(2,'0')}${n.month.toString().padLeft(2,'0')}${n.year.toString().substring(2)}';
-    final p = type == 'proforma' ? 'P' : type == 'facture' ? 'F' : 'B';
-    return '${s.prefix}-${p}001-$d';
+    return '${s.prefix}-01-$d';
   }
 
   static String _dateStr() {
@@ -93,7 +85,7 @@ class PdfGenerator {
     return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Row(children: [
-          _diamond(),
+          _diamond(size: 26),
           pw.SizedBox(width: 8),
           pw.Text('KLR TECH', style: _ts(14, font: bold, spacing: 0.5)),
         ]),
@@ -160,17 +152,15 @@ class PdfGenerator {
         color: _red,
         padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
         child: pw.Row(children: [
-          if (isBl) ...[
-            pw.SizedBox(width: 24, child: pw.Text('Réf',      style: _ts(8, color: PdfColors.white, font: bold))),
-            pw.SizedBox(width: 8),
-          ],
+          pw.SizedBox(width: 28, child: pw.Text('Réf',        style: _ts(8, color: PdfColors.white, font: bold))),
+          pw.SizedBox(width: 8),
           pw.Expanded(           child: pw.Text('Désignation',style: _ts(8, color: PdfColors.white, font: bold))),
           pw.SizedBox(width: 30, child: pw.Text('Qté',        style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
           if (!isBl) ...[
             pw.SizedBox(width: 8),
-            pw.SizedBox(width: 68, child: pw.Text('P.U (FCFA)', style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
+            pw.SizedBox(width: 70, child: pw.Text('P.U (FCFA)', style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
             pw.SizedBox(width: 8),
-            pw.SizedBox(width: 62, child: pw.Text('Montant',    style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
+            pw.SizedBox(width: 65, child: pw.Text('Montant',    style: _ts(8, color: PdfColors.white, font: bold), textAlign: pw.TextAlign.right)),
           ],
         ]),
       ),
@@ -181,17 +171,15 @@ class PdfGenerator {
           color: e.key % 2 == 0 ? _rowAlt : PdfColors.white,
           padding: const pw.EdgeInsets.symmetric(horizontal: 8, vertical: 5),
           child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
-            if (isBl) ...[
-              pw.SizedBox(width: 24, child: pw.Text(l.ref, style: _ts(8.5, color: _grey2))),
-              pw.SizedBox(width: 8),
-            ],
+            pw.SizedBox(width: 28, child: pw.Text(l.ref, style: _ts(8.5, color: _grey2))),
+            pw.SizedBox(width: 8),
             pw.Expanded(child: pw.Text(l.designation, style: _ts(8.5))),
             pw.SizedBox(width: 30, child: pw.Text('${l.qte}', style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
             if (!isBl) ...[
               pw.SizedBox(width: 8),
-              pw.SizedBox(width: 68, child: pw.Text(Fmt.number(l.pu),    style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
+              pw.SizedBox(width: 70, child: pw.Text(Fmt.number(l.pu),    style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
               pw.SizedBox(width: 8),
-              pw.SizedBox(width: 62, child: pw.Text(Fmt.number(l.total), style: _ts(8.5, font: bold),    textAlign: pw.TextAlign.right)),
+              pw.SizedBox(width: 65, child: pw.Text(Fmt.number(l.total), style: _ts(8.5, font: bold),    textAlign: pw.TextAlign.right)),
             ],
           ]),
         );
@@ -199,7 +187,7 @@ class PdfGenerator {
       // Totaux (dernière page uniquement, jamais sur un BL)
       if (showTotals && !isBl) ...[
         pw.SizedBox(height: 8),
-        pw.Align(alignment: pw.Alignment.centerRight, child: pw.SizedBox(width: 195, child: pw.Column(children: [
+        pw.Align(alignment: pw.Alignment.centerRight, child: pw.SizedBox(width: 200, child: pw.Column(children: [
           _ptRow('Sous-total HT', Fmt.number(ht), reg),
           if (tva) _ptRow('TVA (5%)', Fmt.number(tvaAmt), reg),
           pw.Divider(color: _border, thickness: 0.5),
@@ -225,17 +213,19 @@ class PdfGenerator {
   // casser silencieusement dans le moteur PDF.
   // CrossAxisAlignment.stretch → la boîte signature a la même hauteur
   // que la colonne conditions.
-  static pw.Widget _conditionsRow(String conditions, pw.Font bold, pw.Font reg) {
-    const clause =
-        'Tout produit, sauf mention contraire, bénéficie d\'une période de garantie '
-        'contre tout vice de fabrication (retour atelier sans frais de réparation ou '
-        'échange standard dans la limite des stocks disponibles) soumise à '
-        'l\'expertise constructeur, à compter de la date de facturation et à '
-        'condition qu\'il soit tenu en bon état et que les étiquettes de code '
-        'ne soient pas retirées ou déchirées.';
+  // Clause de garantie : source unique dans DocumentPagination.
+  static const _warrantyClause = DocumentPagination.warrantyClause;
+  static const _signatureBoxH = DocumentPagination.signatureBoxH;
 
+  static pw.Widget _conditionsRow(String conditions, pw.Font bold, pw.Font reg) {
+    const clause = _warrantyClause;
+
+    // Alignement `start` (pas `stretch`) : dans le moteur PDF, `stretch` dans
+    // une colonne de hauteur non bornée effondre le Row à hauteur nulle, rendant
+    // tout le bloc invisible. La boîte Signature reçoit donc une hauteur fixe
+    // (identique à l'aperçu) plutôt que de s'étirer sur la colonne.
     return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.stretch,
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
         // ── Colonne gauche : conditions + clause ──────────
         pw.Expanded(child: pw.Column(
@@ -268,6 +258,7 @@ class PdfGenerator {
         // Container simple avec bordure pointillée et rayon 16.
         // "Signature" centré en haut à l'intérieur.
         pw.Expanded(child: pw.Container(
+          height: _signatureBoxH,
           decoration: pw.BoxDecoration(
             border: pw.Border.all(
               color: _border,
@@ -293,11 +284,11 @@ class PdfGenerator {
   // ── Bande pied de page ────────────────────────────────
   static pw.Widget _footerBar(AppSettings s, pw.Font reg) => pw.Container(
     width: double.infinity,
-    padding: const pw.EdgeInsets.symmetric(vertical: 6, horizontal: 16),
+    padding: const pw.EdgeInsets.symmetric(vertical: 7, horizontal: 16),
     color: _bgFoot,
     child: pw.Text(
       s.footerLine,
-      style: _ts(6, color: _grey3, spacing: 0.3),
+      style: _ts(6.5, color: _grey3, spacing: 0.4),
       textAlign: pw.TextAlign.center,
     ),
   );
@@ -315,6 +306,8 @@ class PdfGenerator {
     required double tvaAmt,
     required double ttc,
     required String conditions,
+    String? numero,
+    String? date,
   }) async {
     final doc = pw.Document(title: _typeLabel(type));
 
@@ -328,9 +321,27 @@ class PdfGenerator {
       bold = pw.Font.helveticaBold();
       reg  = pw.Font.helvetica();
     }
-    final numero = _numero(settings, type);
-    final date   = _dateStr();
-    final pages  = _paginate(lines);
+    final docNumero = numero ?? _numero(settings, type);
+    final docDate   = date ?? _dateStr();
+    final pageContext = DocumentContext(
+      typeLabel: _typeLabel(type),
+      numero: docNumero,
+      date: docDate,
+      deLines: [settings.company, settings.address, settings.bp],
+      attentionLines: [
+        if (client.isNotEmpty) client,
+        if (clientAddr.isNotEmpty) clientAddr,
+        if (client.isEmpty && clientAddr.isEmpty) '—',
+      ],
+      objet: objet,
+      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
+      conditions: conditions,
+      warranty: _warrantyClause,
+      footerLine: settings.footerLine,
+      showMontant: ttc > 0 && type != 'bl',
+      tva: tva,
+    );
+    final pages  = _paginate(DocumentPagination.visible(lines), type == 'bl', pageContext);
     final total  = pages.length;
 
     for (int i = 0; i < total; i++) {
@@ -351,7 +362,7 @@ class PdfGenerator {
 
                 // En-tête
                 if (isFirst) ...[
-                  _header(settings, type, numero, date, bold, reg),
+                  _header(settings, type, docNumero, docDate, bold, reg),
                   pw.SizedBox(height: 14),
                   // Info boxes
                   pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
@@ -372,7 +383,7 @@ class PdfGenerator {
                     pw.SizedBox(height: 10),
                   ],
                 ] else ...[
-                  _miniHeader(type, numero, i + 1, total, bold, reg),
+                  _miniHeader(type, docNumero, i + 1, total, bold, reg),
                 ],
 
                 // Tableau
@@ -388,7 +399,9 @@ class PdfGenerator {
                   ),
                 ],
 
-                // ── Spacer : pousse conditions/n° de page vers le bas ──
+                // Spacer : épingle les conditions / le n° de page en bas de page.
+                // (L'invisibilité venait du `stretch` du bloc conditions, pas du
+                // Spacer — désormais en alignement `start`.)
                 pw.Spacer(),
 
                 // Numéro de page (pages intermédiaires)
@@ -427,7 +440,14 @@ class PdfGenerator {
             : 'BL';
     final filename = 'KLR-$p-$d.pdf';
 
-    // 1. Tentative avec la boîte de dialogue native
+    // Sur le web, dart:io/FilePicker ne peuvent pas écrire de fichier :
+    // on déclenche le téléchargement du navigateur via le paquet printing.
+    if (kIsWeb) {
+      await Printing.sharePdf(bytes: Uint8List.fromList(bytes), filename: filename);
+      return filename;
+    }
+
+    // 1. Tentative avec la boîte de dialogue native (bureau)
     try {
       final chosen = await FilePicker.platform.saveFile(
         dialogTitle: 'Enregistrer le document PDF',
