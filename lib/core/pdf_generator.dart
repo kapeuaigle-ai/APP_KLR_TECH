@@ -453,7 +453,8 @@ class PdfGenerator {
       return filename;
     }
 
-    // 1. Tentative avec la boîte de dialogue native (bureau)
+    // 1. Boîte « Enregistrer sous » native : l'utilisateur choisit le dossier
+    //    ET le nom du fichier.
     try {
       final chosen = await FilePicker.platform.saveFile(
         dialogTitle: 'Enregistrer le document PDF',
@@ -462,18 +463,28 @@ class PdfGenerator {
         // versions de file_picker sur Windows.
       );
       if (chosen != null) {
-        // S'assurer que l'extension .pdf est bien présente
-        final dest = chosen.toLowerCase().endsWith('.pdf')
-            ? chosen
-            : '$chosen.pdf';
+        final dest = chosen.toLowerCase().endsWith('.pdf') ? chosen : '$chosen.pdf';
         await File(dest).writeAsBytes(bytes);
         return dest;
       }
-      // L'utilisateur a annulé → on ne fait rien
-      return null;
+      return null; // annulé par l'utilisateur
     } catch (_) {
-      // 2. Fallback : enregistrer automatiquement dans Téléchargements Windows
-      return _saveToDownloads(bytes, filename);
+      // 2. Si « Enregistrer sous » n'est pas disponible, laisser au moins
+      //    choisir le DOSSIER de destination.
+      try {
+        final dir = await FilePicker.platform.getDirectoryPath(
+          dialogTitle: 'Choisir le dossier d\'enregistrement',
+        );
+        if (dir != null) {
+          final path = '$dir${Platform.pathSeparator}$filename';
+          await File(path).writeAsBytes(bytes);
+          return path;
+        }
+        return null; // annulé
+      } catch (_) {
+        // 3. Dernier recours : dossier Téléchargements.
+        return _saveToDownloads(bytes, filename);
+      }
     }
   }
 

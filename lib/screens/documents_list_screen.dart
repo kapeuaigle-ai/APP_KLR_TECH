@@ -25,6 +25,9 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final type = state.docType;
+    // Seules les proformas portent un statut (en cours / validée / annulée).
+    // Les factures et BL sont générés à la validation d'une proforma.
+    final isProforma = type == 'proforma';
     final allDocs = state.documents[type] ?? [];
 
     final filtered = allDocs.where((d) {
@@ -61,14 +64,17 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             _TypeTabs(current: type, onChanged: (t) { state.setDocType(t); setState(() { _filter = 'tous'; _search = ''; }); }),
             const SizedBox(height: 20),
 
-            // Stats
+            // Stats — les pastilles de statut n'existent que pour les proformas.
             LayoutBuilder(builder: (context, constraints) {
+              final search = SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280);
+              if (!isProforma) {
+                return Align(alignment: Alignment.centerRight, child: search);
+              }
               final narrow = constraints.maxWidth < 640;
               final pills = [
                 _StatPill(label: 'VALIDÉS', value: '$validated', color: AppColors.green),
                 _StatPill(label: 'EN COURS', value: '$pending', color: AppColors.orange),
               ];
-              final search = SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280);
               if (narrow) {
                 return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center,
                     children: [...pills, search]);
@@ -82,15 +88,17 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             }),
             const SizedBox(height: 16),
 
-            // Filter chips
-            Row(children: [
-              for (final f in [('tous', 'Tous'), ('cours', 'En cours'), ('validee', 'Validé'), ('annulee', 'Annulé')])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: AppFilterChip(label: f.$2, active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
-                ),
-            ]),
-            const SizedBox(height: 16),
+            // Filter chips — seulement pour les proformas (les autres n'ont pas de statut).
+            if (isProforma) ...[
+              Row(children: [
+                for (final f in [('tous', 'Tous'), ('cours', 'En cours'), ('validee', 'Validé'), ('annulee', 'Annulé')])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: AppFilterChip(label: f.$2, active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
+                  ),
+              ]),
+              const SizedBox(height: 16),
+            ],
 
             // Table
             CardBox(
@@ -110,7 +118,7 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
                       const Expanded(flex: 4, child: ThCell('CLIENT')),
                       const Expanded(flex: 4, child: ThCell('OBJET')),
                       const Expanded(flex: 3, child: ThCell('MONTANT')),
-                      const Expanded(flex: 2, child: ThCell('STATUT')),
+                      if (isProforma) const Expanded(flex: 2, child: ThCell('STATUT')),
                       const SizedBox(width: 60),
                     ]),
                   ),
@@ -332,7 +340,17 @@ class _DocRowState extends State<_DocRow> {
 
   Future<void> _downloadPdf() async {
     try {
-      await PdfGenerator.saveWithDialog(bytes: await _buildPdf(), type: widget.type);
+      final path = await PdfGenerator.saveWithDialog(bytes: await _buildPdf(), type: widget.type);
+      if (mounted && path != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('PDF enregistré :\n$path', style: const TextStyle(fontSize: 13)),
+          backgroundColor: AppColors.green,
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          margin: const EdgeInsets.all(16),
+        ));
+      }
     } catch (e) {
       if (mounted) _pdfError(e);
     }
@@ -358,7 +376,7 @@ class _DocRowState extends State<_DocRow> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Row(children: [
           Expanded(child: Text(doc.numero, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary))),
-          StatusBadge(status: doc.statut),
+          if (widget.type == 'proforma') StatusBadge(status: doc.statut),
         ]),
         content: SizedBox(
           width: 380,
@@ -377,12 +395,15 @@ class _DocRowState extends State<_DocRow> {
                   Expanded(child: Text(item.$2, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1))),
                 ]),
               ),
-            const SizedBox(height: 8),
-            const Divider(color: AppColors.border),
-            const SizedBox(height: 8),
-            Text('CHANGER LE STATUT', style: AppTheme.label),
-            const SizedBox(height: 8),
-            if (widget.type == 'proforma')
+            // Changement de statut : uniquement pour les proformas. Valider
+            // une proforma génère la facture et le BL ; factures et BL n'ont
+            // pas de statut propre.
+            if (widget.type == 'proforma') ...[
+              const SizedBox(height: 8),
+              const Divider(color: AppColors.border),
+              const SizedBox(height: 8),
+              Text('CHANGER LE STATUT', style: AppTheme.label),
+              const SizedBox(height: 8),
               Padding(
                 padding: const EdgeInsets.only(bottom: 8),
                 child: Text(
@@ -390,44 +411,45 @@ class _DocRowState extends State<_DocRow> {
                   style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
                 ),
               ),
-            Row(children: [
-              for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      final appState = context.read<AppState>();
-                      if (widget.type == 'proforma' && s.$1 == 'validee') {
-                        final generated = appState.validateProforma(doc.id);
-                        if (generated) {
-                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                            content: Text('Facture et Bon de livraison ${doc.numero} générés.',
-                                style: const TextStyle(fontSize: 13)),
-                            backgroundColor: AppColors.green,
-                            behavior: SnackBarBehavior.floating,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                            margin: const EdgeInsets.all(16),
-                          ));
+              Row(children: [
+                for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        final appState = context.read<AppState>();
+                        if (s.$1 == 'validee') {
+                          final generated = appState.validateProforma(doc.id);
+                          if (generated) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Facture et Bon de livraison ${doc.numero} générés.',
+                                  style: const TextStyle(fontSize: 13)),
+                              backgroundColor: AppColors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              margin: const EdgeInsets.all(16),
+                            ));
+                          }
+                        } else {
+                          appState.setDocumentStatus(widget.type, doc.id, s.$1);
                         }
-                      } else {
-                        appState.setDocumentStatus(widget.type, doc.id, s.$1);
-                      }
-                      Navigator.of(ctx).pop();
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: doc.statut == s.$1 ? s.$3.withOpacity(0.12) : AppColors.bg,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: doc.statut == s.$1 ? s.$3.withOpacity(0.12) : AppColors.bg,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
+                        ),
+                        child: Text(s.$2, style: GoogleFonts.dmSans(
+                          fontSize: 12, fontWeight: FontWeight.w600,
+                          color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
                       ),
-                      child: Text(s.$2, style: GoogleFonts.dmSans(
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                        color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
                     ),
                   ),
-                ),
-            ]),
+              ]),
+            ],
           ]),
         ),
         actions: [
@@ -479,10 +501,11 @@ class _DocRowState extends State<_DocRow> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(doc.montant > 0 ? Fmt.money(doc.montant) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
           )),
-          Expanded(flex: 2, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: StatusBadge(status: doc.statut),
-          )),
+          if (widget.type == 'proforma')
+            Expanded(flex: 2, child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: StatusBadge(status: doc.statut),
+            )),
           SizedBox(width: 60, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             IconButton(
               tooltip: 'Voir le document',

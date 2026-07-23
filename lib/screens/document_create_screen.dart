@@ -312,25 +312,33 @@ class _FormPanel extends StatelessWidget {
         Text('Lignes de facturation',
             style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 14),
-        Row(children: [
-          const SizedBox(width: 44, child: _ColHead('N°')),
-          const SizedBox(width: 8),
-          const Expanded(child: _ColHead('DÉSIGNATION')),
-          const SizedBox(width: 8),
-          const SizedBox(width: 50, child: _ColHead('QTÉ')),
-          const SizedBox(width: 8),
-          const SizedBox(width: 96, child: _ColHead('P.U. (FCFA)')),
-          const SizedBox(width: 8),
-          const SizedBox(width: 96, child: _ColHead('MONTANT')),
-          const SizedBox(width: 28),
-        ]),
-        const SizedBox(height: 6),
-        ...lines.asMap().entries.map((e) => _LineRow(
-          key: ValueKey(e.key),
-          line: e.value,
-          onRemove: () => onRemoveLine(e.key),
-          onChanged: onLineChanged,
-        )),
+        // En-tête + lignes : défilement horizontal si le panneau est trop
+        // étroit (zoom élevé, petite fenêtre) plutôt que d'écraser la colonne
+        // Désignation.
+        HScrollTable(
+          minWidth: 470,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              const SizedBox(width: 44, child: _ColHead('N°')),
+              const SizedBox(width: 8),
+              const Expanded(child: _ColHead('DÉSIGNATION')),
+              const SizedBox(width: 8),
+              const SizedBox(width: 50, child: _ColHead('QTÉ')),
+              const SizedBox(width: 8),
+              const SizedBox(width: 96, child: _ColHead('P.U. (FCFA)')),
+              const SizedBox(width: 8),
+              const SizedBox(width: 96, child: _ColHead('MONTANT')),
+              const SizedBox(width: 28),
+            ]),
+            const SizedBox(height: 6),
+            ...lines.asMap().entries.map((e) => _LineRow(
+              key: ValueKey(e.key),
+              line: e.value,
+              onRemove: () => onRemoveLine(e.key),
+              onChanged: onLineChanged,
+            )),
+          ]),
+        ),
         const SizedBox(height: 6),
         GestureDetector(
           onTap: onAddLine,
