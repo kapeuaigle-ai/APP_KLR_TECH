@@ -41,13 +41,9 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
 
   String _refFor(int idx) => (idx + 1).toString().padLeft(2, '0');
 
-  // Numérotation partagée proforma/facture/BL : KLR-01-180726
-  String _numeroFor(AppState state) {
-    final now = DateTime.now();
-    final d = '${now.day.toString().padLeft(2,'0')}${now.month.toString().padLeft(2,'0')}${now.year.toString().substring(2)}';
-    final count = (state.documents['proforma']?.length ?? 0) + 1;
-    return '${state.settings.prefix}-${count.toString().padLeft(2,'0')}-$d';
-  }
+  // Numérotation partagée proforma/facture/BL : voir DocNumero (compteur/jour).
+  String _numeroFor(AppState state) =>
+      DocNumero.next(state.settings.prefix, state.documents['proforma'] ?? [], DateTime.now());
 
   // ── PDF helper ───────────────────────────────────────
   Future<List<int>> _buildPdf(AppState state) => PdfGenerator.generate(

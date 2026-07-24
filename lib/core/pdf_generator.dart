@@ -215,15 +215,15 @@ class PdfGenerator {
   // que la colonne conditions.
   // Clause de garantie : source unique dans DocumentPagination.
   static const _warrantyClause = DocumentPagination.warrantyClause;
-  static const _signatureBoxH = DocumentPagination.signatureBoxH;
 
   static pw.Widget _conditionsRow(String conditions, pw.Font bold, pw.Font reg) {
     const clause = _warrantyClause;
+    // Hauteur exacte de la colonne conditions → hauteur de la case Signature,
+    // pour qu'elle s'aligne au même niveau que le texte.
+    final boxH = DocumentPagination.conditionsLeftHeight(conditions, clause);
 
-    // Alignement `start` (pas `stretch`) : dans le moteur PDF, `stretch` dans
-    // une colonne de hauteur non bornée effondre le Row à hauteur nulle, rendant
-    // tout le bloc invisible. La boîte Signature reçoit donc une hauteur fixe
-    // (identique à l'aperçu) plutôt que de s'étirer sur la colonne.
+    // Alignement `start` (pas `stretch`) : dans le moteur PDF, `stretch` effondre
+    // le Row à hauteur nulle. La case reçoit donc une hauteur explicite calculée.
     return pw.Row(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
@@ -261,27 +261,23 @@ class PdfGenerator {
         pw.SizedBox(width: 16),
 
         // ── Colonne droite : boîte signature ─────────────
-        // Container simple avec bordure pointillée et rayon 16.
-        // "Signature" centré en haut à l'intérieur.
-        pw.Expanded(child: pw.Container(
-          height: _signatureBoxH,
-          decoration: pw.BoxDecoration(
-            border: pw.Border.all(
-              color: _border,
-              width: 0.8,
-              style: pw.BorderStyle.dashed,
-            ),
-            borderRadius: pw.BorderRadius.circular(16),
-          ),
-          padding: const pw.EdgeInsets.fromLTRB(8, 7, 8, 6),
-          child: pw.Column(
-            crossAxisAlignment: pw.CrossAxisAlignment.center,
-            children: [
-              pw.Text('Signature',
-                  style: _ts(7.5, color: _grey3, font: bold),
-                  textAlign: pw.TextAlign.center),
-            ],
-          ),
+        // Hauteur = colonne conditions. « Signature » posé sur le bord haut
+        // (fond blanc masquant le trait pointillé).
+        pw.Expanded(child: pw.SizedBox(
+          height: boxH,
+          child: pw.Stack(overflow: pw.Overflow.visible, children: [
+            pw.Positioned(top: 0, left: 0, right: 0, bottom: 0, child: pw.Container(
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: _border, width: 0.8, style: pw.BorderStyle.dashed),
+                borderRadius: pw.BorderRadius.circular(16),
+              ),
+            )),
+            pw.Positioned(top: -5, left: 0, right: 0, child: pw.Center(child: pw.Container(
+              color: PdfColors.white,
+              padding: const pw.EdgeInsets.symmetric(horizontal: 6),
+              child: pw.Text('Signature', style: _ts(7.5, color: _grey3, font: bold)),
+            ))),
+          ]),
         )),
       ],
     );

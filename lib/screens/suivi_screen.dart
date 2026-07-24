@@ -4,7 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
-import '../core/data.dart';
+import '../core/comptabilite.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
@@ -33,14 +33,15 @@ class _SuiviScreenState extends State<SuiviScreen> {
             Text('Factures, dîme, tâches et notes internes.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
             const SizedBox(height: 24),
             AppTabBar(
-              tabs: const ['Factures & Crédits', 'Dîme', 'Tâches', 'Notes'],
+              tabs: const ['Factures & Crédits', 'Comptabilité', 'Dîme', 'Tâches', 'Notes'],
               selected: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
             const SizedBox(height: 20),
             if (_tab == 0) const _FacturesTab()
-            else if (_tab == 1) const _DimeTab()
-            else if (_tab == 2) const _TachesTab()
+            else if (_tab == 1) const _ComptaTab()
+            else if (_tab == 2) const _DimeTab()
+            else if (_tab == 3) const _TachesTab()
             else const _NotesTab(),
           ],
         ),
@@ -159,81 +160,368 @@ class _FacturesTab extends StatelessWidget {
   }
 }
 
-// ── Dîme Tab ──────────────────────────────────────────────
-class _DimeTab extends StatelessWidget {
-  const _DimeTab();
+// ── Comptabilité Tab ──────────────────────────────────────
+class _ComptaTab extends StatefulWidget {
+  const _ComptaTab();
+  @override
+  State<_ComptaTab> createState() => _ComptaTabState();
+}
+
+class _ComptaTabState extends State<_ComptaTab> {
+  final _labelCtrl = TextEditingController();
+  final _montantCtrl = TextEditingController();
+  DateTime _date = DateTime.now();
+  String _categorie = Expense.categories.first;
+  String? _factureNumero; // null = générale
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    _montantCtrl.dispose();
+    super.dispose();
+  }
+
+  String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  Future<DateTime?> _pickDate(DateTime initial) => showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
+
+  void _addExpense(AppState state) {
+    final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
+    if (_labelCtrl.text.trim().isEmpty || montant <= 0) return;
+    state.addExpense(Expense(
+      id: DateTime.now().millisecondsSinceEpoch,
+      date: _date,
+      label: _labelCtrl.text.trim(),
+      amount: montant,
+      category: _categorie,
+      factureNumero: _factureNumero,
+    ));
+    _labelCtrl.clear();
+    _montantCtrl.clear();
+    setState(() => _date = DateTime.now());
+  }
 
   @override
   Widget build(BuildContext context) {
-    final history = SampleData.dimeHistory;
-    final totalRevenu = history.fold<double>(0, (s, d) => s + d.revenu);
-    final totalDime = history.fold<double>(0, (s, d) => s + d.dime);
-    final totalPaye = history.where((d) => d.statut == 'paye').fold<double>(0, (s, d) => s + d.dime);
+    final state = context.watch<AppState>();
+    final factures = state.documents['facture'] ?? [];
+    final expenses = state.expenses;
+    final t = Comptabilite.totaux(factures, expenses);
+    final rows = Comptabilite.bilanMensuel(factures, expenses, state.dimePaidMonths, state.dimePaidDates);
+    final generales = expenses.where((e) => e.factureNumero == null).toList();
 
     return Column(children: [
+      // Synthèse
       StatGrid(cards: [
-        StatCard(label: 'REVENU TOTAL (2026)', value: Fmt.millions(totalRevenu), unit: 'FCFA'),
-        StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
-        StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
-          badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'REVENU HT ENCAISSÉ', value: Fmt.millions(t.revenuHt), unit: 'FCFA'),
+        StatCard(label: 'DÉPENSES', value: Fmt.millions(t.depenses), unit: 'FCFA'),
+        StatCard(label: 'BÉNÉFICE', value: Fmt.millions(t.benefice), unit: 'FCFA', red: t.benefice < 0),
+        StatCard(label: 'DÎME (10%)', value: Fmt.millions(t.dime), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
 
-      CardBox(
-        padding: EdgeInsets.zero,
-        child: HScrollTable(
-          minWidth: 880,
-          child: Column(children: [
-          Container(
-            color: AppColors.bg,
-            child: const Row(children: [
-              Expanded(flex: 3, child: ThCell('MOIS')),
-              Expanded(flex: 3, child: ThCell('REVENU NET')),
-              Expanded(flex: 3, child: ThCell('DÎME (10%)')),
-              Expanded(flex: 2, child: ThCell('STATUT')),
-              Expanded(flex: 3, child: ThCell('DATE VERSEMENT')),
-            ]),
+      // Ajouter une dépense
+      CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('Ajouter une dépense', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+        const SizedBox(height: 14),
+        Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.end, children: [
+          _field('LIBELLÉ', SizedBox(width: 240, child: _tf(_labelCtrl, 'Ex : Achat matériel'))),
+          _field('MONTANT (FCFA)', SizedBox(width: 140, child: _tf(_montantCtrl, '0', numeric: true))),
+          _field('DATE', GestureDetector(
+            onTap: () async {
+              final d = await _pickDate(_date);
+              if (d != null) setState(() => _date = d);
+            },
+            child: Container(
+              width: 130, height: 40,
+              alignment: Alignment.centerLeft,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+              child: Text(_fmtDate(_date), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+            ),
+          )),
+          _field('RATTACHEMENT', _factureDropdown(factures)),
+        ]),
+        const SizedBox(height: 12),
+        Text('CATÉGORIE', style: AppTheme.label),
+        const SizedBox(height: 6),
+        Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
+          onTap: () => setState(() => _categorie = c),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: _categorie == c ? AppColors.primary : AppColors.bg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _categorie == c ? AppColors.primary : AppColors.border),
+            ),
+            child: Text(c, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _categorie == c ? Colors.white : AppColors.text2)),
           ),
+        )).toList()),
+        const SizedBox(height: 16),
+        PrimaryBtn(label: 'Ajouter la dépense', icon: Icons.add, onTap: () => _addExpense(state)),
+      ])),
+      const SizedBox(height: 20),
+
+      // Bénéfice par facture
+      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Text('Bénéfice par facture', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        HScrollTable(minWidth: 820, child: Column(children: [
+          Container(color: AppColors.bg, child: const Row(children: [
+            Expanded(flex: 3, child: ThCell('N° FACTURE')),
+            Expanded(flex: 4, child: ThCell('CLIENT')),
+            Expanded(flex: 3, child: ThCell('HT')),
+            Expanded(flex: 3, child: ThCell('DÉPENSES')),
+            Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
+            Expanded(flex: 3, child: ThCell('ENCAISSÉE')),
+          ])),
           const Divider(height: 1, color: AppColors.border),
-          ...history.asMap().entries.map((e) {
-            final d = e.value;
-            final isLast = e.key == history.length - 1;
-            return Container(
-              decoration: BoxDecoration(
-                color: d.statut == 'attente' ? const Color(0xFFFFFBEB) : Colors.white,
-                border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
-              ),
-              child: Row(children: [
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                  child: Text(d.mois, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-                )),
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(Fmt.money(d.revenu), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                )),
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(Fmt.money(d.dime), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
-                )),
-                Expanded(flex: 2, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: StatusBadge(status: d.statut),
-                )),
-                Expanded(flex: 3, child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Text(d.date ?? '—', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
-                )),
-              ]),
-            );
-          }),
-          ]),
-        ),
-      ),
+          if (factures.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune facture', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          else
+            ...factures.map((f) => _factureRow(state, f, expenses)),
+        ])),
+      ])),
+      const SizedBox(height: 20),
+
+      // Dépenses générales
+      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Text('Dépenses générales', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        HScrollTable(minWidth: 720, child: Column(children: [
+          Container(color: AppColors.bg, child: const Row(children: [
+            Expanded(flex: 2, child: ThCell('DATE')),
+            Expanded(flex: 4, child: ThCell('LIBELLÉ')),
+            Expanded(flex: 3, child: ThCell('CATÉGORIE')),
+            Expanded(flex: 3, child: ThCell('MONTANT')),
+            SizedBox(width: 48),
+          ])),
+          const Divider(height: 1, color: AppColors.border),
+          if (generales.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune dépense générale', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          else
+            ...generales.map((e) => _expenseRow(state, e)),
+        ])),
+      ])),
+      const SizedBox(height: 20),
+
+      // Bilan mensuel
+      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+          child: Text('Bilan mensuel', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        HScrollTable(minWidth: 720, child: Column(children: [
+          Container(color: AppColors.bg, child: const Row(children: [
+            Expanded(flex: 3, child: ThCell('MOIS')),
+            Expanded(flex: 3, child: ThCell('REVENU HT')),
+            Expanded(flex: 3, child: ThCell('DÉPENSES')),
+            Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
+            Expanded(flex: 3, child: ThCell('DÎME (10%)')),
+          ])),
+          const Divider(height: 1, color: AppColors.border),
+          if (rows.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune activité', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          else
+            ...rows.map((r) => Row(children: [
+              _cell(r.label, flex: 3, bold: true),
+              _cell(Fmt.money(r.revenuHt), flex: 3),
+              _cell(Fmt.money(r.depenses), flex: 3),
+              _cell(Fmt.money(r.benefice), flex: 3, color: r.benefice < 0 ? AppColors.red : AppColors.text1),
+              _cell(Fmt.money(r.dime), flex: 3, color: AppColors.primary, bold: true),
+            ])),
+        ])),
+      ])),
     ]);
   }
+
+  Widget _factureRow(AppState state, DocumentItem f, List<Expense> expenses) {
+    final ht = Comptabilite.factureHt(f);
+    final dep = Comptabilite.depensesFacture(f.numero, expenses);
+    final benef = ht - dep;
+    return Container(
+      decoration: BoxDecoration(
+        color: f.encaissee ? Colors.white : const Color(0xFFFAFAFB),
+        border: const Border(bottom: BorderSide(color: AppColors.border)),
+      ),
+      child: Row(children: [
+        _cell(f.numero, flex: 3, color: AppColors.primary, bold: true),
+        _cell(f.client, flex: 4),
+        _cell(Fmt.money(ht), flex: 3),
+        _cell(Fmt.money(dep), flex: 3),
+        _cell(Fmt.money(benef), flex: 3, bold: true, color: benef < 0 ? AppColors.red : AppColors.text1),
+        Expanded(flex: 3, child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Row(children: [
+            Switch(
+              value: f.encaissee,
+              activeColor: AppColors.green,
+              onChanged: (v) async {
+                if (v) {
+                  final d = await _pickDate(DateTime.now());
+                  if (d != null) state.setFactureEncaissee(f.id, true, date: _fmtDate(d));
+                } else {
+                  state.setFactureEncaissee(f.id, false);
+                }
+              },
+            ),
+            Expanded(child: Text(
+              f.encaissee ? (f.dateEncaissement ?? '') : 'en attente',
+              style: GoogleFonts.dmSans(fontSize: 11.5, color: f.encaissee ? AppColors.green : AppColors.text3),
+              overflow: TextOverflow.ellipsis,
+            )),
+          ]),
+        )),
+      ]),
+    );
+  }
+
+  Widget _expenseRow(AppState state, Expense e) => Container(
+    decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+    child: Row(children: [
+      _cell(_fmtDate(e.date), flex: 2),
+      _cell(e.label, flex: 4),
+      _cell(e.category, flex: 3, color: AppColors.text2),
+      _cell(Fmt.money(e.amount), flex: 3, bold: true),
+      SizedBox(width: 48, child: IconButton(
+        icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
+        onPressed: () => state.deleteExpense(e.id),
+      )),
+    ]),
+  );
+
+  Widget _factureDropdown(List<DocumentItem> factures) => Container(
+    width: 200, height: 40,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+    child: DropdownButtonHideUnderline(child: DropdownButton<String?>(
+      value: _factureNumero,
+      isExpanded: true,
+      hint: Text('Générale', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+      style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+      items: [
+        DropdownMenuItem<String?>(value: null, child: Text('Générale', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2))),
+        ...factures.map((f) => DropdownMenuItem<String?>(value: f.numero, child: Text(f.numero, overflow: TextOverflow.ellipsis))),
+      ],
+      onChanged: (v) => setState(() => _factureNumero = v),
+    )),
+  );
+
+  Widget _field(String label, Widget child) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: AppTheme.label),
+    const SizedBox(height: 6),
+    child,
+  ]);
+
+  Widget _tf(TextEditingController c, String hint, {bool numeric = false}) => SizedBox(
+    height: 40,
+    child: TextField(
+      controller: c,
+      keyboardType: numeric ? TextInputType.number : TextInputType.text,
+      style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
+        filled: true, fillColor: AppColors.bg,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
+      ),
+    ),
+  );
+
+  Widget _cell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(
+    flex: flex,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.dmSans(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: color)),
+    ),
+  );
+}
+
+// ── Dîme Tab (recalculée sur le bénéfice mensuel) ─────────
+class _DimeTab extends StatelessWidget {
+  const _DimeTab();
+
+  String _fmtDate(DateTime d) =>
+      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final factures = state.documents['facture'] ?? [];
+    final rows = Comptabilite.bilanMensuel(factures, state.expenses, state.dimePaidMonths, state.dimePaidDates);
+    final totalBenef = rows.fold<double>(0, (s, r) => s + (r.benefice > 0 ? r.benefice : 0));
+    final totalDime = rows.fold<double>(0, (s, r) => s + r.dime);
+    final totalPaye = rows.where((r) => r.dimePaid).fold<double>(0, (s, r) => s + r.dime);
+
+    return Column(children: [
+      StatGrid(cards: [
+        StatCard(label: 'BÉNÉFICE (MOIS +)', value: Fmt.millions(totalBenef), unit: 'FCFA'),
+        StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
+        StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA'),
+      ]),
+      const SizedBox(height: 20),
+      CardBox(padding: EdgeInsets.zero, child: HScrollTable(minWidth: 880, child: Column(children: [
+        Container(color: AppColors.bg, child: const Row(children: [
+          Expanded(flex: 3, child: ThCell('MOIS')),
+          Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
+          Expanded(flex: 3, child: ThCell('DÎME (10%)')),
+          Expanded(flex: 2, child: ThCell('STATUT')),
+          Expanded(flex: 3, child: ThCell('DATE VERSEMENT')),
+          SizedBox(width: 56),
+        ])),
+        const Divider(height: 1, color: AppColors.border),
+        if (rows.isEmpty)
+          Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune activité', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+        else
+          ...rows.map((r) => Container(
+            decoration: BoxDecoration(
+              color: (!r.dimePaid && r.dime > 0) ? const Color(0xFFFFFBEB) : Colors.white,
+              border: const Border(bottom: BorderSide(color: AppColors.border)),
+            ),
+            child: Row(children: [
+              _dcell(r.label, flex: 3, bold: true),
+              _dcell(Fmt.money(r.benefice), flex: 3, color: r.benefice < 0 ? AppColors.red : AppColors.text1),
+              _dcell(Fmt.money(r.dime), flex: 3, color: AppColors.primary, bold: true),
+              Expanded(flex: 2, child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                child: StatusBadge(status: r.dimePaid ? 'paye' : 'attente'),
+              )),
+              _dcell(r.dimeDate ?? '—', flex: 3, color: AppColors.text2),
+              SizedBox(width: 56, child: (r.dime > 0 && !r.dimePaid)
+                ? IconButton(
+                    tooltip: 'Marquer versée',
+                    icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.green),
+                    onPressed: () => state.setDimePaid(r.monthKey, true, date: _fmtDate(DateTime.now())),
+                  )
+                : (r.dimePaid
+                    ? IconButton(
+                        tooltip: 'Annuler le versement',
+                        icon: const Icon(Icons.undo, size: 16, color: AppColors.text3),
+                        onPressed: () => state.setDimePaid(r.monthKey, false),
+                      )
+                    : const SizedBox())),
+            ]),
+          )),
+      ]))),
+    ]);
+  }
+
+  Widget _dcell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(
+    flex: flex,
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+        style: GoogleFonts.dmSans(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: color)),
+    ),
+  );
 }
 
 // ── Tâches Tab ────────────────────────────────────────────

@@ -34,12 +34,16 @@ class DocumentItem {
   String statut; // 'cours' | 'validee' | 'annulee'
   // Lignes du document — permettent de régénérer le PDF depuis la liste.
   final List<LineItem> lines;
+  // Encaissement (comptabilité de caisse). Distinct du statut de workflow.
+  bool encaissee;
+  String? dateEncaissement; // 'dd/MM/yyyy' quand encaissee == true
 
   DocumentItem({
     required this.id, required this.numero, required this.date,
     required this.clientId, required this.client, required this.objet,
     required this.montant, required this.statut,
     this.clientAddr = '', this.lines = const [],
+    this.encaissee = false, this.dateEncaissement,
   });
 }
 
@@ -211,6 +215,26 @@ class LineItem {
   LineItem({required this.ref, required this.designation, required this.qte, required this.pu});
 
   double get total => qte * pu;
+}
+
+// ── Dépense (comptabilité) ───────────────────────────────
+class Expense {
+  final int id;
+  DateTime date;
+  String label;
+  double amount;
+  String category;
+  String? factureNumero; // null = dépense générale
+
+  Expense({
+    required this.id, required this.date, required this.label,
+    required this.amount, required this.category, this.factureNumero,
+  });
+
+  static const categories = [
+    'Achat matériel', 'Transport', 'Sous-traitance',
+    'Loyer & charges', 'Salaires', 'Autre',
+  ];
 }
 
 // ── Nav Screen enum ──────────────────────────────────────

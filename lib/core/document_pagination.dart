@@ -88,8 +88,6 @@ class DocumentPagination {
   // Calibré sur le rendu réel ; légèrement majoré pour rester conservateur.
   static const _leading = 1.5;
 
-  // Hauteur fixe de la case Signature (identique aperçu ⇔ PDF).
-  static const signatureBoxH = 72.0;
 
   /// Clause de garantie affichée sous les conditions, sur la dernière page.
   /// Source unique partagée par l'aperçu et le PDF, et par le calcul de hauteur.
@@ -186,21 +184,23 @@ class DocumentPagination {
   static double _montantH(DocumentContext c) =>
       c.showMontant ? 10 + _h(c.montantWords, 8.5, height: 1.5, maxWidth: _contentW) : 0;
 
-  static double _conditionsH(DocumentContext c) {
+  /// Hauteur de la colonne conditions (titre + puces + clause). Sert de hauteur
+  /// exacte à la case Signature (aperçu + PDF), pour qu'elle s'aligne au texte.
+  static double conditionsLeftHeight(String conditions, String warranty) {
     const leftColW = (_contentW - 16) / 2; // deux colonnes + écart 16
     const bullet = 2.4 + 4; // cercle dessiné + marge droite
-    final condW = leftColW - bullet;
+    const condW = leftColW - bullet;
     var lines = 0.0;
-    for (final l in c.conditions.split('\n').where((l) => l.trim().isNotEmpty)) {
+    for (final l in conditions.split('\n').where((l) => l.trim().isNotEmpty)) {
       lines += _h(l.trim(), 7.5, height: 1.25, maxWidth: condW) + 1;
     }
-    final left = _h('Conditions', 7.5, weight: FontWeight.w700) +
-        3 +
-        lines +
-        5 +
-        _h(c.warranty, 6, height: 1.25, maxWidth: leftColW);
-    return 7 + left; // padding haut 7 (étiquette Signature)
+    return _h('Conditions', 7.5, weight: FontWeight.w700) +
+        3 + lines + 5 +
+        _h(warranty, 6, height: 1.25, maxWidth: leftColW);
   }
+
+  static double _conditionsH(DocumentContext c) =>
+      7 + conditionsLeftHeight(c.conditions, c.warranty); // +7 : étiquette Signature
 
   static double _pageNumH() => _h('— Page 1 / 2 —', 7.5);
 

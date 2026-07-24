@@ -13,6 +13,9 @@ class AppState extends ChangeNotifier {
   late List<Task> tasks;
   late List<Note> notes;
   late List<FactureEntry> factures;
+  late List<Expense> expenses;
+  final Set<String> _dimePaidMonths = {};
+  final Map<String, String> _dimePaidDates = {};
 
   AppState() {
     clients = List.from(SampleData.clients);
@@ -37,11 +40,14 @@ class AppState extends ChangeNotifier {
     tasks = SampleData.initialTasks;
     notes = SampleData.initialNotes;
     factures = List.from(SampleData.factureHistory);
+    expenses = List.from(SampleData.initialExpenses);
   }
 
   NavScreen get screen => _screen;
   String get docType => _docType;
   bool get creating => _creating;
+  Set<String> get dimePaidMonths => _dimePaidMonths;
+  Map<String, String> get dimePaidDates => _dimePaidDates;
 
   void navigate(NavScreen s) {
     _screen = s;
@@ -159,5 +165,38 @@ class AppState extends ChangeNotifier {
     }
     notifyListeners();
     return !alreadyGenerated;
+  }
+
+  // ── Comptabilité : dépenses ────────────────────────────
+  void addExpense(Expense e) {
+    expenses.add(e);
+    notifyListeners();
+  }
+
+  void deleteExpense(int id) {
+    expenses.removeWhere((e) => e.id == id);
+    notifyListeners();
+  }
+
+  // ── Comptabilité : encaissement des factures ───────────
+  void setFactureEncaissee(int id, bool encaissee, {String? date}) {
+    final f = documents['facture']?.where((d) => d.id == id);
+    if (f != null && f.isNotEmpty) {
+      f.first.encaissee = encaissee;
+      f.first.dateEncaissement = encaissee ? date : null;
+      notifyListeners();
+    }
+  }
+
+  // ── Comptabilité : versement de la dîme ────────────────
+  void setDimePaid(String monthKey, bool paid, {String? date}) {
+    if (paid) {
+      _dimePaidMonths.add(monthKey);
+      if (date != null) _dimePaidDates[monthKey] = date;
+    } else {
+      _dimePaidMonths.remove(monthKey);
+      _dimePaidDates.remove(monthKey);
+    }
+    notifyListeners();
   }
 }

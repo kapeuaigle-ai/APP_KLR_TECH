@@ -210,11 +210,12 @@ class DocumentPreview extends StatelessWidget {
                 ),
 
               // ── Conditions + Signature (dernière page) ─
-              // Structure identique au PDF : Row aligné en haut + case Signature
-              // à hauteur fixe (le PDF ne peut ni étirer ni superposer d'étiquette).
+              // IntrinsicHeight + stretch → la case Signature prend exactement la
+              // hauteur de la colonne conditions. « Signature » posé sur le bord
+              // supérieur (fond blanc qui masque le trait pointillé).
               if (isLast)
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                IntrinsicHeight(child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text('Conditions de règlement :',
@@ -223,8 +224,6 @@ class DocumentPreview extends StatelessWidget {
                       ...conditions.split('\n').where((l) => l.trim().isNotEmpty).map((l) => Padding(
                         padding: const EdgeInsets.only(bottom: 1),
                         child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          // Puce dessinée (cercle), identique au PDF où « • »
-                          // ne peut pas être rendu.
                           Container(
                             width: 2.4, height: 2.4,
                             margin: const EdgeInsets.only(top: 3.4, right: 4),
@@ -241,22 +240,24 @@ class DocumentPreview extends StatelessWidget {
                       ),
                     ])),
                     const SizedBox(width: 16),
-                    // Case signature à hauteur fixe, « Signature » centré en haut.
-                    Expanded(child: SizedBox(
-                      height: DocumentPagination.signatureBoxH,
-                      child: Stack(
-                        children: [
-                          Positioned.fill(child: CustomPaint(painter: _DashedRectPainter())),
-                          Positioned(
-                            top: 7, left: 0, right: 0,
-                            child: Center(child: Text('Signature', style: GoogleFonts.dmSans(
-                                fontSize: 7.5, fontWeight: FontWeight.w600, color: AppColors.text3))),
-                          ),
-                        ],
-                      ),
+                    // Case signature étirée sur la hauteur des conditions.
+                    Expanded(child: Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        Positioned.fill(child: CustomPaint(painter: _DashedRectPainter())),
+                        Positioned(
+                          top: -5, left: 0, right: 0,
+                          child: Center(child: Container(
+                            color: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            child: Text('Signature', style: GoogleFonts.dmSans(
+                                fontSize: 7.5, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                          )),
+                        ),
+                      ],
                     )),
                   ],
-                ),
+                )),
             ]),
           )),
 

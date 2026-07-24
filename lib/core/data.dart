@@ -46,8 +46,8 @@ class SampleData {
     ],
     // Générées à la validation de leur proforma : même numéro, mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements()),
-      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements(), encaissee: true, dateEncaissement: '30/04/2026'),
+      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement(), encaissee: true, dateEncaissement: '15/01/2026'),
     ],
     'bl': [
       DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
@@ -72,6 +72,14 @@ class SampleData {
     const Department(nom: 'Gestion', membres: 1, color: AppColors.emerald, bg: AppColors.greenBg, projets: 5, chef: 'Moussa Diallo'),
     const Department(nom: 'Commercial', membres: 1, color: AppColors.red, bg: AppColors.redBg, projets: 2, chef: 'Fatou Sy'),
     const Department(nom: 'Direction', membres: 1, color: AppColors.primary, bg: AppColors.redBg, projets: 4, chef: 'Koffi Lambert'),
+  ];
+
+  static List<Expense> get initialExpenses => [
+    Expense(id: 1, date: DateTime(2026, 1, 12), label: 'Licences de développement', amount: 250000, category: 'Achat matériel', factureNumero: 'KLR-02-100126'),
+    Expense(id: 2, date: DateTime(2026, 1, 20), label: 'Sous-traitance intégration', amount: 180000, category: 'Sous-traitance', factureNumero: 'KLR-02-100126'),
+    Expense(id: 3, date: DateTime(2026, 4, 26), label: 'Achat switches et bornes Wi-Fi', amount: 1650000, category: 'Achat matériel', factureNumero: 'KLR-04-240426'),
+    Expense(id: 4, date: DateTime(2026, 4, 10), label: 'Loyer atelier — avril', amount: 150000, category: 'Loyer & charges'),
+    Expense(id: 5, date: DateTime(2026, 1, 5), label: 'Transport livraisons', amount: 60000, category: 'Transport'),
   ];
 
   static final List<DimeEntry> dimeHistory = [

@@ -1,4 +1,18 @@
 import 'package:intl/intl.dart';
+import 'models.dart';
+
+/// Numérotation des documents : `PREFIX-NN-ddMMyy`.
+/// NN = n° de la proforma DU JOUR (repart à 01 chaque jour).
+class DocNumero {
+  static String next(String prefix, List<DocumentItem> proformas, DateTime now) {
+    final dd = now.day.toString().padLeft(2, '0');
+    final mm = now.month.toString().padLeft(2, '0');
+    final today = '$dd/$mm/${now.year}';
+    final count = proformas.where((p) => p.date == today).length + 1;
+    final d = '$dd$mm${now.year.toString().substring(2)}';
+    return '$prefix-${count.toString().padLeft(2, '0')}-$d';
+  }
+}
 
 class Fmt {
   static final _nf = NumberFormat('#,##0', 'fr_FR');
