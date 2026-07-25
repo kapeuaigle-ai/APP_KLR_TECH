@@ -53,21 +53,20 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
     }
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Header
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Documents', style: AppTheme.h1),
-                const SizedBox(height: 3),
-                Text('Gérez vos proformas, factures et bons de livraison.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ])),
-              PrimaryBtn(label: 'Nouvelle Proforma', icon: Icons.add, onTap: () => state.setCreating(true)),
-            ]),
+            SectionHeader(
+              title: 'Documents',
+              subtitle: 'Gérez vos proformas, factures et bons de livraison.',
+              actions: [
+                PrimaryBtn(label: 'Nouvelle Proforma', icon: Icons.add, onTap: () => state.setCreating(true)),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // Type tabs
@@ -355,7 +354,7 @@ class _DocRowState extends State<_DocRow> {
           if (widget.type == 'proforma') StatusBadge(status: doc.statut),
         ]),
         content: SizedBox(
-          width: 380,
+          width: dialogWidth(ctx, 380),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             for (final item in [
               ('Type', typeLabels[widget.type] ?? widget.type),

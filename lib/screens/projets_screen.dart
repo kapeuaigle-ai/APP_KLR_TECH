@@ -5,6 +5,7 @@ import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 // ── Drag payload ──────────────────────────────────────────
 class _DragData {
@@ -79,7 +80,7 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
         title: Text('Nouveau projet — ${_columns[colIndex].title}',
             style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
         content: SizedBox(
-          width: 420,
+          width: dialogWidth(ctx, 420),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('TITRE *', style: AppTheme.label),
             const SizedBox(height: 6),
@@ -144,21 +145,19 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('Projets', style: AppTheme.h1),
-              const SizedBox(height: 3),
-              Text('Tableau Kanban de suivi de vos projets.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-            ])),
-            SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
-                onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
-            const SizedBox(width: 12),
-            PrimaryBtn(label: 'Nouveau projet', icon: Icons.add, onTap: () => _showAddProjectDialog(0)),
-          ]),
+          SectionHeader(
+            title: 'Projets',
+            subtitle: 'Tableau Kanban de suivi de vos projets.',
+            actions: [
+              SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
+                  onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
+              PrimaryBtn(label: 'Nouveau projet', icon: Icons.add, onTap: () => _showAddProjectDialog(0)),
+            ],
+          ),
           const SizedBox(height: 24),
 
           Expanded(

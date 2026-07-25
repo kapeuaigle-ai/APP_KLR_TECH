@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import 'responsive.dart';
 
 class AppHeader extends StatelessWidget {
   const AppHeader({super.key});
@@ -146,7 +147,7 @@ class _HelpBtn extends StatelessWidget {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
           title: Text('KLR TECH – Gestion', style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
           content: SizedBox(
-            width: 380,
+            width: dialogWidth(ctx, 380),
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('Application de gestion d\'entreprise — version 1.0.0',
                   style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),

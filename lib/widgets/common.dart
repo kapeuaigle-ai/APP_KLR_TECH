@@ -166,31 +166,60 @@ class StatCard extends StatelessWidget {
 }
 
 // ── Section Header ────────────────────────────────────────
+/// En-tête d'écran : titre, sous-titre, et zéro à deux boutons d'action.
+///
+/// Sur téléphone les actions passent sous le titre et se partagent la
+/// largeur. Les garder sur la même ligne laisserait environ 160 px au titre
+/// une fois le bouton posé, ce qui tronque « Nouvelle Proforma » et compagnie.
 class SectionHeader extends StatelessWidget {
   final String title;
   final String? subtitle;
-  final Widget? action;
-  const SectionHeader({super.key, required this.title, this.subtitle, this.action});
+  final List<Widget> actions;
+
+  const SectionHeader({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.actions = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    final texts = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: AppTheme.h1),
-              if (subtitle != null) ...[
-                const SizedBox(height: 3),
-                Text(subtitle!, style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ],
-            ],
-          ),
-        ),
-        ?action,
+        Text(title, style: AppTheme.h1),
+        if (subtitle != null) ...[
+          const SizedBox(height: 3),
+          Text(subtitle!, style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
+        ],
       ],
     );
+
+    if (actions.isEmpty) return texts;
+
+    if (isPhone(context)) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        texts,
+        const SizedBox(height: 14),
+        // Deux actions se partagent la ligne : à 360 px chacune dispose
+        // encore de ~160 px, assez pour son libellé.
+        Row(children: [
+          for (var i = 0; i < actions.length; i++) ...[
+            if (i > 0) const SizedBox(width: 10),
+            Expanded(child: actions[i]),
+          ],
+        ]),
+      ]);
+    }
+
+    return Row(children: [
+      Expanded(child: texts),
+      for (var i = 0; i < actions.length; i++) ...[
+        if (i > 0) const SizedBox(width: 12),
+        actions[i],
+      ],
+    ]);
   }
 }
 

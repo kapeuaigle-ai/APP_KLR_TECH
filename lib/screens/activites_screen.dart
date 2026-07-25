@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 import '../widgets/common.dart';
+import '../widgets/responsive.dart';
 
 class ActivitesScreen extends StatefulWidget {
   const ActivitesScreen({super.key});
@@ -42,7 +43,7 @@ class _ActivitesScreenState extends State<ActivitesScreen> {
     final filtered = _filter == 'tous' ? activities : activities.where((a) => a.type == _filter).toList();
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 900),
         child: Column(

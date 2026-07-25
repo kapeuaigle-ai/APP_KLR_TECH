@@ -23,21 +23,23 @@ class GanttScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Gantt', style: AppTheme.h1),
-                const SizedBox(height: 3),
-                Text('Vue chronologique des projets sur 6 mois.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ])),
-              SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
-                  onTap: () => context.read<AppState>().navigate(NavScreen.projets)),
-            ]),
+            SectionHeader(
+              title: 'Gantt',
+              subtitle: 'Vue chronologique des projets sur 6 mois.',
+              actions: [
+                // Le Kanban n'existe pas sur téléphone : proposer le bouton
+                // enverrait vers un écran dont la coquille ressort aussitôt.
+                if (!isPhone(context))
+                  SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
+                      onTap: () => context.read<AppState>().navigate(NavScreen.projets)),
+              ],
+            ),
             const SizedBox(height: 24),
 
             CardBox(

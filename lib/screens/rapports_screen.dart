@@ -61,24 +61,23 @@ class _RapportsScreenState extends State<RapportsScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Rapports', style: AppTheme.h1),
-                const SizedBox(height: 3),
-                Text('Analyses financières, clients et projets.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ])),
-              SecondaryBtn(
-                label: _exporting ? 'Export en cours...' : 'Exporter PDF',
-                icon: Icons.download_outlined,
-                onTap: _exportPdf,
-              ),
-            ]),
+            SectionHeader(
+              title: 'Rapports',
+              subtitle: 'Analyses financières, clients et projets.',
+              actions: [
+                SecondaryBtn(
+                  label: _exporting ? 'Export en cours...' : 'Exporter PDF',
+                  icon: Icons.download_outlined,
+                  onTap: _exportPdf,
+                ),
+              ],
+            ),
             const SizedBox(height: 24),
 
             AppTabBar(tabs: const ['Financier', 'Clients', 'Projets'], selected: _tab, onChanged: (i) => setState(() => _tab = i)),

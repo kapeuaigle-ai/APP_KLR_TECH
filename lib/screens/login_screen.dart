@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
 import '../widgets/klr_logo.dart';
+import '../widgets/responsive.dart';
 
 /// Page de connexion : porte d'entrée de l'application.
 /// Accès d'usine admin/admin, modifiables dans Paramètres → Sécurité.
@@ -53,11 +54,15 @@ class _LoginScreenState extends State<LoginScreen> {
       backgroundColor: AppColors.bg,
       body: Center(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          // Sur un écran de 360 px, 24 de marge plus 36 de padding interne ne
+          // laissaient que 240 px utiles au formulaire : on resserre les deux.
+          padding: EdgeInsets.all(isPhone(context) ? 16 : 24),
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 400),
             child: Container(
-              padding: const EdgeInsets.fromLTRB(36, 40, 36, 36),
+              padding: isPhone(context)
+                  ? const EdgeInsets.fromLTRB(22, 30, 22, 26)
+                  : const EdgeInsets.fromLTRB(36, 40, 36, 36),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),

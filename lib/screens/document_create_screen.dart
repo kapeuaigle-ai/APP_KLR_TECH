@@ -211,7 +211,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1340),
         child: Column(

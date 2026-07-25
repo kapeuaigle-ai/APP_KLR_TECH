@@ -31,20 +31,19 @@ class _ClientsScreenState extends State<ClientsScreen> {
     final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Clients', style: AppTheme.h1),
-                const SizedBox(height: 3),
-                Text('Gérez votre portefeuille clients et leur historique.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ])),
-              PrimaryBtn(label: 'Nouveau client', icon: Icons.add, onTap: () => showClientDialog(context)),
-            ]),
+            SectionHeader(
+              title: 'Clients',
+              subtitle: 'Gérez votre portefeuille clients et leur historique.',
+              actions: [
+                PrimaryBtn(label: 'Nouveau client', icon: Icons.add, onTap: () => showClientDialog(context)),
+              ],
+            ),
             const SizedBox(height: 24),
 
             // Stat cards
@@ -126,7 +125,7 @@ void showClientDialog(BuildContext context, {Client? existing}) {
       title: Text(existing == null ? 'Nouveau client' : 'Modifier le client',
           style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
       content: SizedBox(
-        width: 420,
+        width: dialogWidth(ctx, 420),
         child: SingleChildScrollView(
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             _DialogField(label: 'NOM DE L\'ENTREPRISE *', ctrl: nameCtrl, hint: 'Ex : Acme Corp'),

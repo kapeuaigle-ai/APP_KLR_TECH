@@ -23,37 +23,42 @@ class _ParametresScreenState extends State<ParametresScreen> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
+      padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ── Header ──────────────────────────────────────
-            Row(children: [
-              Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            StackingRow(
+              left: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                 Text('Paramètres', style: AppTheme.h1),
                 const SizedBox(height: 3),
                 Text('Configuration de votre entreprise et de l\'application.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
-              ])),
-              AnimatedOpacity(
-                opacity: _saved ? 1 : 0,
-                duration: const Duration(milliseconds: 300),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: AppColors.greenBg,
-                    borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: AppColors.green.withAlpha(76)),
+              ]),
+              // Témoin d'enregistrement : un badge, pas un bouton — il garde
+              // sa taille naturelle et reste à gauche quand il passe dessous.
+              right: Align(
+                alignment: Alignment.centerLeft,
+                child: AnimatedOpacity(
+                  opacity: _saved ? 1 : 0,
+                  duration: const Duration(milliseconds: 300),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: AppColors.greenBg,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.green.withAlpha(76)),
+                    ),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.check_circle_outline, size: 14, color: AppColors.green),
+                      const SizedBox(width: 6),
+                      Text('Modifications enregistrées', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.green)),
+                    ]),
                   ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.check_circle_outline, size: 14, color: AppColors.green),
-                    const SizedBox(width: 6),
-                    Text('Modifications enregistrées', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.green)),
-                  ]),
                 ),
               ),
-            ]),
+            ),
             const SizedBox(height: 24),
 
             // ── Tabs ─────────────────────────────────────────
