@@ -49,3 +49,12 @@ app.*.map.json
 
 # Paquets de distribution (generes par tool/, non versionnes)
 /dist/
+
+# Artefacts de build Android (generes par Gradle, non versionnes)
+/android/.gradle/
+/android/.kotlin/
+/android/app/build/
+/android/build/
+/android/local.properties
+/android/key.properties
+*.jks

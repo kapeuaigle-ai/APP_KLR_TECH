@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Icône adaptative (Android 8 / API 26 et plus). Le lanceur compose les deux
+  plans puis leur applique sa propre forme — cercle, carré arrondi, goutte
+  selon le constructeur.
+
+  Le fond est blanc plein : le losange KLR conserve un anneau blanc interne,
+  qui disparaîtrait sur un fond sombre ou transparent.
+-->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+</adaptive-icon>

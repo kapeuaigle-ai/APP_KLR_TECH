@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fond de l'icône adaptative. Blanc : le losange KLR porte un anneau blanc
+     interne qui se perdrait sur un fond sombre. -->
+<resources>
+    <color name="ic_launcher_background">#FFFFFFFF</color>
+</resources>

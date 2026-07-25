@@ -1,5 +1,5 @@
-// Génère les icônes d'application (Windows + Web) à partir du logo officiel,
-// en remplacement des icônes Flutter par défaut.
+// Génère les icônes d'application (Windows + Web + Android) à partir du logo
+// officiel, en remplacement des icônes Flutter par défaut.
 //
 //   dart run tool/build_app_icons.dart
 //
@@ -8,11 +8,14 @@
 //   web/favicon.png                        — 32
 //   web/icons/Icon-{192,512}.png           — icônes PWA classiques
 //   web/icons/Icon-maskable-{192,512}.png  — icônes PWA « maskable »
+//   android/.../mipmap-*/ic_launcher.png            — icône héritée (< API 26)
+//   android/.../mipmap-*/ic_launcher_foreground.png — plan avant adaptatif
 //
 // Les icônes classiques gardent le fond transparent (le losange se pose alors
 // correctement sur une barre des tâches claire comme sombre). Les « maskable »
 // sont rognées par le système en cercle ou en carré arrondi : elles reçoivent
-// donc un fond blanc plein et une marge de sécurité plus large.
+// donc un fond blanc plein et une marge de sécurité plus large. Les icônes
+// Android suivent la même logique : le lanceur les rogne aussi.
 
 import 'dart:io';
 import 'package:image/image.dart' as img;
@@ -79,5 +82,33 @@ void main() {
     File('web/icons/Icon-maskable-$s.png')
         .writeAsBytesSync(img.encodePng(_square(mark, s, 0.6, background: blanc)));
     stdout.writeln('Icon-maskable-$s.png');
+  }
+
+  // ── Android ─────────────────────────────────────────────
+  // Tailles du lanceur par densité d'écran.
+  const mipmaps = {
+    'mdpi': 48, 'hdpi': 72, 'xhdpi': 96, 'xxhdpi': 144, 'xxxhdpi': 192,
+  };
+  const resDir = 'android/app/src/main/res';
+
+  for (final e in mipmaps.entries) {
+    final dir = Directory('$resDir/mipmap-${e.key}');
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+
+    // Icône héritée (Android < 8) : fond blanc, marge modérée. C'est l'image
+    // affichée telle quelle, sans masque système.
+    File('${dir.path}/ic_launcher.png').writeAsBytesSync(
+        img.encodePng(_square(mark, e.value, 0.78, background: blanc)));
+
+    // Plan avant de l'icône adaptative (Android ≥ 8). Le système n'en montre
+    // que le tiers central après rognage, et le rendu est agrandi : le
+    // losange doit donc rester petit dans un cadre transparent, sinon il est
+    // coupé. Le plan est traditionnellement fourni en 108/72 de la taille.
+    final foreground = (e.value * 108 / 48).round();
+    File('${dir.path}/ic_launcher_foreground.png')
+        .writeAsBytesSync(img.encodePng(_square(mark, foreground, 0.42)));
+
+    stdout.writeln('mipmap-${e.key} : ic_launcher ${e.value} px, '
+        'foreground $foreground px');
   }
 }
