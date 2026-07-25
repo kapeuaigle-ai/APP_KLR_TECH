@@ -241,26 +241,6 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     if (mounted) setState(() {});
   }
 
-  Future<void> _valider(AppState state, Engagement e) async {
-    final d = await _pickDate(DateTime.now());
-    if (d == null || !mounted) return;
-    state.validerEngagement(e.id, Fmt.jour(d));
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-      content: Text(
-        e.estCreance
-            ? 'Créance encaissée : ${Fmt.money(e.montant)} entrent en revenu (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).'
-            : 'Dette payée : ${Fmt.money(e.montant)} entrent en dépense (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).',
-        style: const TextStyle(fontSize: 13),
-      ),
-      backgroundColor: e.estCreance ? AppColors.green : AppColors.orange,
-      duration: const Duration(seconds: 4),
-      behavior: SnackBarBehavior.floating,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      margin: const EdgeInsets.all(16),
-    ));
-  }
-
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
@@ -318,6 +298,46 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       ),
       const SizedBox(height: 14),
 
+      // Téléphone : une carte par engagement (le tableau ferait 1000 px).
+      if (isPhone(context))
+        if (liste.isEmpty)
+          CardBox(
+            padding: EdgeInsets.zero,
+            child: EmptyHint(_estCreance
+                ? 'Aucune créance enregistrée'
+                : 'Aucune dette enregistrée'),
+          )
+        else
+          ...liste.map((e) => ListCard(
+            // Bande de statut : en retard, réglé, ou en attente.
+            accent: switch (e.statut) {
+              'retard' => AppColors.red,
+              'paye' => AppColors.green,
+              _ => AppColors.orange,
+            },
+            background: e.regle ? Colors.white : const Color(0xFFFAFAFB),
+            title: Text(e.tiers, style: GoogleFonts.dmSans(
+              fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1,
+            ), maxLines: 1, overflow: TextOverflow.ellipsis),
+            // Le type (créance / dette) est déjà donné par le sélecteur au
+            // dessus : inutile de le répéter, la place manque.
+            subtitle: Row(children: [
+              StatusBadge(status: e.statut),
+              const SizedBox(width: 8),
+              Expanded(child: Text(e.num, maxLines: 1, overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary))),
+            ]),
+            trailing: _engagementMenu(context, state, e, large: true),
+            fields: [
+              ('MONTANT', CardValue(Fmt.money(e.montant), bold: true)),
+              if (e.description.isNotEmpty) ('OBJET', CardValue(e.description)),
+              ('ÉCHÉANCE', CardValue(e.echeance,
+                  color: e.statut == 'retard' ? AppColors.red : null)),
+              if (e.regle)
+                ('RÉGLÉ LE', CardValue(e.dateReglement ?? '—', color: AppColors.green)),
+            ],
+          ))
+      else
       CardBox(
         padding: EdgeInsets.zero,
         child: HScrollTable(
@@ -338,13 +358,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             ),
             const Divider(height: 1, color: AppColors.border),
             if (liste.isEmpty)
-              Padding(
-                padding: const EdgeInsets.all(30),
-                child: Center(child: Text(
-                  _estCreance ? 'Aucune créance enregistrée' : 'Aucune dette enregistrée',
-                  style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3),
-                )),
-              )
+              EmptyHint(_estCreance
+                  ? 'Aucune créance enregistrée'
+                  : 'Aucune dette enregistrée')
             else
               ...liste.asMap().entries.map((entry) {
                 final e = entry.value;
@@ -393,42 +409,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                     )),
                     _cell(e.echeance, flex: 3, color: e.statut == 'retard' ? AppColors.red : AppColors.text2),
                     _cell(e.dateReglement ?? '—', flex: 3, color: e.regle ? AppColors.green : AppColors.text3),
-                    SizedBox(width: 60, child: PopupMenuButton<String>(
-                      tooltip: 'Actions',
-                      icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
-                      padding: const EdgeInsets.all(6),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      color: Colors.white,
-                      onSelected: (action) {
-                        if (action == 'valider') {
-                          _valider(state, e);
-                        } else if (action == 'annuler') {
-                          state.annulerValidationEngagement(e.id);
-                        } else if (action == 'supprimer') {
-                          state.deleteEngagement(e.id);
-                        }
-                      },
-                      itemBuilder: (ctx) => [
-                        if (!e.regle)
-                          PopupMenuItem(value: 'valider', child: Row(children: [
-                            const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
-                            const SizedBox(width: 8),
-                            Text(e.estCreance ? 'Encaisser' : 'Marquer payée',
-                                style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                          ]))
-                        else
-                          PopupMenuItem(value: 'annuler', child: Row(children: [
-                            const Icon(Icons.undo, size: 15, color: AppColors.text3),
-                            const SizedBox(width: 8),
-                            Text('Annuler la validation', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                          ])),
-                        PopupMenuItem(value: 'supprimer', child: Row(children: [
-                          const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
-                          const SizedBox(width: 8),
-                          Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                        ])),
-                      ],
-                    )),
+                    SizedBox(width: 60, child: _engagementMenu(context, state, e)),
                   ]),
                 );
               }),
@@ -437,6 +418,151 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       ),
     ]);
   }
+}
+
+/// Section de la comptabilité : un titre, éventuellement un sous-titre, puis
+/// soit le tableau de bureau, soit la liste de cartes du téléphone.
+///
+/// Les trois sections de l'onglet Comptabilité partageaient déjà la même
+/// structure ; ce widget évite de la réécrire trois fois avec le
+/// branchement responsive en plus.
+class _SectionCompta extends StatelessWidget {
+  final String titre;
+  final String? sousTitre;
+  final bool vide;
+  final String messageVide;
+  final List<Widget> cartes;
+  final Widget tableau;
+
+  const _SectionCompta({
+    required this.titre,
+    required this.vide,
+    required this.messageVide,
+    required this.cartes,
+    required this.tableau,
+    this.sousTitre,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final entete = <Widget>[
+      Padding(
+        padding: EdgeInsets.fromLTRB(isPhone(context) ? 2 : 20, 0, 20, sousTitre == null ? 12 : 2),
+        child: Text(titre, style: GoogleFonts.dmSans(
+            fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+      ),
+      if (sousTitre != null)
+        Padding(
+          padding: EdgeInsets.fromLTRB(isPhone(context) ? 2 : 20, 0, 20, 12),
+          child: Text(sousTitre!, style: GoogleFonts.dmSans(
+              fontSize: 12.5, color: AppColors.text3)),
+        ),
+    ];
+
+    if (isPhone(context)) {
+      // Le titre sort de la carte : sur téléphone chaque ligne est déjà une
+      // carte, un cadre supplémentaire n'ajouterait qu'une bordure.
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        ...entete,
+        if (vide)
+          CardBox(padding: EdgeInsets.zero, child: EmptyHint(messageVide))
+        else
+          ...cartes,
+      ]);
+    }
+
+    return CardBox(
+      padding: EdgeInsets.zero,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Padding(padding: const EdgeInsets.only(top: 18), child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start, children: entete)),
+        tableau,
+      ]),
+    );
+  }
+}
+
+/// Valider un engagement : demande la date de règlement puis l'enregistre.
+/// Valider signifie que l'argent a bougé — la créance est encaissée, la dette
+/// payée — et l'engagement entre en comptabilité au mois de son règlement.
+Future<void> _validerEngagement(
+    BuildContext context, AppState state, Engagement e) async {
+  // Mêmes bornes que les autres sélecteurs de date de l'écran, et pas de
+  // locale explicite : l'application n'enregistre aucun
+  // localizationsDelegates, donc on s'en tient au défaut de MaterialApp.
+  final d = await showDatePicker(
+    context: context,
+    initialDate: DateTime.now(),
+    firstDate: DateTime(2020),
+    lastDate: DateTime(2100),
+  );
+  if (d == null || !context.mounted) return;
+  state.validerEngagement(e.id, Fmt.jour(d));
+  if (!context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(
+      e.estCreance
+          ? 'Créance encaissée : ${Fmt.money(e.montant)} entrent en revenu (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).'
+          : 'Dette payée : ${Fmt.money(e.montant)} entrent en dépense (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).',
+      style: const TextStyle(fontSize: 13),
+    ),
+    backgroundColor: e.estCreance ? AppColors.green : AppColors.orange,
+    duration: const Duration(seconds: 4),
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    margin: const EdgeInsets.all(16),
+  ));
+}
+
+/// Menu d'actions d'un engagement, partagé par la ligne de tableau (bureau)
+/// et la carte (téléphone) : encaisser ou payer, annuler la validation,
+/// supprimer. Le contenu est identique ; seule la taille de la cible change.
+Widget _engagementMenu(
+  BuildContext context,
+  AppState state,
+  Engagement e, {
+  bool large = false,
+}) {
+  return PopupMenuButton<String>(
+    tooltip: 'Actions',
+    icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
+    padding: EdgeInsets.all(large ? 8 : 6),
+    constraints: BoxConstraints(
+      minWidth: large ? 40 : 28,
+      minHeight: large ? 40 : 28,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    color: Colors.white,
+    onSelected: (action) {
+      if (action == 'valider') {
+        _validerEngagement(context, state, e);
+      } else if (action == 'annuler') {
+        state.annulerValidationEngagement(e.id);
+      } else if (action == 'supprimer') {
+        state.deleteEngagement(e.id);
+      }
+    },
+    itemBuilder: (ctx) => [
+      if (!e.regle)
+        PopupMenuItem(value: 'valider', child: Row(children: [
+          const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
+          const SizedBox(width: 8),
+          Text(e.estCreance ? 'Encaisser' : 'Marquer payée',
+              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ]))
+      else
+        PopupMenuItem(value: 'annuler', child: Row(children: [
+          const Icon(Icons.undo, size: 15, color: AppColors.text3),
+          const SizedBox(width: 8),
+          Text('Annuler la validation', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ])),
+      PopupMenuItem(value: 'supprimer', child: Row(children: [
+        const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
+        const SizedBox(width: 8),
+        Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+      ])),
+    ],
+  );
 }
 
 // ── Comptabilité Tab ──────────────────────────────────────
@@ -649,22 +775,72 @@ class _ComptaTabState extends State<_ComptaTab> {
       // dettes — et seulement sur le mois en cours : on n'écrit pas dans un
       // mois déjà clôturé.
       if (estMoisCourant) ...[
-        Row(children: [
-          const Spacer(),
-          PrimaryBtn(
-            label: 'Nouvelle Dépense',
-            icon: Icons.add,
-            onTap: () => _ouvrirFormulaireDepense(state, factures),
+        // Bouton pleine largeur sur téléphone, aligné à droite sur bureau.
+        SizedBox(
+          width: double.infinity,
+          child: Align(
+            alignment: isPhone(context) ? Alignment.center : Alignment.centerRight,
+            child: SizedBox(
+              width: isPhone(context) ? double.infinity : null,
+              child: PrimaryBtn(
+                label: 'Nouvelle Dépense',
+                icon: Icons.add,
+                onTap: () => _ouvrirFormulaireDepense(state, factures),
+              ),
+            ),
           ),
-        ]),
+        ),
         const SizedBox(height: 14),
       ],
 
       // Bénéfice par facture
-      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Text('Bénéfice par facture', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
-        HScrollTable(minWidth: 820, child: Column(children: [
+      _SectionCompta(
+        titre: 'Bénéfice par facture',
+        vide: facturesMois.isEmpty,
+        messageVide: 'Aucune facture sur ce mois',
+        // Téléphone : une carte par facture.
+        cartes: facturesMois.map((f) {
+          final ht = Comptabilite.factureHt(f);
+          final dep = Comptabilite.depensesFacture(f.numero, expenses);
+          final benef = ht - dep;
+          return ListCard(
+            accent: benef < 0 ? AppColors.red : AppColors.green,
+            background: f.encaissee ? Colors.white : const Color(0xFFFAFAFB),
+            title: Text(f.numero, style: GoogleFonts.dmSans(
+              fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
+            subtitle: Text(f.client, style: GoogleFonts.dmSans(
+              fontSize: 13, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis),
+            fields: [
+              ('HT', CardValue(Fmt.money(ht))),
+              ('DÉPENSES', CardValue(Fmt.money(dep))),
+              ('BÉNÉFICE', CardValue(Fmt.money(benef), bold: true,
+                  color: benef < 0 ? AppColors.red : AppColors.text1)),
+              // L'interrupteur d'encaissement reste accessible : c'est
+              // l'action principale de cette liste.
+              ('ENCAISSÉE', Row(children: [
+                Switch(
+                  value: f.encaissee,
+                  activeThumbColor: AppColors.green,
+                  onChanged: (v) async {
+                    if (v) {
+                      final d = await _pickDate(DateTime.now());
+                      if (d != null) state.setFactureEncaissee(f.id, true, date: _fmtDate(d));
+                    } else {
+                      state.setFactureEncaissee(f.id, false);
+                    }
+                  },
+                ),
+                Expanded(child: Text(
+                  f.encaissee ? (f.dateEncaissement ?? '') : 'en attente',
+                  style: GoogleFonts.dmSans(fontSize: 11.5,
+                      color: f.encaissee ? AppColors.green : AppColors.text3),
+                  overflow: TextOverflow.ellipsis,
+                )),
+              ])),
+            ],
+          );
+        }).toList(),
+        tableau: HScrollTable(minWidth: 820, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 3, child: ThCell('N° FACTURE')),
             Expanded(flex: 4, child: ThCell('CLIENT')),
@@ -675,18 +851,36 @@ class _ComptaTabState extends State<_ComptaTab> {
           ])),
           const Divider(height: 1, color: AppColors.border),
           if (facturesMois.isEmpty)
-            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune facture sur ce mois', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+            const EmptyHint('Aucune facture sur ce mois')
           else
             ...facturesMois.map((f) => _factureRow(state, f, expenses)),
         ])),
-      ])),
+      ),
       const SizedBox(height: 20),
 
       // Dépenses générales
-      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Text('Dépenses générales', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
-        HScrollTable(minWidth: 720, child: Column(children: [
+      _SectionCompta(
+        titre: 'Dépenses générales',
+        vide: generales.isEmpty,
+        messageVide: 'Aucune dépense générale',
+        cartes: generales.map((e) => ListCard(
+          title: Text(e.label, style: GoogleFonts.dmSans(
+            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1)),
+          subtitle: Text(_fmtDate(e.date), style: GoogleFonts.dmSans(
+            fontSize: 12.5, color: AppColors.text3)),
+          trailing: IconButton(
+            tooltip: 'Supprimer',
+            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.red),
+            // 40 px : cible tactile confortable.
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            onPressed: () => state.deleteExpense(e.id),
+          ),
+          fields: [
+            ('CATÉGORIE', CardValue(e.category)),
+            ('MONTANT', CardValue(Fmt.money(e.amount), bold: true)),
+          ],
+        )).toList(),
+        tableau: HScrollTable(minWidth: 720, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 2, child: ThCell('DATE')),
             Expanded(flex: 4, child: ThCell('LIBELLÉ')),
@@ -696,22 +890,34 @@ class _ComptaTabState extends State<_ComptaTab> {
           ])),
           const Divider(height: 1, color: AppColors.border),
           if (generales.isEmpty)
-            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune dépense générale', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+            const EmptyHint('Aucune dépense générale')
           else
             ...generales.map((e) => _expenseRow(state, e)),
         ])),
-      ])),
+      ),
       const SizedBox(height: 20),
 
       // Dettes & créances validées sur le mois — c'est ce qui explique
       // l'écart entre les factures encaissées et le revenu du mois.
-      CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 2),
-          child: Text('Dettes & créances réglées', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
-        Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-          child: Text('Validées depuis l\'onglet Engagements : les créances alimentent le revenu, les dettes les dépenses.',
-              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))),
-        HScrollTable(minWidth: 720, child: Column(children: [
+      _SectionCompta(
+        titre: 'Dettes & créances réglées',
+        sousTitre: 'Validées depuis l\'onglet Engagements : les créances alimentent le revenu, les dettes les dépenses.',
+        vide: engagementsMois.isEmpty,
+        messageVide: 'Aucun règlement sur ce mois',
+        cartes: engagementsMois.map((e) => ListCard(
+          accent: e.estCreance ? AppColors.green : AppColors.red,
+          title: Text(e.tiers, style: GoogleFonts.dmSans(
+            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1),
+            maxLines: 1, overflow: TextOverflow.ellipsis),
+          subtitle: Text('${e.estCreance ? 'Créance' : 'Dette'} · ${e.num}',
+              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary)),
+          fields: [
+            ('MONTANT', CardValue('${e.estCreance ? '+' : '−'} ${Fmt.money(e.montant)}',
+                bold: true, color: e.estCreance ? AppColors.green : AppColors.red)),
+            ('RÉGLÉ LE', CardValue(e.dateReglement ?? '—')),
+          ],
+        )).toList(),
+        tableau: HScrollTable(minWidth: 720, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 2, child: ThCell('TYPE')),
             Expanded(flex: 3, child: ThCell('RÉFÉRENCE')),
@@ -721,7 +927,7 @@ class _ComptaTabState extends State<_ComptaTab> {
           ])),
           const Divider(height: 1, color: AppColors.border),
           if (engagementsMois.isEmpty)
-            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucun règlement sur ce mois', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+            const EmptyHint('Aucun règlement sur ce mois')
           else
             ...engagementsMois.map((e) => Container(
               decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
@@ -735,7 +941,7 @@ class _ComptaTabState extends State<_ComptaTab> {
               ]),
             )),
         ])),
-      ])),
+      ),
     ]);
   }
 

@@ -90,39 +90,42 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
               const SizedBox(height: 16),
             ],
 
-            // Table
-            CardBox(
-              padding: EdgeInsets.zero,
-              child: HScrollTable(
-                minWidth: 1020,
-                child: Column(children: [
-                  // Table header
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: AppColors.bg,
-                      borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+            // Téléphone : une carte par document (le tableau ferait 1020 px).
+            if (isPhone(context))
+              if (filtered.isEmpty)
+                const CardBox(padding: EdgeInsets.zero, child: EmptyHint('Aucun document trouvé'))
+              else
+                ...filtered.map((d) => _DocCard(doc: d, type: type))
+            else
+              CardBox(
+                padding: EdgeInsets.zero,
+                child: HScrollTable(
+                  minWidth: 1020,
+                  child: Column(children: [
+                    // Table header
+                    Container(
+                      decoration: const BoxDecoration(
+                        color: AppColors.bg,
+                        borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
+                      ),
+                      child: Row(children: [
+                        const Expanded(flex: 3, child: ThCell('NUMÉRO')),
+                        const Expanded(flex: 3, child: ThCell('DATE')),
+                        const Expanded(flex: 4, child: ThCell('CLIENT')),
+                        const Expanded(flex: 4, child: ThCell('OBJET')),
+                        const Expanded(flex: 3, child: ThCell('MONTANT')),
+                        if (isProforma) const Expanded(flex: 2, child: ThCell('STATUT')),
+                        const SizedBox(width: 60),
+                      ]),
                     ),
-                    child: Row(children: [
-                      const Expanded(flex: 3, child: ThCell('NUMÉRO')),
-                      const Expanded(flex: 3, child: ThCell('DATE')),
-                      const Expanded(flex: 4, child: ThCell('CLIENT')),
-                      const Expanded(flex: 4, child: ThCell('OBJET')),
-                      const Expanded(flex: 3, child: ThCell('MONTANT')),
-                      if (isProforma) const Expanded(flex: 2, child: ThCell('STATUT')),
-                      const SizedBox(width: 60),
-                    ]),
-                  ),
-                  const Divider(height: 1, color: AppColors.border),
-                  if (filtered.isEmpty)
-                    Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(child: Text('Aucun document trouvé', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
-                    )
-                  else
-                    ...filtered.asMap().entries.map((e) => _DocRow(doc: e.value, type: type, isLast: e.key == filtered.length - 1)),
-                ]),
+                    const Divider(height: 1, color: AppColors.border),
+                    if (filtered.isEmpty)
+                      const EmptyHint('Aucun document trouvé')
+                    else
+                      ...filtered.asMap().entries.map((e) => _DocRow(doc: e.value, type: type, isLast: e.key == filtered.length - 1)),
+                  ]),
+                ),
               ),
-            ),
           ],
         ),
       ),
@@ -174,37 +177,39 @@ class _TypeTabs extends StatelessWidget {
   }
 }
 
-class _DocRow extends StatefulWidget {
+// ─────────────────────────────────────────────────────────
+//  Actions d'un document
+//
+//  Extrait de l'ancien State de la ligne de tableau : générer le PDF,
+//  l'imprimer, l'enregistrer, ouvrir le détail ou l'aperçu pleine page ne
+//  dépend d'aucun état de widget. Ligne de bureau et carte mobile partagent
+//  donc exactement le même comportement.
+// ─────────────────────────────────────────────────────────
+class _DocActions {
   final DocumentItem doc;
   final String type;
-  final bool isLast;
-  const _DocRow({required this.doc, required this.type, required this.isLast});
+  const _DocActions({required this.doc, required this.type});
 
-  @override
-  State<_DocRow> createState() => _DocRowState();
-}
-
-class _DocRowState extends State<_DocRow> {
-  bool _hovered = false;
+  static const _typeLabels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+  static const _fullTypeLabels = {'proforma': 'Facture Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
 
   // Totaux recalculés depuis les lignes enregistrées du document.
   // Le BL ne porte aucun montant.
-  ({double ht, double tvaAmt, double ttc, bool tva}) _totals(AppSettings s) {
-    if (widget.type == 'bl') return (ht: 0, tvaAmt: 0, ttc: 0, tva: false);
-    final ht = widget.doc.lines.fold<double>(0, (sum, l) => sum + l.total);
+  ({double ht, double tvaAmt, double ttc, bool tva}) totals(AppSettings s) {
+    if (type == 'bl') return (ht: 0, tvaAmt: 0, ttc: 0, tva: false);
+    final ht = doc.lines.fold<double>(0, (sum, l) => sum + l.total);
     final tva = s.tva > 0;
     final tvaAmt = tva ? ht * 0.05 : 0.0;
     return (ht: ht, tvaAmt: tvaAmt, ttc: ht + tvaAmt, tva: tva);
   }
 
   // Régénère le PDF du document depuis ses lignes enregistrées.
-  Future<List<int>> _buildPdf() {
+  Future<List<int>> _buildPdf(BuildContext context) {
     final s = context.read<AppState>().settings;
-    final doc = widget.doc;
-    final t = _totals(s);
+    final t = totals(s);
     return PdfGenerator.generate(
       settings: s,
-      type: widget.type,
+      type: type,
       numero: doc.numero,
       date: doc.date,
       client: doc.client,
@@ -218,11 +223,10 @@ class _DocRowState extends State<_DocRow> {
   }
 
   // ── Aperçu du document en pleine page ──────────────────
-  void _showFullDocument() {
-    final doc = widget.doc;
+  void showFullDocument(BuildContext context) {
     final s = context.read<AppState>().settings;
-    final t = _totals(s);
-    const typeLabels = {'proforma': 'Facture Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+    final t = totals(s);
+    const typeLabels = _fullTypeLabels;
 
     showDialog(
       context: context,
@@ -238,7 +242,7 @@ class _DocRowState extends State<_DocRow> {
               padding: const EdgeInsets.fromLTRB(20, 16, 12, 12),
               child: Row(children: [
                 Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${typeLabels[widget.type] ?? widget.type}  ·  ${doc.numero}',
+                  Text('${typeLabels[type] ?? type}  ·  ${doc.numero}',
                       style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.text1)),
                   const SizedBox(height: 2),
                   Text(doc.client, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
@@ -265,7 +269,7 @@ class _DocRowState extends State<_DocRow> {
                         )),
                       )
                     : DocumentPreview(
-                        type: widget.type,
+                        type: type,
                         numero: doc.numero,
                         settings: s,
                         client: doc.client,
@@ -286,12 +290,12 @@ class _DocRowState extends State<_DocRow> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   TextButton.icon(
-                    onPressed: _printPdf,
+                    onPressed: () => printPdf(context),
                     icon: const Icon(Icons.print_outlined, size: 16, color: AppColors.text2),
                     label: Text('Imprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
                   ),
                   TextButton.icon(
-                    onPressed: _downloadPdf,
+                    onPressed: () => downloadPdf(context),
                     icon: const Icon(Icons.download_outlined, size: 16, color: AppColors.primary),
                     label: Text('Télécharger PDF', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
                   ),
@@ -304,19 +308,19 @@ class _DocRowState extends State<_DocRow> {
     );
   }
 
-  Future<void> _printPdf() async {
+  Future<void> printPdf(BuildContext context) async {
     try {
-      await PdfGenerator.printDoc(await _buildPdf());
+      await PdfGenerator.printDoc(await _buildPdf(context));
     } catch (e) {
-      if (mounted) _pdfError(e);
+      if (context.mounted) _pdfError(context, e);
     }
   }
 
-  Future<void> _downloadPdf() async {
+  Future<void> downloadPdf(BuildContext context) async {
     try {
       final path = await PdfGenerator.saveWithDialog(
-          bytes: await _buildPdf(), type: widget.type, numero: widget.doc.numero);
-      if (mounted && path != null) {
+          bytes: await _buildPdf(context), type: type, numero: doc.numero);
+      if (context.mounted && path != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('PDF enregistré :\n$path', style: const TextStyle(fontSize: 13)),
           backgroundColor: AppColors.green,
@@ -327,11 +331,11 @@ class _DocRowState extends State<_DocRow> {
         ));
       }
     } catch (e) {
-      if (mounted) _pdfError(e);
+      if (context.mounted) _pdfError(context, e);
     }
   }
 
-  void _pdfError(Object e) {
+  void _pdfError(BuildContext context, Object e) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Erreur PDF : $e', style: const TextStyle(fontSize: 13)),
       backgroundColor: AppColors.primary,
@@ -341,9 +345,8 @@ class _DocRowState extends State<_DocRow> {
     ));
   }
 
-  void _showDetails(BuildContext context) {
-    final doc = widget.doc;
-    const typeLabels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+  void showDetails(BuildContext context) {
+        const typeLabels = _typeLabels;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -351,13 +354,13 @@ class _DocRowState extends State<_DocRow> {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         title: Row(children: [
           Expanded(child: Text(doc.numero, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.primary))),
-          if (widget.type == 'proforma') StatusBadge(status: doc.statut),
+          if (type == 'proforma') StatusBadge(status: doc.statut),
         ]),
         content: SizedBox(
           width: dialogWidth(ctx, 380),
           child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
             for (final item in [
-              ('Type', typeLabels[widget.type] ?? widget.type),
+              ('Type', typeLabels[type] ?? type),
               ('Date', doc.date),
               ('Client', doc.client),
               ('Objet', doc.objet),
@@ -373,7 +376,7 @@ class _DocRowState extends State<_DocRow> {
             // Changement de statut : uniquement pour les proformas. Valider
             // une proforma génère la facture et le BL ; factures et BL n'ont
             // pas de statut propre.
-            if (widget.type == 'proforma') ...[
+            if (type == 'proforma') ...[
               const SizedBox(height: 8),
               const Divider(color: AppColors.border),
               const SizedBox(height: 8),
@@ -406,7 +409,7 @@ class _DocRowState extends State<_DocRow> {
                             ));
                           }
                         } else {
-                          appState.setDocumentStatus(widget.type, doc.id, s.$1);
+                          appState.setDocumentStatus(type, doc.id, s.$1);
                         }
                         Navigator.of(ctx).pop();
                       },
@@ -429,7 +432,7 @@ class _DocRowState extends State<_DocRow> {
         ),
         actions: [
           TextButton.icon(
-            onPressed: () { Navigator.of(ctx).pop(); _showFullDocument(); },
+            onPressed: () { Navigator.of(ctx).pop(); showFullDocument(context); },
             icon: const Icon(Icons.description_outlined, size: 16, color: AppColors.primary),
             label: Text('Voir le document', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
           ),
@@ -442,9 +445,65 @@ class _DocRowState extends State<_DocRow> {
     );
   }
 
+}
+
+// ── Carte document (téléphone) ────────────────────────────
+class _DocCard extends StatelessWidget {
+  final DocumentItem doc;
+  final String type;
+  const _DocCard({required this.doc, required this.type});
+
+  @override
+  Widget build(BuildContext context) {
+    final actions = _DocActions(doc: doc, type: type);
+    final isProforma = type == 'proforma';
+
+    // Bande de couleur reprenant le statut : le repère le plus utile d'un
+    // coup d'œil dans une liste de proformas.
+    final accent = !isProforma ? null : switch (doc.statut) {
+      'validee' => AppColors.green,
+      'annulee' => AppColors.text3,
+      _ => AppColors.orange,
+    };
+
+    return ListCard(
+      accent: accent,
+      title: Text(doc.numero, style: GoogleFonts.dmSans(
+        fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary,
+      )),
+      subtitle: Text(doc.client, style: GoogleFonts.dmSans(
+        fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text1,
+      ), maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: isProforma ? StatusBadge(status: doc.statut) : null,
+      fields: [
+        ('DATE', CardValue(doc.date)),
+        if (doc.objet.isNotEmpty) ('OBJET', CardValue(doc.objet)),
+        if (type != 'bl')
+          ('MONTANT', CardValue(doc.montant > 0 ? Fmt.money(doc.montant) : '—', bold: true)),
+      ],
+      // Toute la carte ouvre le détail : plus facile à viser qu'une icône.
+      onTap: () => actions.showDetails(context),
+    );
+  }
+}
+
+class _DocRow extends StatefulWidget {
+  final DocumentItem doc;
+  final String type;
+  final bool isLast;
+  const _DocRow({required this.doc, required this.type, required this.isLast});
+
+  @override
+  State<_DocRow> createState() => _DocRowState();
+}
+
+class _DocRowState extends State<_DocRow> {
+  bool _hovered = false;
+
   @override
   Widget build(BuildContext context) {
     final doc = widget.doc;
+    final actions = _DocActions(doc: doc, type: widget.type);
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -485,7 +544,7 @@ class _DocRowState extends State<_DocRow> {
             IconButton(
               tooltip: 'Voir le document',
               icon: const Icon(Icons.remove_red_eye_outlined, size: 15, color: AppColors.text3),
-              onPressed: () => _showDetails(context),
+              onPressed: () => actions.showDetails(context),
               padding: const EdgeInsets.all(6),
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             ),

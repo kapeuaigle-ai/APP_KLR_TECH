@@ -7,6 +7,7 @@ import 'package:klr_tech_app/core/models.dart';
 import 'package:klr_tech_app/widgets/sidebar.dart';
 import 'package:klr_tech_app/widgets/app_header.dart';
 import 'package:klr_tech_app/widgets/responsive.dart';
+import 'package:klr_tech_app/widgets/common.dart';
 import 'support/test_fonts.dart';
 
 /// Mise en page téléphone.
@@ -212,6 +213,60 @@ void main() {
       );
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ── Tableaux remplacés par des cartes ───────────────────
+  //
+  // Sans ces assertions, les tests de débordement ci-dessus passeraient même
+  // si rien n'avait été converti : HScrollTable ne déborde pas, il défile.
+  // Ce qu'on veut vérifier, c'est que le tableau a bien cédé la place.
+  group('tableaux convertis en cartes', () {
+    testWidgets('Clients : cartes sur téléphone, tableau sur bureau',
+        (tester) async {
+      await pumpApp(tester, size: phone, screen: NavScreen.clients);
+      expect(find.byType(HScrollTable), findsNothing,
+          reason: 'le tableau de 1020 px ne doit pas subsister sur téléphone');
+      expect(find.byType(ListCard), findsWidgets);
+
+      await pumpApp(tester, size: desktop, screen: NavScreen.clients);
+      expect(find.byType(HScrollTable), findsOneWidget);
+      expect(find.byType(ListCard), findsNothing);
+    });
+
+    testWidgets('Documents : cartes sur téléphone, tableau sur bureau',
+        (tester) async {
+      await pumpApp(tester, size: phone, screen: NavScreen.documents);
+      expect(find.byType(HScrollTable), findsNothing);
+      expect(find.byType(ListCard), findsWidgets);
+
+      await pumpApp(tester, size: desktop, screen: NavScreen.documents);
+      expect(find.byType(HScrollTable), findsOneWidget);
+      expect(find.byType(ListCard), findsNothing);
+    });
+
+    testWidgets('Suivi / Engagements : cartes sur téléphone', (tester) async {
+      await pumpApp(tester, size: phone, screen: NavScreen.suivi);
+      expect(find.byType(HScrollTable), findsNothing);
+      expect(find.byType(ListCard), findsWidgets);
+    });
+
+    testWidgets('Suivi / Comptabilité : les trois sections en cartes',
+        (tester) async {
+      await pumpApp(tester, size: phone, screen: NavScreen.suivi);
+      await tester.tap(find.text('Comptabilité'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HScrollTable), findsNothing,
+          reason: 'les trois tableaux (820/720/720) doivent céder la place');
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('Gantt garde son défilement horizontal', (tester) async {
+      // Décision produit : une frise chronologique se lit en défilant, elle
+      // ne se découpe pas en cartes.
+      await pumpApp(tester, size: phone, screen: NavScreen.gantt);
+      expect(find.byType(HScrollTable), findsOneWidget);
     });
   });
 

@@ -425,6 +425,136 @@ class AppFilterChip extends StatelessWidget {
   }
 }
 
+// ── Carte de liste (téléphone) ────────────────────────────
+/// Équivalent tactile d'une ligne de tableau.
+///
+/// Sur téléphone, les tableaux de l'application (jusqu'à 1020 px de large)
+/// obligeraient à balayer l'écran latéralement pour lire une seule ligne.
+/// Chaque ligne devient donc une carte : l'identifiant en tête, les champs
+/// utiles en paires libellé/valeur, et le même menu d'actions que la ligne
+/// de bureau.
+///
+/// Le motif d'accent respecte la contrainte Flutter connue du projet : une
+/// `Border.all` uniforme plus `clipBehavior`, et la bande de couleur en
+/// premier enfant — jamais un `Border(left: ...)` coloré avec un
+/// `borderRadius`, qui lève « A borderRadius can only be given on borders
+/// with uniform colors ».
+class ListCard extends StatelessWidget {
+  /// Ligne de titre (numéro de document, nom de client…).
+  final Widget title;
+
+  /// Deuxième ligne facultative, sous le titre.
+  final Widget? subtitle;
+
+  /// Paires libellé / valeur affichées sous le titre.
+  final List<(String, Widget)> fields;
+
+  /// Menu ou bouton d'action, posé en haut à droite.
+  final Widget? trailing;
+
+  /// Bande de couleur à gauche. Sert à distinguer un statut d'un coup d'œil.
+  final Color? accent;
+
+  /// Fond de la carte. Par défaut la surface blanche.
+  final Color? background;
+
+  final VoidCallback? onTap;
+
+  const ListCard({
+    super.key,
+    required this.title,
+    this.subtitle,
+    this.fields = const [],
+    this.trailing,
+    this.accent,
+    this.background,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final body = Padding(
+      padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            title,
+            if (subtitle != null) ...[const SizedBox(height: 2), subtitle!],
+          ])),
+          ?trailing,
+        ]),
+        if (fields.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          ...fields.map((f) => Padding(
+            padding: const EdgeInsets.only(bottom: 4, right: 6),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              SizedBox(width: 96, child: Text(f.$1, style: GoogleFonts.dmSans(
+                fontSize: 11, fontWeight: FontWeight.w600,
+                color: AppColors.text3, letterSpacing: 0.5,
+              ))),
+              Expanded(child: f.$2),
+            ]),
+          )),
+        ],
+      ]),
+    );
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: background ?? AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: accent == null
+            ? body
+            : IntrinsicHeight(child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(width: 3, color: accent),
+                  Expanded(child: body),
+                ],
+              )),
+      ),
+    );
+  }
+}
+
+/// Valeur de champ d'une [ListCard], au style homogène.
+class CardValue extends StatelessWidget {
+  final String text;
+  final bool bold;
+  final Color? color;
+  const CardValue(this.text, {super.key, this.bold = false, this.color});
+
+  @override
+  Widget build(BuildContext context) => Text(
+    text.isEmpty ? '—' : text,
+    style: GoogleFonts.dmSans(
+      fontSize: 13,
+      fontWeight: bold ? FontWeight.w700 : FontWeight.w400,
+      color: color ?? (bold ? AppColors.text1 : AppColors.text2),
+    ),
+  );
+}
+
+/// Message d'absence de données, partagé par les tableaux et les listes de
+/// cartes.
+class EmptyHint extends StatelessWidget {
+  final String message;
+  const EmptyHint(this.message, {super.key});
+
+  @override
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.all(30),
+    child: Center(child: Text(message, textAlign: TextAlign.center,
+        style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
+  );
+}
+
 // ── Table header cell ─────────────────────────────────────
 class ThCell extends StatelessWidget {
   final String label;

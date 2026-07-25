@@ -55,44 +55,50 @@ class _ClientsScreenState extends State<ClientsScreen> {
             ]),
             const SizedBox(height: 20),
 
-            // Table
-            CardBox(
-              padding: EdgeInsets.zero,
-              child: Column(children: [
-                Padding(
-                  padding: const EdgeInsets.all(16),
-                  child: Row(children: [
-                    Text('${filtered.length} client${filtered.length > 1 ? 's' : ''}', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text1)),
-                    const Spacer(),
-                    Flexible(child: SearchField(placeholder: 'Rechercher un client...', onChanged: (v) => setState(() => _search = v), maxWidth: 280)),
-                  ]),
-                ),
-                const Divider(height: 1, color: AppColors.border),
-                HScrollTable(
-                  minWidth: 1020,
-                  child: Column(children: [
-                    Container(
-                      color: AppColors.bg,
-                      child: const Row(children: [
-                        Expanded(flex: 4, child: ThCell('CLIENT')),
-                        Expanded(flex: 3, child: ThCell('CONTACT')),
-                        Expanded(flex: 4, child: ThCell('EMAIL')),
-                        Expanded(flex: 3, child: ThCell('TÉLÉPHONE')),
-                        Expanded(flex: 3, child: ThCell('CA TOTAL')),
-                        SizedBox(width: 48),
-                      ]),
-                    ),
-                    const Divider(height: 1, color: AppColors.border),
-                    ...filtered.asMap().entries.map((e) => _ClientRow(client: e.value, isLast: e.key == filtered.length - 1)),
-                  ]),
-                ),
-                if (filtered.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.all(40),
-                    child: Center(child: Text('Aucun client trouvé', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))),
-                  ),
-              ]),
+            // Compteur + recherche, au-dessus de la liste dans les deux modes.
+            StackingRow(
+              left: Text('${filtered.length} client${filtered.length > 1 ? 's' : ''}',
+                  style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text1)),
+              right: SearchField(
+                placeholder: 'Rechercher un client...',
+                onChanged: (v) => setState(() => _search = v),
+                maxWidth: isPhone(context) ? double.infinity : 280,
+              ),
             ),
+            const SizedBox(height: 12),
+
+            // Téléphone : une carte par client. Le tableau ferait 1020 px de
+            // large, illisible sans balayer l'écran.
+            if (isPhone(context))
+              if (filtered.isEmpty)
+                const CardBox(padding: EdgeInsets.zero, child: EmptyHint('Aucun client trouvé'))
+              else
+                ...filtered.map((c) => _ClientCard(client: c))
+            else
+              CardBox(
+                padding: EdgeInsets.zero,
+                child: Column(children: [
+                  HScrollTable(
+                    minWidth: 1020,
+                    child: Column(children: [
+                      Container(
+                        color: AppColors.bg,
+                        child: const Row(children: [
+                          Expanded(flex: 4, child: ThCell('CLIENT')),
+                          Expanded(flex: 3, child: ThCell('CONTACT')),
+                          Expanded(flex: 4, child: ThCell('EMAIL')),
+                          Expanded(flex: 3, child: ThCell('TÉLÉPHONE')),
+                          Expanded(flex: 3, child: ThCell('CA TOTAL')),
+                          SizedBox(width: 48),
+                        ]),
+                      ),
+                      const Divider(height: 1, color: AppColors.border),
+                      ...filtered.asMap().entries.map((e) => _ClientRow(client: e.value, isLast: e.key == filtered.length - 1)),
+                    ]),
+                  ),
+                  if (filtered.isEmpty) const EmptyHint('Aucun client trouvé'),
+                ]),
+              ),
           ],
         ),
       ),
@@ -206,6 +212,99 @@ class _DialogField extends StatelessWidget {
   }
 }
 
+// ── Actions d'un client, partagées ligne bureau / carte mobile ────
+void _confirmDeleteClient(BuildContext context, Client c) {
+  showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer le client ?', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text('« ${c.name} » sera retiré de votre portefeuille. Cette action est irréversible.',
+          style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            context.read<AppState>().deleteClient(c.id);
+            Navigator.of(ctx).pop();
+          },
+          child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Menu « Modifier / Supprimer ». Même contenu au bureau et au doigt ; seule
+/// la taille de la cible change.
+Widget _clientActionMenu(BuildContext context, Client c, {bool large = false}) {
+  return PopupMenuButton<String>(
+    tooltip: 'Actions',
+    icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
+    padding: EdgeInsets.all(large ? 8 : 6),
+    // 40 px au doigt contre 28 à la souris : une cible tactile doit rester
+    // atteignable sans viser.
+    constraints: BoxConstraints(
+      minWidth: large ? 40 : 28,
+      minHeight: large ? 40 : 28,
+    ),
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    color: Colors.white,
+    onSelected: (action) {
+      if (action == 'edit') {
+        showClientDialog(context, existing: c);
+      } else if (action == 'delete') {
+        _confirmDeleteClient(context, c);
+      }
+    },
+    itemBuilder: (ctx) => [
+      PopupMenuItem(value: 'edit', child: Row(children: [
+        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text2),
+        const SizedBox(width: 8),
+        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+      ])),
+      PopupMenuItem(value: 'delete', child: Row(children: [
+        const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
+        const SizedBox(width: 8),
+        Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
+      ])),
+    ],
+  );
+}
+
+// ── Carte client (téléphone) ──────────────────────────────
+class _ClientCard extends StatelessWidget {
+  final Client client;
+  const _ClientCard({required this.client});
+
+  @override
+  Widget build(BuildContext context) {
+    final c = client;
+    return ListCard(
+      title: Row(children: [
+        AvatarCircle(initials: c.initials, color: c.color, size: 32, fontSize: 11),
+        const SizedBox(width: 10),
+        Expanded(child: Text(c.name, style: GoogleFonts.dmSans(
+          fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1,
+        ), overflow: TextOverflow.ellipsis)),
+      ]),
+      trailing: _clientActionMenu(context, c, large: true),
+      fields: [
+        if (c.contact.isNotEmpty) ('CONTACT', CardValue(c.contact)),
+        if (c.email.isNotEmpty) ('EMAIL', CardValue(c.email)),
+        if (c.phone.isNotEmpty) ('TÉLÉPHONE', CardValue(c.phone)),
+        ('CA TOTAL', CardValue(
+          c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', bold: true)),
+      ],
+      onTap: () => showClientDialog(context, existing: c),
+    );
+  }
+}
+
 class _ClientRow extends StatefulWidget {
   final Client client;
   final bool isLast;
@@ -217,32 +316,6 @@ class _ClientRow extends StatefulWidget {
 
 class _ClientRowState extends State<_ClientRow> {
   bool _hovered = false;
-
-  void _confirmDelete(BuildContext context, Client c) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Supprimer le client ?', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
-        content: Text('« ${c.name} » sera retiré de votre portefeuille. Cette action est irréversible.',
-            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
-          ),
-          TextButton(
-            onPressed: () {
-              context.read<AppState>().deleteClient(c.id);
-              Navigator.of(ctx).pop();
-            },
-            child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -281,32 +354,7 @@ class _ClientRowState extends State<_ClientRow> {
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
           )),
-          SizedBox(width: 48, child: PopupMenuButton<String>(
-            tooltip: 'Actions',
-            icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
-            padding: const EdgeInsets.all(6),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            color: Colors.white,
-            onSelected: (action) {
-              if (action == 'edit') {
-                showClientDialog(context, existing: c);
-              } else if (action == 'delete') {
-                _confirmDelete(context, c);
-              }
-            },
-            itemBuilder: (ctx) => [
-              PopupMenuItem(value: 'edit', child: Row(children: [
-                const Icon(Icons.edit_outlined, size: 15, color: AppColors.text2),
-                const SizedBox(width: 8),
-                Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-              ])),
-              PopupMenuItem(value: 'delete', child: Row(children: [
-                const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
-                const SizedBox(width: 8),
-                Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
-              ])),
-            ],
-          )),
+          SizedBox(width: 48, child: _clientActionMenu(context, c)),
         ]),
       ),
     );
