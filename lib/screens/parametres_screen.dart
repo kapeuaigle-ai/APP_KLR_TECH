@@ -7,6 +7,7 @@ import '../core/theme.dart';
 import '../core/app_state.dart';
 import '../core/signature_image.dart';
 import '../widgets/common.dart';
+import '../widgets/signature_pad.dart';
 import '../widgets/responsive.dart';
 
 class ParametresScreen extends StatefulWidget {
@@ -674,6 +675,25 @@ class _SignatureCardState extends State<_SignatureCard> {
     }
   }
 
+  /// Pavé de dessin : l'autre façon d'obtenir la même image. Il produit des
+  /// octets PNG passés à la même `encodeSignaturePng` que l'import, donc rien
+  /// d'autre ne change en aval.
+  Future<void> _draw() async {
+    if (_busy) return;
+    final png = await showSignaturePad(context);
+    if (png == null || !mounted) return; // annulé ou rien dessiné
+    setState(() => _busy = true);
+    try {
+      final b64 = await encodeSignaturePng(png);
+      if (!mounted) return;
+      setState(() { _base64 = b64; _bytes = decodeSignature(b64); });
+    } catch (_) {
+      if (mounted) _snack('Signature illisible. Réessaie.', AppColors.red);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   void _remove() => setState(() { _base64 = ''; _bytes = null; });
 
   void _save() {
@@ -727,20 +747,26 @@ class _SignatureCardState extends State<_SignatureCard> {
       ),
       const SizedBox(height: 14),
 
-      Row(children: [
+      // Deux entrées pour la même sortie : importer un fichier (naturel à la
+      // souris) ou dessiner (naturel au doigt). Les deux sont proposées
+      // partout — un écran tactile Windows profite aussi du pavé.
+      Wrap(spacing: 8, runSpacing: 8, children: [
         SecondaryBtn(
-          label: hasSig ? 'Changer la signature' : 'Importer une signature',
+          label: hasSig ? 'Changer' : 'Importer',
           icon: _busy ? Icons.hourglass_empty : Icons.upload_file_outlined,
           onTap: _import,
         ),
-        if (hasSig) ...[
-          const SizedBox(width: 8),
+        SecondaryBtn(
+          label: 'Dessiner',
+          icon: Icons.draw_outlined,
+          onTap: _draw,
+        ),
+        if (hasSig)
           TextButton.icon(
             onPressed: _remove,
             icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
             label: Text('Retirer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.red)),
           ),
-        ],
       ]),
       const SizedBox(height: 16),
 

@@ -460,6 +460,14 @@ class PdfGenerator {
     return doc.save();
   }
 
+  /// Vrai sur Android et iOS, où il n'existe pas de boîte « Enregistrer
+  /// sous » : le partage système remplace le choix d'un dossier.
+  ///
+  /// Le test de `kIsWeb` doit précéder toute lecture de `Platform`, qui n'est
+  /// pas disponible dans un navigateur.
+  static bool get _isMobile =>
+      !kIsWeb && (Platform.isAndroid || Platform.isIOS);
+
   // ── Enregistrer avec boîte "Enregistrer sous" ─────────
   // Retourne le chemin du fichier enregistré, ou null si annulé.
   static Future<String?> saveWithDialog({
@@ -471,9 +479,18 @@ class PdfGenerator {
     // voir DocNumero.fileName. Aucun renommage manuel nécessaire.
     final filename = DocNumero.fileName(type, numero, DateTime.now());
 
-    // Sur le web, dart:io/FilePicker ne peuvent pas écrire de fichier :
-    // on déclenche le téléchargement du navigateur via le paquet printing.
-    if (kIsWeb) {
+    // Web et mobile passent par la même sortie : le paquet printing.
+    //
+    // Web : dart:io et FilePicker ne peuvent pas écrire de fichier, printing
+    // déclenche le téléchargement du navigateur.
+    //
+    // Android / iOS : `FilePicker.platform.saveFile` n'y est **pas
+    // implémenté**. Sans ce branchement, l'appel plus bas échouait et
+    // l'exécution retombait sur un sélecteur de dossier puis sur une
+    // supposition du dossier Téléchargements. `Printing.sharePdf` ouvre la
+    // feuille de partage du système — enregistrer dans les Fichiers ou Drive,
+    // envoyer par messagerie — ce qui est l'idiome mobile attendu.
+    if (kIsWeb || _isMobile) {
       await Printing.sharePdf(bytes: Uint8List.fromList(bytes), filename: filename);
       return filename;
     }
@@ -678,6 +695,16 @@ class PdfGenerator {
               '${now.month.toString().padLeft(2,'0')}'
               '${now.year}';
     final filename = 'KLR-Rapport-$d.pdf';
+
+    // Même sortie que saveWithDialog sur web et mobile. Cette fonction n'avait
+    // aucun garde : sur le web, `saveFile` levait puis `_saveToDownloads`
+    // levait à son tour en lisant `Platform.environment`, indisponible dans un
+    // navigateur — l'export de rapport y était donc cassé.
+    if (kIsWeb || _isMobile) {
+      await Printing.sharePdf(bytes: Uint8List.fromList(bytes), filename: filename);
+      return filename;
+    }
+
     try {
       final chosen = await FilePicker.platform.saveFile(
         dialogTitle: 'Enregistrer le rapport PDF',

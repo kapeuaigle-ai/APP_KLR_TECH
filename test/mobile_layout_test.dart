@@ -8,6 +8,7 @@ import 'package:klr_tech_app/widgets/sidebar.dart';
 import 'package:klr_tech_app/widgets/app_header.dart';
 import 'package:klr_tech_app/widgets/responsive.dart';
 import 'package:klr_tech_app/widgets/common.dart';
+import 'package:klr_tech_app/widgets/document_preview.dart';
 import 'support/test_fonts.dart';
 
 /// Mise en page téléphone.
@@ -267,6 +268,56 @@ void main() {
       // ne se découpe pas en cartes.
       await pumpApp(tester, size: phone, screen: NavScreen.gantt);
       expect(find.byType(HScrollTable), findsOneWidget);
+    });
+  });
+
+  // ── Création de proforma ────────────────────────────────
+  group('création de proforma sur téléphone', () {
+    testWidgets('formulaire seul, aperçu A4 derrière un bouton', (tester) async {
+      final state = await pumpApp(tester, size: phone);
+      state.setCreating(true);
+      await tester.pumpAndSettle();
+
+      // L'aperçu ne doit pas cohabiter avec le formulaire : il ferait 330 px
+      // de large pour un texte composé en 8,5 pt.
+      expect(find.byType(DocumentPreview), findsNothing);
+      expect(find.text('Aperçu'), findsOneWidget);
+      expect(find.text('Enregistrer'), findsOneWidget);
+    });
+
+    testWidgets('le bouton Aperçu ouvre l\'A4 zoomable en plein écran',
+        (tester) async {
+      final state = await pumpApp(tester, size: phone);
+      state.setCreating(true);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Aperçu'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DocumentPreview), findsOneWidget);
+      expect(find.byType(InteractiveViewer), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('les lignes d\'article ne défilent plus latéralement',
+        (tester) async {
+      final state = await pumpApp(tester, size: phone);
+      state.setCreating(true);
+      await tester.pumpAndSettle();
+
+      // La grille de saisie à cinq colonnes obligeait à défiler pendant la
+      // frappe : elle est empilée sur téléphone.
+      expect(find.byType(HScrollTable), findsNothing);
+      expect(find.text('QTÉ'), findsWidgets);
+    });
+
+    testWidgets('bureau : aperçu et formulaire côte à côte', (tester) async {
+      final state = await pumpApp(tester, size: desktop);
+      state.setCreating(true);
+      await tester.pumpAndSettle();
+
+      expect(find.byType(DocumentPreview), findsOneWidget);
+      expect(find.text('Annuler'), findsOneWidget);
     });
   });
 

@@ -207,10 +207,64 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     }
   }
 
+  /// Construit l'aperçu A4. `showToolbar` est laissé à la charge de l'appelant :
+  /// sur bureau la barre d'outils vit dans l'aperçu lui-même, sur téléphone
+  /// elle est portée par la page plein écran.
+  DocumentPreview _preview(AppState state, {bool showToolbar = true}) => DocumentPreview(
+    type: _type,
+    numero: _numeroFor(state),
+    settings: state.settings,
+    client: _clientCtrl.text,
+    clientAddr: _clientAddrCtrl.text,
+    objet: _objetCtrl.text,
+    lines: List.from(_lines),
+    tva: _tvaEnabled,
+    ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
+    conditions: state.settings.conditions,
+    showToolbar: showToolbar,
+    onPrint: () => _print(state),
+    onDownload: _downloading ? null : () => _download(state),
+  );
+
+  Widget _formPanel(AppState state) => _FormPanel(
+    clientCtrl: _clientCtrl,
+    clientAddrCtrl: _clientAddrCtrl,
+    objetCtrl: _objetCtrl,
+    lines: _lines,
+    onAddLine: _addLine,
+    onRemoveLine: _removeLine,
+    ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
+    tva: _tvaEnabled,
+    onLineChanged: () => setState(() {}),
+    clients: state.clients,
+    onClientSelected: (c) {
+      _clientCtrl.text = c.name;
+      if (c.address.isNotEmpty) _clientAddrCtrl.text = c.address;
+      setState(() {});
+    },
+  );
+
+  /// Ouvre l'aperçu A4 en plein écran, zoomable.
+  ///
+  /// Sur téléphone l'aperçu ne peut pas rester à côté du formulaire : il
+  /// ferait environ 330 px de large pour un texte composé en 8,5 pt.
+  void _ouvrirApercu(AppState state) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (ctx) => _ApercuPleinEcran(
+        titre: 'Aperçu · ${_numeroFor(state)}',
+        preview: _preview(state, showToolbar: false),
+        onPrint: () => _print(state),
+        onDownload: _downloading ? null : () => _download(state),
+      ),
+    ));
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    return SingleChildScrollView(
+    final phone = isPhone(context);
+
+    final form = SingleChildScrollView(
       padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1340),
@@ -230,57 +284,117 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
                 Text('Remplissez la proforma : la facture et le BL seront générés à sa validation.',
                     style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
-              SecondaryBtn(label: 'Annuler', onTap: () => state.setCreating(false)),
-              const SizedBox(width: 12),
-              PrimaryBtn(
-                label: _saving ? 'Enregistrement...' : 'Enregistrer',
-                icon: Icons.save_outlined,
-                onTap: _saving ? null : () => _saveDocument(state),
-              ),
+              // Sur téléphone, Annuler et Enregistrer descendent dans la
+              // barre d'actions basse, toujours visible.
+              if (!phone) ...[
+                SecondaryBtn(label: 'Annuler', onTap: () => state.setCreating(false)),
+                const SizedBox(width: 12),
+                PrimaryBtn(
+                  label: _saving ? 'Enregistrement...' : 'Enregistrer',
+                  icon: Icons.save_outlined,
+                  onTap: _saving ? null : () => _saveDocument(state),
+                ),
+              ],
             ]),
             const SizedBox(height: 24),
 
-            // L'aperçu reste à droite et rétrécit avec l'écran (l'A4 est en
-            // AspectRatio) ; il ne passe dessous que sur écran étroit.
-            LayoutBuilder(builder: (context, constraints) => ResponsiveSplit(
-              sideWidth: math.min(530, constraints.maxWidth * 0.44),
-              breakpoint: 700,
-              spacing: 20,
-              // ── Form ────────────────────────────────────
-              main: _FormPanel(
-                clientCtrl: _clientCtrl,
-                clientAddrCtrl: _clientAddrCtrl,
-                objetCtrl: _objetCtrl,
-                lines: _lines,
-                onAddLine: _addLine,
-                onRemoveLine: _removeLine,
-                ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
-                tva: _tvaEnabled,
-                onLineChanged: () => setState(() {}),
-                clients: state.clients,
-                onClientSelected: (c) {
-                  _clientCtrl.text = c.name;
-                  if (c.address.isNotEmpty) _clientAddrCtrl.text = c.address;
-                  setState(() {});
-                },
-              ),
-              // ── Preview ─────────────────────────────────
-              side: DocumentPreview(
-                type: _type,
-                numero: _numeroFor(state),
-                settings: state.settings,
-                client: _clientCtrl.text,
-                clientAddr: _clientAddrCtrl.text,
-                objet: _objetCtrl.text,
-                lines: List.from(_lines),
-                tva: _tvaEnabled,
-                ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
-                conditions: state.settings.conditions,
-                onPrint: () => _print(state),
-                onDownload: _downloading ? null : () => _download(state),
-              ),
-            )),
+            if (phone)
+              // Formulaire seul : l'aperçu s'ouvre à la demande.
+              _formPanel(state)
+            else
+              // L'aperçu reste à droite et rétrécit avec l'écran (l'A4 est en
+              // AspectRatio) ; il ne passe dessous que sur écran étroit.
+              LayoutBuilder(builder: (context, constraints) => ResponsiveSplit(
+                sideWidth: math.min(530, constraints.maxWidth * 0.44),
+                breakpoint: 700,
+                spacing: 20,
+                main: _formPanel(state),
+                side: _preview(state),
+              )),
           ],
+        ),
+      ),
+    );
+
+    if (!phone) return form;
+
+    // Barre d'actions basse : Aperçu / Annuler / Enregistrer restent
+    // atteignables sans remonter tout le formulaire.
+    return Column(children: [
+      Expanded(child: form),
+      Container(
+        decoration: const BoxDecoration(
+          color: AppColors.surface,
+          border: Border(top: BorderSide(color: AppColors.border)),
+        ),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+        child: Row(children: [
+          Expanded(child: SecondaryBtn(
+            label: 'Aperçu',
+            icon: Icons.remove_red_eye_outlined,
+            onTap: () => _ouvrirApercu(state),
+          )),
+          const SizedBox(width: 10),
+          Expanded(child: PrimaryBtn(
+            label: _saving ? 'Enregistrement...' : 'Enregistrer',
+            icon: Icons.save_outlined,
+            onTap: _saving ? null : () => _saveDocument(state),
+          )),
+        ]),
+      ),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Aperçu A4 plein écran (téléphone)
+// ─────────────────────────────────────────────────────────
+class _ApercuPleinEcran extends StatelessWidget {
+  final String titre;
+  final Widget preview;
+  final VoidCallback onPrint;
+  final VoidCallback? onDownload;
+
+  const _ApercuPleinEcran({
+    required this.titre,
+    required this.preview,
+    required this.onPrint,
+    required this.onDownload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.bg,
+      appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        surfaceTintColor: AppColors.surface,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        shape: const Border(bottom: BorderSide(color: AppColors.border)),
+        title: Text(titre, style: GoogleFonts.dmSans(
+            fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+        actions: [
+          IconButton(
+            tooltip: 'Imprimer',
+            icon: const Icon(Icons.print_outlined, size: 20, color: AppColors.text2),
+            onPressed: onPrint,
+          ),
+          IconButton(
+            tooltip: 'Enregistrer le PDF',
+            icon: const Icon(Icons.download_outlined, size: 20, color: AppColors.primary),
+            onPressed: onDownload,
+          ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      // Le pincement permet d'agrandir le document, dont le texte est composé
+      // à la taille réelle d'un A4 (8,5 pt) et donc minuscule à l'écran.
+      body: InteractiveViewer(
+        maxScale: 5,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(12),
+          child: preview,
         ),
       ),
     );
@@ -337,6 +451,19 @@ class _FormPanel extends StatelessWidget {
         Text('Lignes de facturation',
             style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 14),
+        // Téléphone : chaque ligne porte ses propres libellés, la rangée
+        // d'en-têtes n'a plus de sens et le défilement horizontal disparaît.
+        if (isPhone(context))
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            for (var i = 0; i < lines.length; i++)
+              _LineRow(
+                key: ValueKey(i),
+                line: lines[i],
+                onRemove: () => onRemoveLine(i),
+                onChanged: onLineChanged,
+              ),
+          ])
+        else
         // En-tête + lignes : défilement horizontal si le panneau est trop
         // étroit (zoom élevé, petite fenêtre) plutôt que d'écraser la colonne
         // Désignation.
@@ -570,32 +697,88 @@ class _LineRowState extends State<_LineRow> {
     ),
   );
 
+  /// Encadré gris affichant une valeur calculée (référence, total).
+  Widget _readonlyBox(String text, {Alignment align = Alignment.center}) => Container(
+    height: 36, alignment: align,
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
+    child: Text(text, style: GoogleFonts.dmSans(
+        fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+  );
+
   @override
   Widget build(BuildContext context) {
     final line = widget.line;
+
+    final designation = _tf(_desCtrl, hint: 'Désignation du produit/service',
+        onChanged: (v) { line.designation = v; widget.onChanged(); });
+    final qte = _tf(_qteCtrl, numeric: true,
+        onChanged: (v) { line.qte = int.tryParse(v) ?? 1; widget.onChanged(); });
+    final pu = _tf(_puCtrl, hint: '0', numeric: true,
+        onChanged: (v) { line.pu = double.tryParse(v) ?? 0; widget.onChanged(); });
+
+    // Téléphone : la désignation occupe sa propre ligne, quantité, prix
+    // unitaire et total se partagent celle du dessous. Aligner les cinq
+    // colonnes sur 288 px utiles obligerait à saisir en défilant
+    // latéralement — la pire des manipulations au doigt.
+    if (isPhone(context)) {
+      return Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.fromLTRB(10, 10, 6, 10),
+        decoration: BoxDecoration(
+          color: AppColors.surface,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Text('LIGNE ${line.ref}', style: AppTheme.label),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Retirer la ligne',
+              icon: const Icon(Icons.close, size: 18, color: AppColors.text3),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+              padding: EdgeInsets.zero,
+              onPressed: widget.onRemove,
+            ),
+          ]),
+          const SizedBox(height: 6),
+          designation,
+          const SizedBox(height: 8),
+          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
+            SizedBox(width: 56, child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [Text('QTÉ', style: AppTheme.label), const SizedBox(height: 4), qte],
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [Text('P.U.', style: AppTheme.label), const SizedBox(height: 4), pu],
+            )),
+            const SizedBox(width: 8),
+            Expanded(child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('MONTANT', style: AppTheme.label),
+                const SizedBox(height: 4),
+                _readonlyBox(Fmt.number(line.total), align: Alignment.centerRight),
+              ],
+            )),
+          ]),
+        ]),
+      );
+    }
+
     return _cell(Row(children: [
-      SizedBox(width: 44, child: Container(
-        height: 36, alignment: Alignment.center,
-        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
-        child: Text(line.ref, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text2)),
-      )),
+      SizedBox(width: 44, child: _readonlyBox(line.ref)),
       const SizedBox(width: 8),
-      Expanded(child: _tf(_desCtrl, hint: 'Désignation du produit/service',
-          onChanged: (v) { line.designation = v; widget.onChanged(); })),
+      Expanded(child: designation),
       const SizedBox(width: 8),
-      SizedBox(width: 50, child: _tf(_qteCtrl, numeric: true,
-          onChanged: (v) { line.qte = int.tryParse(v) ?? 1; widget.onChanged(); })),
+      SizedBox(width: 50, child: qte),
       const SizedBox(width: 8),
-      SizedBox(width: 96, child: _tf(_puCtrl, hint: '0', numeric: true,
-          onChanged: (v) { line.pu = double.tryParse(v) ?? 0; widget.onChanged(); })),
+      SizedBox(width: 96, child: pu),
       const SizedBox(width: 8),
-      SizedBox(width: 96, child: Container(
-        height: 36, alignment: Alignment.centerRight,
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(6)),
-        child: Text(Fmt.number(line.total),
-            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-      )),
+      SizedBox(width: 96, child: _readonlyBox(Fmt.number(line.total), align: Alignment.centerRight)),
       const SizedBox(width: 8),
       GestureDetector(onTap: widget.onRemove, child: const Icon(Icons.close, size: 16, color: AppColors.text3)),
     ]));
