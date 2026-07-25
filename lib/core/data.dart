@@ -3,13 +3,13 @@ import 'theme.dart';
 
 class SampleData {
   static final List<Client> clients = [
-    const Client(id: 1, initials: 'AC', color: AppColors.purple, name: 'Acme Corp', contact: 'Jean Dupont', email: 'jean@acmecorp.com', phone: '01 23 45 67 88', totalFacture: 12450000, status: 'actif', address: '14 Rue de la Paix, 75001 Paris, France'),
-    const Client(id: 2, initials: 'GT', color: AppColors.blue, name: 'Global Tech', contact: 'Sarah Smith', email: 's.smith@globaltech.fr', phone: '06 12 34 56 78', totalFacture: 8900000, status: 'actif', address: '45 Avenue des Champs, Lyon, France'),
-    const Client(id: 3, initials: 'DS', color: AppColors.emerald, name: 'Design Studio', contact: 'Marc Lévy', email: 'contact@designstudio.io', phone: '07 88 99 80 91', totalFacture: 3200000, status: 'attente', address: '8 Rue Créative, Plateau, Abidjan, CI'),
-    const Client(id: 4, initials: 'IN', color: AppColors.orange, name: 'Innovate SAS', contact: 'Julie Martin', email: 'j.martin@innovate.fr', phone: '01 99 88 77 66', totalFacture: 15780000, status: 'actif', address: '22 Boulevard de l\'Innovation, Bordeaux, France'),
-    const Client(id: 5, initials: 'UJ', color: AppColors.red, name: 'Université Jean Lorougon Guédé', contact: 'Prof. Koné', email: 'kone@ujlg.ci', phone: '07 00 11 22 33', totalFacture: 0, status: 'cours', address: 'BP 150, Daloa, Côte d\'Ivoire'),
-    const Client(id: 6, initials: 'SA', color: AppColors.purple, name: 'Société Anonyme X', contact: 'Dir. Général', email: 'dg@sax.ci', phone: '07 44 55 66 77', totalFacture: 450000, status: 'actif', address: 'Zone Industrielle, Yopougon, Abidjan, CI'),
-    const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, status: 'actif', address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
+    const Client(id: 1, initials: 'AC', color: AppColors.purple, name: 'Acme Corp', contact: 'Jean Dupont', email: 'jean@acmecorp.com', phone: '01 23 45 67 88', totalFacture: 12450000, address: '14 Rue de la Paix, 75001 Paris, France'),
+    const Client(id: 2, initials: 'GT', color: AppColors.blue, name: 'Global Tech', contact: 'Sarah Smith', email: 's.smith@globaltech.fr', phone: '06 12 34 56 78', totalFacture: 8900000, address: '45 Avenue des Champs, Lyon, France'),
+    const Client(id: 3, initials: 'DS', color: AppColors.emerald, name: 'Design Studio', contact: 'Marc Lévy', email: 'contact@designstudio.io', phone: '07 88 99 80 91', totalFacture: 3200000, address: '8 Rue Créative, Plateau, Abidjan, CI'),
+    const Client(id: 4, initials: 'IN', color: AppColors.orange, name: 'Innovate SAS', contact: 'Julie Martin', email: 'j.martin@innovate.fr', phone: '01 99 88 77 66', totalFacture: 15780000, address: '22 Boulevard de l\'Innovation, Bordeaux, France'),
+    const Client(id: 5, initials: 'UJ', color: AppColors.red, name: 'Université Jean Lorougon Guédé', contact: 'Prof. Koné', email: 'kone@ujlg.ci', phone: '07 00 11 22 33', totalFacture: 0, address: 'BP 150, Daloa, Côte d\'Ivoire'),
+    const Client(id: 6, initials: 'SA', color: AppColors.purple, name: 'Société Anonyme X', contact: 'Dir. Général', email: 'dg@sax.ci', phone: '07 44 55 66 77', totalFacture: 450000, address: 'Zone Industrielle, Yopougon, Abidjan, CI'),
+    const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
   ];
 
   // Lignes des documents d'exemple. Les montants ci-dessous sont les totaux
@@ -40,18 +40,19 @@ class SampleData {
 
   static final Map<String, List<DocumentItem>> documents = {
     'proforma': [
-      DocumentItem(id: 1, numero: 'KLR-03-160226', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 2010750, statut: 'cours', lines: _linesMaintenance()),
-      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
-      DocumentItem(id: 3, numero: 'KLR-01-050126', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Audit Sécurité Réseau', montant: 472500, statut: 'annulee', lines: _linesAudit()),
+      DocumentItem(id: 1, numero: 'KLR-P03-16022026', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 2010750, statut: 'cours', lines: _linesMaintenance()),
+      DocumentItem(id: 2, numero: 'KLR-P02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 3, numero: 'KLR-P01-05012026', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Audit Sécurité Réseau', montant: 472500, statut: 'annulee', lines: _linesAudit()),
     ],
-    // Générées à la validation de leur proforma : même numéro, mêmes lignes.
+    // Générées à la validation de leur proforma : numéro apparié (lettre F/B pour
+    // le même compteur et la même date), mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements(), encaissee: true, dateEncaissement: '30/04/2026'),
-      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement(), encaissee: true, dateEncaissement: '15/01/2026'),
+      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements(), encaissee: true, dateEncaissement: '30/04/2026'),
+      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement(), encaissee: true, dateEncaissement: '15/01/2026'),
     ],
     'bl': [
-      DocumentItem(id: 1, numero: 'KLR-04-240426', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
-      DocumentItem(id: 2, numero: 'KLR-02-100126', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 0, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 1, numero: 'KLR-B04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-B02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 0, statut: 'validee', lines: _linesDeveloppement()),
     ],
   };
 
@@ -75,9 +76,9 @@ class SampleData {
   ];
 
   static List<Expense> get initialExpenses => [
-    Expense(id: 1, date: DateTime(2026, 1, 12), label: 'Licences de développement', amount: 250000, category: 'Achat matériel', factureNumero: 'KLR-02-100126'),
-    Expense(id: 2, date: DateTime(2026, 1, 20), label: 'Sous-traitance intégration', amount: 180000, category: 'Sous-traitance', factureNumero: 'KLR-02-100126'),
-    Expense(id: 3, date: DateTime(2026, 4, 26), label: 'Achat switches et bornes Wi-Fi', amount: 1650000, category: 'Achat matériel', factureNumero: 'KLR-04-240426'),
+    Expense(id: 1, date: DateTime(2026, 1, 12), label: 'Licences de développement', amount: 250000, category: 'Achat matériel', factureNumero: 'KLR-F02-10012026'),
+    Expense(id: 2, date: DateTime(2026, 1, 20), label: 'Sous-traitance intégration', amount: 180000, category: 'Sous-traitance', factureNumero: 'KLR-F02-10012026'),
+    Expense(id: 3, date: DateTime(2026, 4, 26), label: 'Achat switches et bornes Wi-Fi', amount: 1650000, category: 'Achat matériel', factureNumero: 'KLR-F04-24042026'),
     Expense(id: 4, date: DateTime(2026, 4, 10), label: 'Loyer atelier — avril', amount: 150000, category: 'Loyer & charges'),
     Expense(id: 5, date: DateTime(2026, 1, 5), label: 'Transport livraisons', amount: 60000, category: 'Transport'),
   ];
@@ -91,11 +92,16 @@ class SampleData {
     const DimeEntry(mois: 'Juin 2026', revenu: 18000000, dime: 1800000, statut: 'attente'),
   ];
 
-  static final List<FactureEntry> factureHistory = [
-    FactureEntry(num: 'KLR-F001-240426', client: "Advans Côte d'Ivoire", montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
-    FactureEntry(num: 'KLR-F003-180326', client: 'Acme Corp', montant: 5200000, statut: 'paye', echeance: '18/04/2026'),
-    FactureEntry(num: 'KLR-F002-050326', client: 'Global Tech', montant: 1800000, statut: 'paye', echeance: '05/04/2026'),
-    FactureEntry(num: 'KLR-F004-010426', client: 'Design Studio', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
+  // Engagements : ce qu'on nous doit (créances) et ce que l'on doit (dettes).
+  // Getter et non champ : chaque AppState part d'objets neufs, les statuts
+  // d'un test ou d'une session ne fuient pas dans la suivante.
+  static List<Engagement> get initialEngagements => [
+    Engagement(id: 1, sens: 'creance', num: 'KLR-F001-240426', tiers: "Advans Côte d'Ivoire", description: 'Équipements réseau', montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
+    Engagement(id: 2, sens: 'creance', num: 'KLR-F003-180326', tiers: 'Acme Corp', description: 'Développement application', montant: 5200000, statut: 'paye', echeance: '18/04/2026', dateReglement: '18/04/2026'),
+    Engagement(id: 3, sens: 'creance', num: 'KLR-F002-050326', tiers: 'Global Tech', description: 'Audit sécurité réseau', montant: 1800000, statut: 'paye', echeance: '05/04/2026', dateReglement: '05/04/2026'),
+    Engagement(id: 4, sens: 'creance', num: 'KLR-F004-010426', tiers: 'Design Studio', description: 'Maintenance parc informatique', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
+    Engagement(id: 5, sens: 'dette', num: 'FRN-2026-018', tiers: 'Orange CI', description: 'Abonnement fibre trimestriel', montant: 240000, statut: 'cours', echeance: '31/07/2026', categorie: 'Loyer & charges'),
+    Engagement(id: 6, sens: 'dette', num: 'FRN-2026-012', tiers: 'Sotra Logistique', description: 'Livraison matériel Daloa', montant: 480000, statut: 'paye', echeance: '30/06/2026', dateReglement: '28/06/2026', categorie: 'Sous-traitance'),
   ];
 
   static List<Task> get initialTasks => [
@@ -111,16 +117,6 @@ class SampleData {
     Note(id: 3, titre: 'Conditions TVA', contenu: "Rappel : TVA à 5% sur tous les documents. Vérifier avec comptable pour les cas d'exonération.", color: AppColors.emerald, date: '28 Avr'),
   ];
 
-  static final List<ActivityItem> activities = [
-    const ActivityItem(id: 1, type: 'facture', titre: 'Facture #KLR-F001-240426 générée', desc: "Client : Advans Côte d'Ivoire — 3 517 500 FCFA", auteur: 'Koffi Lambert', initiales: 'KL', time: "Aujourd'hui, 09:14", color: AppColors.primary),
-    const ActivityItem(id: 2, type: 'paiement', titre: 'Paiement reçu — 5 200 000 FCFA', desc: 'Via virement bancaire · Acme Corp', auteur: 'Sara El Mansouri', initiales: 'SM', time: "Aujourd'hui, 08:40", color: AppColors.purple),
-    const ActivityItem(id: 3, type: 'projet', titre: 'Tâche "API OAuth2" marquée terminée', desc: 'Projet Alpha · Développement API Connecteurs', auteur: 'Amine Benjelloun', initiales: 'AB', time: 'Hier, 17:22', color: AppColors.blue),
-    const ActivityItem(id: 4, type: 'client', titre: 'Nouveau client ajouté — Société Sahel Innov', desc: 'Secteur : Technologie · Statut : Actif', auteur: 'Fatou Sy', initiales: 'FS', time: 'Hier, 15:05', color: AppColors.red),
-    const ActivityItem(id: 5, type: 'document', titre: 'Proforma #KLR-P008-160226 envoyée par email', desc: "Destinataire : Université Jean Lorougon Guédé", auteur: 'Koffi Lambert', initiales: 'KL', time: 'Hier, 11:30', color: AppColors.primary),
-    const ActivityItem(id: 6, type: 'projet', titre: 'Nouveau projet créé — Module CRM', desc: 'Chef de projet : Moussa Diallo · Priorité haute', auteur: 'Moussa Diallo', initiales: 'MD', time: '28 Avr, 16:00', color: AppColors.emerald),
-    const ActivityItem(id: 7, type: 'paiement', titre: 'Rappel de paiement envoyé', desc: 'Facture #4402 · Tech Corp — J+15', auteur: 'Sara El Mansouri', initiales: 'SM', time: '28 Avr, 10:15', color: AppColors.purple),
-    const ActivityItem(id: 8, type: 'equipe', titre: 'Jean-Luc Traoré assigné au Projet Alpha', desc: 'Rôle : Développeur Backend', auteur: 'Koffi Lambert', initiales: 'KL', time: '27 Avr, 14:20', color: AppColors.primary),
-    const ActivityItem(id: 9, type: 'document', titre: 'BL #KLR-B001-240426 validé', desc: "Client : Advans Côte d'Ivoire", auteur: 'Koffi Lambert', initiales: 'KL', time: '27 Avr, 09:00', color: AppColors.primary),
-    const ActivityItem(id: 10, type: 'facture', titre: 'Facture #KLR-F003-180326 marquée payée', desc: 'Acme Corp — 5 200 000 FCFA', auteur: 'Sara El Mansouri', initiales: 'SM', time: '25 Avr, 11:00', color: AppColors.purple),
-  ];
+  // Le fil d'activité démarre vide : il se remplit des vraies actions du
+  // manager (documents, encaissements, dépenses, clôtures). Voir AppState.
 }

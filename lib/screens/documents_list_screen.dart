@@ -39,8 +39,18 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
       return matchSearch && matchFilter;
     }).toList();
 
-    final validated = allDocs.where((d) => d.statut == 'validee').length;
-    final pending = allDocs.where((d) => d.statut == 'cours').length;
+    // Compteurs par statut, affichés directement dans les filtres.
+    // Un compteur à 0 n'est pas montré (inutile d'encombrer).
+    final counts = {
+      'tous': allDocs.length,
+      'cours': allDocs.where((d) => d.statut == 'cours').length,
+      'validee': allDocs.where((d) => d.statut == 'validee').length,
+      'annulee': allDocs.where((d) => d.statut == 'annulee').length,
+    };
+    String chipLabel(String key, String label) {
+      final n = counts[key] ?? 0;
+      return n > 0 ? '$label ($n)' : label;
+    }
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
@@ -64,38 +74,19 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
             _TypeTabs(current: type, onChanged: (t) { state.setDocType(t); setState(() { _filter = 'tous'; _search = ''; }); }),
             const SizedBox(height: 20),
 
-            // Stats — les pastilles de statut n'existent que pour les proformas.
-            LayoutBuilder(builder: (context, constraints) {
-              final search = SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280);
-              if (!isProforma) {
-                return Align(alignment: Alignment.centerRight, child: search);
-              }
-              final narrow = constraints.maxWidth < 640;
-              final pills = [
-                _StatPill(label: 'VALIDÉS', value: '$validated', color: AppColors.green),
-                _StatPill(label: 'EN COURS', value: '$pending', color: AppColors.orange),
-              ];
-              if (narrow) {
-                return Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center,
-                    children: [...pills, search]);
-              }
-              return Row(children: [
-                pills[0], const SizedBox(width: 12),
-                pills[1],
-                const Spacer(),
-                search,
-              ]);
-            }),
+            // Barre de recherche. Le nombre de documents par statut est
+            // désormais porté par les filtres eux-mêmes, plus par des cartes.
+            Align(
+              alignment: Alignment.centerLeft,
+              child: SearchField(placeholder: 'Rechercher un document...', onChanged: (v) => setState(() => _search = v), maxWidth: 280),
+            ),
             const SizedBox(height: 16),
 
             // Filter chips — seulement pour les proformas (les autres n'ont pas de statut).
             if (isProforma) ...[
-              Row(children: [
+              Wrap(spacing: 8, runSpacing: 8, children: [
                 for (final f in [('tous', 'Tous'), ('cours', 'En cours'), ('validee', 'Validé'), ('annulee', 'Annulé')])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: AppFilterChip(label: f.$2, active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
-                  ),
+                  AppFilterChip(label: chipLabel(f.$1, f.$2), active: _filter == f.$1, onTap: () => setState(() => _filter = f.$1)),
               ]),
               const SizedBox(height: 16),
             ],
@@ -168,34 +159,6 @@ class _TypeTabs extends StatelessWidget {
           ),
         );
       }).toList()),
-    );
-  }
-}
-
-class _StatPill extends StatelessWidget {
-  final String label;
-  final String value;
-  final Color color;
-  const _StatPill({required this.label, required this.value, required this.color});
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Row(children: [
-          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
-          const SizedBox(width: 6),
-          Text(label, style: GoogleFonts.dmSans(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.text3, letterSpacing: 0.8)),
-        ]),
-        const SizedBox(height: 6),
-        Text(value, style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1, letterSpacing: -0.3)),
-      ]),
     );
   }
 }
@@ -340,7 +303,8 @@ class _DocRowState extends State<_DocRow> {
 
   Future<void> _downloadPdf() async {
     try {
-      final path = await PdfGenerator.saveWithDialog(bytes: await _buildPdf(), type: widget.type);
+      final path = await PdfGenerator.saveWithDialog(
+          bytes: await _buildPdf(), type: widget.type, numero: widget.doc.numero);
       if (mounted && path != null) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text('PDF enregistré :\n$path', style: const TextStyle(fontSize: 13)),
@@ -438,7 +402,7 @@ class _DocRowState extends State<_DocRow> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: doc.statut == s.$1 ? s.$3.withOpacity(0.12) : AppColors.bg,
+                          color: doc.statut == s.$1 ? s.$3.withValues(alpha: 0.12) : AppColors.bg,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
                         ),

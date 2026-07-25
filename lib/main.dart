@@ -4,8 +4,10 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'core/models.dart';
 import 'core/app_state.dart';
+import 'core/persistence.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/app_header.dart';
+import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/documents_list_screen.dart';
 import 'screens/document_create_screen.dart';
@@ -20,9 +22,12 @@ import 'screens/parametres_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await initializeDateFormatting('fr_FR', null);
+  // Charge la sauvegarde disque avant d'afficher l'UI (fichier local, OS).
+  final state = AppState(store: defaultStore());
+  await state.init();
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => AppState(),
+    ChangeNotifierProvider.value(
+      value: state,
       child: const KlrTechApp(),
     ),
   );
@@ -37,7 +42,12 @@ class KlrTechApp extends StatelessWidget {
       title: 'KLR TECH – Gestion',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.theme,
-      home: const AppShell(),
+      // Porte d'entrée : tant que le manager n'est pas connecté, l'app n'est
+      // pas montée. La connexion est redemandée à chaque démarrage.
+      home: Consumer<AppState>(
+        builder: (context, state, _) =>
+            state.authenticated ? const AppShell() : const LoginScreen(),
+      ),
     );
   }
 }

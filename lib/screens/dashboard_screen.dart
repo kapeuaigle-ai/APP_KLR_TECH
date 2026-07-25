@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
 import '../widgets/responsive.dart';
@@ -149,7 +150,8 @@ class _LineChartCardState extends State<_LineChartCard> {
             child: LineAreaChart(
               values: values,
               labels: labels,
-              tooltipFormatter: (v) => '${v.toStringAsFixed(2).replaceAll('.', ',')} M FCFA',
+              // Données stockées en millions : on les rétablit en entier.
+              tooltipFormatter: (v) => Fmt.money(v * 1000000),
             ),
           ),
           const SizedBox(height: 8),
@@ -193,15 +195,20 @@ class _DonutCard extends StatelessWidget {
 }
 
 class _ActivitiesCard extends StatelessWidget {
-  static const _activities = [
-    (Icons.description_outlined, 'Facture #4420 générée', 'Client: Global Logistics Ltd', 'Il y a 2h'),
-    (Icons.credit_card_outlined, 'Paiement reçu – 1 200 000 FCFA', 'Via Virement Bancaire', 'Il y a 5h'),
-    (Icons.person_outline_rounded, 'Nouveau client ajouté', 'Société Sahel Innov', 'Hier, 16:45'),
-    (Icons.email_outlined, 'Rappel envoyé (Délai dépassé)', 'Facture #4402 · Tech Corp', 'Hier, 10:20'),
-  ];
+  // Icône par type d'activité (aligné sur l'écran Activités).
+  static const _icons = {
+    'comptabilite': Icons.account_balance_wallet_outlined,
+    'facture': Icons.description_outlined,
+    'paiement': Icons.credit_card_outlined,
+    'client': Icons.person_outline_rounded,
+    'document': Icons.folder_outlined,
+  };
 
   @override
   Widget build(BuildContext context) {
+    // Les 5 dernières entrées du vrai fil d'activité.
+    final activities = context.watch<AppState>().activities.take(5).toList();
+
     return CardBox(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -218,28 +225,37 @@ class _ActivitiesCard extends StatelessWidget {
             ),
           ]),
           const SizedBox(height: 16),
-          ..._activities.asMap().entries.map((e) {
-            final (icon, title, sub, time) = e.value;
-            return Container(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              decoration: BoxDecoration(
-                border: e.key < _activities.length - 1 ? const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))) : null,
-              ),
-              child: Row(children: [
-                Container(
-                  width: 36, height: 36,
-                  decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
-                  child: Icon(icon, size: 16, color: AppColors.text3),
+          if (activities.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: Text('Aucune activité pour le moment',
+                  style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3))),
+            )
+          else
+            ...activities.asMap().entries.map((e) {
+              final a = e.value;
+              final icon = _icons[a.type] ?? Icons.circle_outlined;
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                decoration: BoxDecoration(
+                  border: e.key < activities.length - 1 ? const Border(bottom: BorderSide(color: Color(0xFFF3F4F6))) : null,
                 ),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(title, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.text1)),
-                  Text(sub, style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-                ])),
-                Text(time, style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-              ]),
-            );
-          }),
+                child: Row(children: [
+                  Container(
+                    width: 36, height: 36,
+                    decoration: BoxDecoration(color: a.color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(10)),
+                    child: Icon(icon, size: 16, color: a.color),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(a.titre, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                    if (a.desc.isNotEmpty)
+                      Text(a.desc, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+                  ])),
+                  Text(a.time, style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+                ]),
+              );
+            }),
         ],
       ),
     );
@@ -301,7 +317,7 @@ class _AlertsCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                     decoration: BoxDecoration(
-                      color: color.withOpacity(0.1),
+                      color: color.withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(badge, style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w800, color: color)),

@@ -142,7 +142,9 @@ class _LineAreaPainter extends CustomPainter {
 
     final linePath = Path();
     linePath.moveTo(pts[0].dx, pts[0].dy);
-    for (var i = 1; i < pts.length; i++) linePath.lineTo(pts[i].dx, pts[i].dy);
+    for (var i = 1; i < pts.length; i++) {
+      linePath.lineTo(pts[i].dx, pts[i].dy);
+    }
 
     // Area
     final areaPath = Path.from(linePath)
@@ -151,7 +153,7 @@ class _LineAreaPainter extends CustomPainter {
       ..close();
     final grad = LinearGradient(
       begin: Alignment.topCenter, end: Alignment.bottomCenter,
-      colors: [color.withOpacity(0.15), color.withOpacity(0.01)],
+      colors: [color.withValues(alpha: 0.15), color.withValues(alpha: 0.01)],
     );
     canvas.drawPath(areaPath, Paint()..shader = grad.createShader(Rect.fromLTWH(0, 0, W, H)));
 
@@ -176,7 +178,7 @@ class _LineAreaPainter extends CustomPainter {
       // Ligne guide verticale
       canvas.drawLine(
         Offset(p.dx, 0), Offset(p.dx, H),
-        Paint()..color = color.withOpacity(0.25)..strokeWidth = 1,
+        Paint()..color = color.withValues(alpha: 0.25)..strokeWidth = 1,
       );
 
       // Point agrandi (halo blanc + couleur)
@@ -190,7 +192,7 @@ class _LineAreaPainter extends CustomPainter {
         text: TextSpan(children: [
           if (label.isNotEmpty)
             TextSpan(text: '$label\n', style: GoogleFonts.dmSans(
-              fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white.withOpacity(0.75))),
+              fontSize: 10, fontWeight: FontWeight.w600, color: Colors.white.withValues(alpha: 0.75))),
           TextSpan(text: valueTxt, style: GoogleFonts.dmSans(
             fontSize: 12, fontWeight: FontWeight.w800, color: Colors.white)),
         ]),
@@ -208,7 +210,7 @@ class _LineAreaPainter extends CustomPainter {
       final rrect = RRect.fromRectAndRadius(
         Rect.fromLTWH(boxX, boxY, boxW, boxH), const Radius.circular(7));
       canvas.drawRRect(rrect, Paint()
-        ..color = Colors.black.withOpacity(0.15)
+        ..color = Colors.black.withValues(alpha: 0.15)
         ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4));
       canvas.drawRRect(rrect, Paint()..color = const Color(0xFF1F2433));
       tp.paint(canvas, Offset(boxX + padH, boxY + padV));
@@ -264,7 +266,7 @@ class _BarLinePainter extends CustomPainter {
       final rect = Rect.fromLTWH(bx(i) - barW / 2, py(bars[i]), barW, H - py(bars[i]) - 4);
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-        Paint()..color = const Color(0xFF374151).withOpacity(0.75),
+        Paint()..color = const Color(0xFF374151).withValues(alpha: 0.75),
       );
     }
 
@@ -272,7 +274,9 @@ class _BarLinePainter extends CustomPainter {
     final linePts = [for (var i = 0; i < line.length; i++) Offset(bx(i), py(line[i]))];
     final linePath = Path();
     linePath.moveTo(linePts[0].dx, linePts[0].dy);
-    for (var i = 1; i < linePts.length; i++) linePath.lineTo(linePts[i].dx, linePts[i].dy);
+    for (var i = 1; i < linePts.length; i++) {
+      linePath.lineTo(linePts[i].dx, linePts[i].dy);
+    }
     canvas.drawPath(linePath, Paint()
       ..color = AppColors.primary
       ..strokeWidth = 2

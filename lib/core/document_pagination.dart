@@ -89,15 +89,10 @@ class DocumentPagination {
   static const _leading = 1.5;
 
 
-  /// Clause de garantie affichée sous les conditions, sur la dernière page.
-  /// Source unique partagée par l'aperçu et le PDF, et par le calcul de hauteur.
-  static const warrantyClause =
-      'Tout produit, sauf mention contraire, bénéficie d\'une période de garantie '
-      'contre tout vice de fabrication (retour atelier sans frais de réparation ou '
-      'échange standard dans la limite des stocks disponibles) soumise à '
-      'l\'expertise constructeur, à compter de la date de facturation et à '
-      'condition qu\'il soit tenu en bon état et que les étiquettes de code '
-      'ne soient pas retirées ou déchirées.';
+  /// Clause de garantie par défaut. Source unique dans models (`kDefaultWarranty`),
+  /// réutilisée ici comme repli et pour le calcul de hauteur. Le texte réellement
+  /// affiché vient de `settings.warranty` (personnalisable).
+  static const warrantyClause = kDefaultWarranty;
 
   /// Lignes réellement portées par le document : celles ayant une désignation.
   /// Les rangées laissées vides ne sont ni affichées ni comptées.

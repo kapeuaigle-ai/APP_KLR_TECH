@@ -58,12 +58,19 @@ class Comptabilite {
     return '${_moisFr[int.parse(p[1])]} ${p[0]}';
   }
 
-  static ComptaTotaux totaux(List<DocumentItem> factures, List<Expense> expenses) {
+  static ComptaTotaux totaux(List<DocumentItem> factures, List<Expense> expenses,
+      List<Engagement> engagements) {
     final revenu = factures
-        .where((f) => f.encaissee)
-        .fold(0.0, (s, f) => s + factureHt(f));
-    final dep = expenses.fold(0.0, (s, e) => s + e.amount);
-    final dime = bilanMensuel(factures, expenses, const {}, const {})
+            .where((f) => f.encaissee)
+            .fold(0.0, (s, f) => s + factureHt(f)) +
+        engagements
+            .where((e) => e.regle && e.estCreance)
+            .fold(0.0, (s, e) => s + e.montant);
+    final dep = expenses.fold(0.0, (s, e) => s + e.amount) +
+        engagements
+            .where((e) => e.regle && !e.estCreance)
+            .fold(0.0, (s, e) => s + e.montant);
+    final dime = bilanMensuel(factures, expenses, engagements, const {}, const {})
         .fold(0.0, (s, r) => s + r.dime);
     return ComptaTotaux(
       revenuHt: revenu, depenses: dep, benefice: revenu - dep, dime: dime,
@@ -73,6 +80,7 @@ class Comptabilite {
   static List<MonthlyRow> bilanMensuel(
     List<DocumentItem> factures,
     List<Expense> expenses,
+    List<Engagement> engagements,
     Set<String> dimePaidMonths,
     Map<String, String> dimePaidDates,
   ) {
@@ -88,6 +96,16 @@ class Comptabilite {
       final k = monthKeyFromDate(e.date);
       dep[k] = (dep[k] ?? 0) + e.amount;
     }
+    // Engagements validés : rattachés au mois de leur règlement.
+    for (final e in engagements) {
+      if (!e.regle) continue;
+      final k = monthKeyFromDdMmYyyy(e.dateReglement!);
+      if (e.estCreance) {
+        rev[k] = (rev[k] ?? 0) + e.montant;
+      } else {
+        dep[k] = (dep[k] ?? 0) + e.montant;
+      }
+    }
     final keys = <String>{...rev.keys, ...dep.keys}.toList()..sort();
     return keys.map((k) {
       final r = rev[k] ?? 0, d = dep[k] ?? 0;
@@ -98,5 +116,35 @@ class Comptabilite {
         dimePaid: dimePaidMonths.contains(k), dimeDate: dimePaidDates[k],
       );
     }).toList();
+  }
+
+  static MonthlyRow? ligneMois(String monthKey, List<MonthlyRow> rows) {
+    for (final r in rows) {
+      if (r.monthKey == monthKey) return r;
+    }
+    return null;
+  }
+
+  /// Mois à clôturer : de `dernierMois` (inclus) au mois précédant `now`.
+  ///
+  /// `dernierMois` est le mois que l'app a vu la dernière fois. Au premier
+  /// lancement il est nul : il n'y a rien à clôturer. Si l'app est restée
+  /// fermée plusieurs mois, ils ressortent tous, du plus ancien au plus
+  /// récent, pour être archivés dans Activités.
+  static List<String> moisAClore(String? dernierMois, DateTime now) {
+    if (dernierMois == null) return const [];
+    final p = dernierMois.split('-');
+    if (p.length != 2) return const [];
+    var y = int.tryParse(p[0]) ?? 0;
+    var m = int.tryParse(p[1]) ?? 0;
+    if (y == 0 || m < 1 || m > 12) return const [];
+
+    final res = <String>[];
+    while (y < now.year || (y == now.year && m < now.month)) {
+      res.add('$y-${m.toString().padLeft(2, '0')}');
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+    return res;
   }
 }

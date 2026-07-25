@@ -39,11 +39,54 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   bool _saving = false;
   bool _downloading = false;
 
+  // Numéro/date/id verrouillés à la 1ʳᵉ génération : les téléchargements ou
+  // impressions suivants réutilisent (et mettent à jour) le même document, au
+  // lieu d'en créer un nouveau et de « brûler » un numéro à chaque fois.
+  String? _committedNumero;
+  String? _committedDate;
+  int? _docId;
+
   String _refFor(int idx) => (idx + 1).toString().padLeft(2, '0');
 
-  // Numérotation partagée proforma/facture/BL : voir DocNumero (compteur/jour).
+  // Numéro affiché : celui déjà verrouillé s'il existe, sinon le prochain
+  // disponible (compteur du jour, repart à 01 chaque jour). La facture et le BL
+  // en sont dérivés à la validation (voir DocNumero).
   String _numeroFor(AppState state) =>
-      DocNumero.next(state.settings.prefix, state.documents['proforma'] ?? [], DateTime.now());
+      _committedNumero ??
+      DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], DateTime.now());
+
+  // Fige numéro + date + id pour la session (sans encore enregistrer), pour que
+  // le PDF et l'enregistrement portent le même numéro.
+  void _lockNumero(AppState state) {
+    if (_committedNumero != null) return;
+    final now = DateTime.now();
+    _docId = now.millisecondsSinceEpoch;
+    _committedDate = Fmt.jour(now);
+    _committedNumero =
+        DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], now);
+  }
+
+  // Enregistre (ou met à jour) la proforma dans l'app avec le contenu courant.
+  // C'est ce qui fait avancer le compteur du jour : le prochain document ce
+  // jour-là prendra le numéro suivant.
+  void _commit(AppState state) {
+    _lockNumero(state);
+    state.saveOrUpdateProforma(DocumentItem(
+      id: _docId!,
+      numero: _committedNumero!,
+      date: _committedDate!,
+      clientId: 0,
+      client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
+      clientAddr: _clientAddrCtrl.text,
+      objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
+      montant: _ttc,
+      statut: 'cours',
+      lines: _lines
+          .where((l) => l.designation.trim().isNotEmpty)
+          .map((l) => LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu))
+          .toList(),
+    ));
+  }
 
   // ── PDF helper ───────────────────────────────────────
   Future<List<int>> _buildPdf(AppState state) => PdfGenerator.generate(
@@ -62,33 +105,17 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   // ── Enregistrer ──────────────────────────────────────
   Future<void> _saveDocument(AppState state) async {
     setState(() => _saving = true);
-    final now = DateTime.now();
-
-    final doc = DocumentItem(
-      id: now.millisecondsSinceEpoch,
-      numero: _numeroFor(state),
-      date: '${now.day.toString().padLeft(2,'0')}/${now.month.toString().padLeft(2,'0')}/${now.year}',
-      clientId: 0,
-      client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
-      clientAddr: _clientAddrCtrl.text,
-      objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
-      montant: _ttc,
-      statut: 'cours',
-      // On ne conserve que les lignes réellement remplies.
-      lines: _lines
-          .where((l) => l.designation.trim().isNotEmpty)
-          .map((l) => LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu))
-          .toList(),
-    );
-    state.addDocument(_type, doc);
+    _commit(state);
     state.setCreating(false);
   }
 
   // ── Imprimer ─────────────────────────────────────────
   Future<void> _print(AppState state) async {
     try {
+      _lockNumero(state);
       final bytes = await _buildPdf(state);
       await PdfGenerator.printDoc(bytes);
+      _commit(state); // imprimé = document enregistré
     } catch (e) {
       if (mounted) _showError('Erreur impression : $e');
     }
@@ -99,11 +126,13 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     if (_downloading) return;
     setState(() => _downloading = true);
     try {
+      _lockNumero(state);
       final bytes = await _buildPdf(state);
       final path = await PdfGenerator.saveWithDialog(
-          bytes: bytes, type: _type);
-      if (mounted && path != null) {
-        _showSuccess('PDF enregistré :\n$path');
+          bytes: bytes, type: _type, numero: _committedNumero!);
+      if (path != null) {
+        _commit(state); // le PDF a bien été enregistré → on consigne le document
+        if (mounted) _showSuccess('PDF enregistré :\n$path');
       }
     } catch (e) {
       if (mounted) _showError('Erreur téléchargement : $e');
@@ -426,7 +455,6 @@ class _ClientAutocomplete extends StatelessWidget {
                             Text(c.address, style: GoogleFonts.dmSans(fontSize: 10.5, color: AppColors.text3),
                                 overflow: TextOverflow.ellipsis),
                         ])),
-                        StatusBadge(status: c.status),
                       ]),
                     ),
                   );

@@ -5,26 +5,26 @@ import '../core/theme.dart';
 // ── Status Badge ─────────────────────────────────────────
 class StatusBadge extends StatelessWidget {
   final String status;
-  final Map<String, _BadgeCfg>? config;
+  final Map<String, BadgeCfg>? config;
   const StatusBadge({super.key, required this.status, this.config});
 
   static const _doc = {
-    'cours':   _BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En cours'),
-    'validee': _BadgeCfg(AppColors.green,    AppColors.greenBg,  'Validée'),
-    'annulee': _BadgeCfg(AppColors.text2,    AppColors.grayBg,   'Annulée'),
-    'paye':    _BadgeCfg(AppColors.green,    AppColors.greenBg,  'Payé'),
-    'attente': _BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En attente'),
-    'retard':  _BadgeCfg(AppColors.red,      AppColors.redBg,    'En retard'),
-    'actif':   _BadgeCfg(AppColors.green,    AppColors.greenBg,  'Actif'),
-    'mission': _BadgeCfg(AppColors.blue,     AppColors.blueBg,   'En mission'),
-    'conge':   _BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En congé'),
-    'termine': _BadgeCfg(AppColors.green,    AppColors.greenBg,  'Terminé'),
-    'planifie':_BadgeCfg(AppColors.blue,     AppColors.blueBg,   'Planifié'),
+    'cours':   BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En cours'),
+    'validee': BadgeCfg(AppColors.green,    AppColors.greenBg,  'Validée'),
+    'annulee': BadgeCfg(AppColors.text2,    AppColors.grayBg,   'Annulée'),
+    'paye':    BadgeCfg(AppColors.green,    AppColors.greenBg,  'Payé'),
+    'attente': BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En attente'),
+    'retard':  BadgeCfg(AppColors.red,      AppColors.redBg,    'En retard'),
+    'actif':   BadgeCfg(AppColors.green,    AppColors.greenBg,  'Actif'),
+    'mission': BadgeCfg(AppColors.blue,     AppColors.blueBg,   'En mission'),
+    'conge':   BadgeCfg(AppColors.orange,   AppColors.orangeBg, 'En congé'),
+    'termine': BadgeCfg(AppColors.green,    AppColors.greenBg,  'Terminé'),
+    'planifie':BadgeCfg(AppColors.blue,     AppColors.blueBg,   'Planifié'),
   };
 
   @override
   Widget build(BuildContext context) {
-    final cfg = (config ?? _doc)[status] ?? const _BadgeCfg(AppColors.text2, AppColors.grayBg, '—');
+    final cfg = (config ?? _doc)[status] ?? const BadgeCfg(AppColors.text2, AppColors.grayBg, '—');
     // FittedBox : le libellé reste toujours sur une seule ligne,
     // quitte à se réduire légèrement dans une colonne étroite.
     return Align(
@@ -43,10 +43,10 @@ class StatusBadge extends StatelessWidget {
   }
 }
 
-class _BadgeCfg {
+class BadgeCfg {
   final Color color, bg;
   final String label;
-  const _BadgeCfg(this.color, this.bg, this.label);
+  const BadgeCfg(this.color, this.bg, this.label);
 }
 
 // ── Avatar Circle ─────────────────────────────────────────
@@ -122,10 +122,10 @@ class StatCard extends StatelessWidget {
             children: [
               Expanded(child: Text(label, style: GoogleFonts.dmSans(
                 fontSize: 10.5, fontWeight: FontWeight.w700,
-                color: red ? Colors.white.withOpacity(0.65) : AppColors.text3,
+                color: red ? Colors.white.withValues(alpha: 0.65) : AppColors.text3,
                 letterSpacing: 0.8,
               ))),
-              if (badge != null) badge!,
+              ?badge,
             ],
           ),
           const SizedBox(height: 10),
@@ -148,7 +148,7 @@ class StatCard extends StatelessWidget {
                   padding: const EdgeInsets.only(bottom: 4),
                   child: Text(unit!, style: GoogleFonts.dmSans(
                     fontSize: 12, fontWeight: FontWeight.w500,
-                    color: red ? Colors.white.withOpacity(0.65) : AppColors.text3,
+                    color: red ? Colors.white.withValues(alpha: 0.65) : AppColors.text3,
                   )),
                 ),
               ],
@@ -156,7 +156,7 @@ class StatCard extends StatelessWidget {
           ),
           if (sub != null) ...[
             const SizedBox(height: 8),
-            Text(sub!, style: GoogleFonts.dmSans(fontSize: 12, color: red ? Colors.white.withOpacity(0.65) : AppColors.text3)),
+            Text(sub!, style: GoogleFonts.dmSans(fontSize: 12, color: red ? Colors.white.withValues(alpha: 0.65) : AppColors.text3)),
           ],
         ],
       ),
@@ -187,7 +187,7 @@ class SectionHeader extends StatelessWidget {
             ],
           ),
         ),
-        if (action != null) action!,
+        ?action,
       ],
     );
   }

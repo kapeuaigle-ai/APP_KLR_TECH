@@ -29,8 +29,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
     ).toList();
 
     final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
-    final actifs = clients.where((c) => c.status == 'actif').length;
-    final pctActifs = clients.isEmpty ? 0 : ((actifs / clients.length) * 100).round();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(28, 28, 28, 40),
@@ -52,11 +50,9 @@ class _ClientsScreenState extends State<ClientsScreen> {
             // Stat cards
             StatGrid(cards: [
               StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires'),
-              StatCard(label: 'CLIENTS ACTIFS', value: '$actifs',
-                badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-                  child: Text('$pctActifs%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
-              StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA'),
+              StatCard(label: 'CA CUMULÉ', value: Fmt.number(totalCA), unit: 'FCFA'),
+              StatCard(label: 'CA MOY./CLIENT',
+                value: Fmt.number(clients.isEmpty ? 0 : totalCA / clients.length), unit: 'FCFA'),
             ]),
             const SizedBox(height: 20),
 
@@ -84,7 +80,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
                         Expanded(flex: 4, child: ThCell('EMAIL')),
                         Expanded(flex: 3, child: ThCell('TÉLÉPHONE')),
                         Expanded(flex: 3, child: ThCell('CA TOTAL')),
-                        Expanded(flex: 2, child: ThCell('STATUT')),
                         SizedBox(width: 48),
                       ]),
                     ),
@@ -113,7 +108,6 @@ void showClientDialog(BuildContext context, {Client? existing}) {
   final emailCtrl = TextEditingController(text: existing?.email ?? '');
   final phoneCtrl = TextEditingController(text: existing?.phone ?? '');
   final addressCtrl = TextEditingController(text: existing?.address ?? '');
-  String status = existing?.status ?? 'actif';
 
   const colors = [AppColors.purple, AppColors.blue, AppColors.emerald, AppColors.orange, AppColors.red, AppColors.teal];
 
@@ -144,29 +138,6 @@ void showClientDialog(BuildContext context, {Client? existing}) {
             _DialogField(label: 'TÉLÉPHONE', ctrl: phoneCtrl, hint: '+225 ...'),
             const SizedBox(height: 12),
             _DialogField(label: 'ADRESSE', ctrl: addressCtrl, hint: 'Adresse complète', maxLines: 2),
-            const SizedBox(height: 12),
-            Text('STATUT', style: AppTheme.label),
-            const SizedBox(height: 6),
-            Row(children: [
-              for (final s in [('actif', 'Actif'), ('attente', 'En attente'), ('cours', 'En cours')])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => setState(() => status = s.$1),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: status == s.$1 ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: status == s.$1 ? AppColors.primary : AppColors.border),
-                      ),
-                      child: Text(s.$2, style: GoogleFonts.dmSans(
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                        color: status == s.$1 ? AppColors.primary : AppColors.text2)),
-                    ),
-                  ),
-                ),
-            ]),
           ]),
         ),
       ),
@@ -191,7 +162,6 @@ void showClientDialog(BuildContext context, {Client? existing}) {
               email: emailCtrl.text.trim(),
               phone: phoneCtrl.text.trim(),
               totalFacture: existing?.totalFacture ?? 0,
-              status: status,
               address: addressCtrl.text.trim(),
             );
             if (existing == null) {
@@ -311,10 +281,6 @@ class _ClientRowState extends State<_ClientRow> {
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Text(c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-          )),
-          Expanded(flex: 2, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: StatusBadge(status: c.status),
           )),
           SizedBox(width: 48, child: PopupMenuButton<String>(
             tooltip: 'Actions',

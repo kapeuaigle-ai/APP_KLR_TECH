@@ -1,11 +1,11 @@
 {
-    "name": "klr_tech_app",
-    "short_name": "klr_tech_app",
+    "name": "KLR TECH – Gestion",
+    "short_name": "KLR TECH",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#F4F5F9",
+    "theme_color": "#C62828",
+    "description": "Gestion KLR TECH : documents (proforma, facture, BL), clients, suivi et comptabilité.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

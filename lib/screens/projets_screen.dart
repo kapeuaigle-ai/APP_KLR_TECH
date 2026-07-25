@@ -100,7 +100,7 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: tag == t ? AppColors.primary.withOpacity(0.1) : AppColors.bg,
+                        color: tag == t ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
                         borderRadius: BorderRadius.circular(6),
                         border: Border.all(color: tag == t ? AppColors.primary : AppColors.border),
                       ),

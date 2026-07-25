@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import 'klr_logo.dart';
 
 class Sidebar extends StatelessWidget {
   /// Mode compact (icônes seules) pour les écrans étroits.
@@ -61,16 +62,16 @@ class _Logo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (compact) {
-      return Padding(
-        padding: const EdgeInsets.symmetric(vertical: 20),
-        child: CustomPaint(size: const Size(30, 30), painter: _DiamondPainter()),
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 20),
+        child: KlrLogo(height: 30, markOnly: true),
       );
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 22, 20, 18),
       child: Row(
         children: [
-          CustomPaint(size: const Size(32, 32), painter: _DiamondPainter()),
+          const KlrLogo(height: 32, markOnly: true),
           const SizedBox(width: 10),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -87,31 +88,6 @@ class _Logo extends StatelessWidget {
       ),
     );
   }
-}
-
-class _DiamondPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.primary;
-    final path = Path()
-      ..moveTo(size.width / 2, 2)
-      ..lineTo(size.width - 2, size.height / 2)
-      ..lineTo(size.width / 2, size.height - 2)
-      ..lineTo(2, size.height / 2)
-      ..close();
-    canvas.drawPath(path, paint);
-    final inner = Paint()..color = Colors.white.withOpacity(0.25);
-    final innerPath = Path()
-      ..moveTo(size.width / 2, size.height * 0.28)
-      ..lineTo(size.width * 0.72, size.height / 2)
-      ..lineTo(size.width / 2, size.height * 0.72)
-      ..lineTo(size.width * 0.28, size.height / 2)
-      ..close();
-    canvas.drawPath(innerPath, inner);
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
 class _NavItem extends StatefulWidget {
@@ -148,8 +124,8 @@ class _NavItemState extends State<_NavItem> {
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(8),
             color: widget.active
-                ? AppColors.primary.withOpacity(0.12)
-                : _hovered ? Colors.white.withOpacity(0.05) : Colors.transparent,
+                ? AppColors.primary.withValues(alpha: 0.12)
+                : _hovered ? Colors.white.withValues(alpha: 0.05) : Colors.transparent,
           ),
           child: Row(
             mainAxisAlignment: widget.compact ? MainAxisAlignment.center : MainAxisAlignment.start,
@@ -200,20 +176,30 @@ class _UserProfile extends StatelessWidget {
       child: Text('KL', style: GoogleFonts.dmSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w700)),
     );
 
+    final logout = IconButton(
+      icon: const Icon(Icons.logout_rounded, size: 17, color: AppColors.text2),
+      tooltip: 'Se déconnecter',
+      onPressed: () => context.read<AppState>().logout(),
+    );
+
     if (compact) {
       return Container(
         padding: const EdgeInsets.symmetric(vertical: 14),
         decoration: BoxDecoration(
-          border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07))),
+          border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.07))),
         ),
-        child: Tooltip(message: 'Kapeu Aigle — Directeur Tech', child: avatar),
+        child: Column(children: [
+          Tooltip(message: 'Kapeu Aigle — Directeur Tech', child: avatar),
+          const SizedBox(height: 4),
+          logout,
+        ]),
       );
     }
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: BoxDecoration(
-        border: Border(top: BorderSide(color: Colors.white.withOpacity(0.07))),
+        border: Border(top: BorderSide(color: Colors.white.withValues(alpha: 0.07))),
       ),
       child: Row(
         children: [
@@ -228,6 +214,7 @@ class _UserProfile extends StatelessWidget {
               ],
             ),
           ),
+          logout,
         ],
       ),
     );

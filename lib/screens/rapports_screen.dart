@@ -30,7 +30,7 @@ class _RapportsScreenState extends State<RapportsScreen> {
         settings: state.settings,
         dime: SampleData.dimeHistory,
         clients: state.clients,
-        factures: state.factures,
+        engagements: state.engagements,
       );
       final path = await PdfGenerator.saveRapport(bytes);
       if (mounted && path != null) {
@@ -110,8 +110,8 @@ class _FinancierTab extends StatelessWidget {
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
             child: Text('↗ +12%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
-        StatCard(label: 'REVENU TOTAL', value: Fmt.millions(totalRevenu), unit: 'FCFA'),
-        StatCard(label: 'DÎME TOTALE', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
+        StatCard(label: 'REVENU TOTAL', value: Fmt.number(totalRevenu), unit: 'FCFA'),
+        StatCard(label: 'DÎME TOTALE', value: Fmt.number(totalDime), unit: 'FCFA', red: true),
         StatCard(label: 'TAUX RECOUVREMENT', value: '87', unit: '%',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
@@ -193,9 +193,8 @@ class _ClientsTab extends StatelessWidget {
     return Column(children: [
       StatGrid(cards: [
         StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires'),
-        StatCard(label: 'CLIENTS ACTIFS', value: '${clients.where((c) => c.status == 'actif').length}'),
-        StatCard(label: 'CA CUMULÉ', value: Fmt.millions(totalCA), unit: 'FCFA'),
-        StatCard(label: 'CA MOY./CLIENT', value: Fmt.millions(clients.isEmpty ? 0 : totalCA / clients.length), unit: 'FCFA'),
+        StatCard(label: 'CA CUMULÉ', value: Fmt.number(totalCA), unit: 'FCFA'),
+        StatCard(label: 'CA MOY./CLIENT', value: Fmt.number(clients.isEmpty ? 0 : totalCA / clients.length), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
 

@@ -30,15 +30,15 @@ class _SuiviScreenState extends State<SuiviScreen> {
           children: [
             Text('Suivi', style: AppTheme.h1),
             const SizedBox(height: 3),
-            Text('Factures, dîme, tâches et notes internes.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
+            Text('Engagements, comptabilité, dîme, tâches et notes internes.', style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
             const SizedBox(height: 24),
             AppTabBar(
-              tabs: const ['Factures & Crédits', 'Comptabilité', 'Dîme', 'Tâches', 'Notes'],
+              tabs: const ['Engagements', 'Comptabilité', 'Dîme', 'Tâches', 'Notes'],
               selected: _tab,
               onChanged: (i) => setState(() => _tab = i),
             ),
             const SizedBox(height: 20),
-            if (_tab == 0) const _FacturesTab()
+            if (_tab == 0) const _EngagementsTab()
             else if (_tab == 1) const _ComptaTab()
             else if (_tab == 2) const _DimeTab()
             else if (_tab == 3) const _TachesTab()
@@ -50,109 +50,388 @@ class _SuiviScreenState extends State<SuiviScreen> {
   }
 }
 
-// ── Factures Tab ──────────────────────────────────────────
-class _FacturesTab extends StatelessWidget {
-  const _FacturesTab();
+// ── Engagements Tab (créances & dettes) ───────────────────
+// Deux listes séparées : ce qu'on nous doit, ce que l'on doit. Tant qu'un
+// engagement est en cours il reste hors comptabilité ; sa validation
+// (encaissement / paiement) le fait entrer au bilan du mois du règlement.
+class _EngagementsTab extends StatefulWidget {
+  const _EngagementsTab();
+  @override
+  State<_EngagementsTab> createState() => _EngagementsTabState();
+}
+
+class _EngagementsTabState extends State<_EngagementsTab> {
+  final _numCtrl = TextEditingController();
+  final _tiersCtrl = TextEditingController();
+  final _descCtrl = TextEditingController();
+  final _montantCtrl = TextEditingController();
+  /// Liste affichée : 'creance' ou 'dette'. Détermine aussi ce que crée le
+  /// bouton — pas de sélecteur de type dans le formulaire.
+  String _sens = 'creance';
+  DateTime _echeance = DateTime.now();
+  String _categorie = Expense.categories.first;
+  bool _erreur = false;
+
+  bool get _estCreance => _sens == 'creance';
+
+  @override
+  void dispose() {
+    _numCtrl.dispose();
+    _tiersCtrl.dispose();
+    _descCtrl.dispose();
+    _montantCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<DateTime?> _pickDate(DateTime initial) => showDatePicker(
+        context: context,
+        initialDate: initial,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(2100),
+      );
+
+  /// Enregistre l'engagement saisi. Retourne false si le formulaire est
+  /// incomplet, pour que la boîte reste ouverte et signale ce qui manque.
+  bool _add(AppState state) {
+    final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
+    if (_tiersCtrl.text.trim().isEmpty || montant <= 0) return false;
+    final enRetard = _echeance.isBefore(DateUtils.dateOnly(DateTime.now()));
+    state.addEngagement(Engagement(
+      id: DateTime.now().millisecondsSinceEpoch,
+      sens: _sens,
+      num: _numCtrl.text.trim().isEmpty ? '—' : _numCtrl.text.trim(),
+      tiers: _tiersCtrl.text.trim(),
+      description: _descCtrl.text.trim(),
+      montant: montant,
+      statut: enRetard ? 'retard' : 'cours',
+      echeance: Fmt.jour(_echeance),
+      categorie: _categorie,
+    ));
+    return true;
+  }
+
+  /// Questionnaire de saisie. Le type vient de la liste ouverte : sur l'onglet
+  /// Créances le bouton crée une créance, sur Dettes une dette.
+  Future<void> _ouvrirFormulaire(AppState state) async {
+    _numCtrl.clear();
+    _tiersCtrl.clear();
+    _descCtrl.clear();
+    _montantCtrl.clear();
+    _echeance = DateTime.now();
+    _categorie = Expense.categories.first;
+    _erreur = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(_estCreance ? 'Nouvelle Créance' : 'Nouvelle Dette',
+                        style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+                    const SizedBox(height: 2),
+                    Text(_estCreance
+                            ? 'Entre en comptabilité une fois encaissée.'
+                            : 'Entre en comptabilité une fois payée.',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                  ])),
+                  IconButton(
+                    tooltip: 'Fermer',
+                    icon: const Icon(Icons.close, size: 18, color: AppColors.text2),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ]),
+              ),
+              const Divider(height: 1, color: AppColors.border),
+
+              Flexible(child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _field(_estCreance ? 'NOM DU DÉBITEUR' : 'CRÉANCIER',
+                      _tf(_tiersCtrl, _estCreance ? 'Ex : Advans' : 'Ex : Orange CI')),
+                  const SizedBox(height: 14),
+                  _field('DESCRIPTION', _tf(_descCtrl, 'Ex : Équipements réseau')),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 12, runSpacing: 14, crossAxisAlignment: WrapCrossAlignment.end, children: [
+                    _field('MONTANT (FCFA)', SizedBox(width: 190, child: _tf(_montantCtrl, '0', numeric: true))),
+                    _field('RÉFÉRENCE', SizedBox(width: 190, child: _tf(_numCtrl, 'Facultative'))),
+                  ]),
+                  const SizedBox(height: 14),
+                  _field('DATE D\'ÉCHÉANCE', GestureDetector(
+                    onTap: () async {
+                      final d = await _pickDate(_echeance);
+                      if (d != null) setLocal(() => _echeance = d);
+                    },
+                    child: Container(
+                      height: 40,
+                      alignment: Alignment.centerLeft,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                      child: Row(children: [
+                        const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text(Fmt.jour(_echeance), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ]),
+                    ),
+                  )),
+
+                  // La catégorie ne sert qu'aux dettes : c'est la ligne de
+                  // dépense sous laquelle le paiement sera classé.
+                  if (!_estCreance) ...[
+                    const SizedBox(height: 16),
+                    Text('CATÉGORIE DE DÉPENSE', style: AppTheme.label),
+                    const SizedBox(height: 6),
+                    Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
+                      onTap: () => setLocal(() => _categorie = c),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _categorie == c ? AppColors.primary : AppColors.bg,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: _categorie == c ? AppColors.primary : AppColors.border),
+                        ),
+                        child: Text(c, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _categorie == c ? Colors.white : AppColors.text2)),
+                      ),
+                    )).toList()),
+                  ],
+
+                  if (_erreur) ...[
+                    const SizedBox(height: 14),
+                    Text(
+                      _estCreance
+                          ? 'Renseignez le nom du débiteur et un montant supérieur à 0.'
+                          : 'Renseignez le créancier et un montant supérieur à 0.',
+                      style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red),
+                    ),
+                  ],
+                ]),
+              )),
+
+              const Divider(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+                  ),
+                  const SizedBox(width: 8),
+                  PrimaryBtn(label: 'Enregistrer', icon: Icons.check, onTap: () {
+                    if (_add(state)) {
+                      Navigator.of(ctx).pop();
+                    } else {
+                      setLocal(() => _erreur = true);
+                    }
+                  }),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _valider(AppState state, Engagement e) async {
+    final d = await _pickDate(DateTime.now());
+    if (d == null || !mounted) return;
+    state.validerEngagement(e.id, Fmt.jour(d));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(
+        e.estCreance
+            ? 'Créance encaissée : ${Fmt.money(e.montant)} entrent en revenu (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).'
+            : 'Dette payée : ${Fmt.money(e.montant)} entrent en dépense (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).',
+        style: const TextStyle(fontSize: 13),
+      ),
+      backgroundColor: e.estCreance ? AppColors.green : AppColors.orange,
+      duration: const Duration(seconds: 4),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      margin: const EdgeInsets.all(16),
+    ));
+  }
 
   @override
   Widget build(BuildContext context) {
-    final factures = context.watch<AppState>().factures;
-    final totalPaye = factures.where((f) => f.statut == 'paye').fold<double>(0, (s, f) => s + f.montant);
-    final totalAttente = factures.where((f) => f.statut == 'cours').fold<double>(0, (s, f) => s + f.montant);
-    final totalRetard = factures.where((f) => f.statut == 'retard').fold<double>(0, (s, f) => s + f.montant);
+    final state = context.watch<AppState>();
+    final engagements = state.engagements;
+    final creances = engagements.where((e) => e.estCreance).toList();
+    final dettes = engagements.where((e) => !e.estCreance).toList();
+
+    // Les totaux ne portent que sur le reste dû : un engagement réglé est
+    // déjà passé en comptabilité, il n'est plus un encours.
+    final totalCreances = creances.where((e) => !e.regle).fold<double>(0, (s, e) => s + e.montant);
+    final totalDettes = dettes.where((e) => !e.regle).fold<double>(0, (s, e) => s + e.montant);
+    final soldeNet = totalCreances - totalDettes;
+
+    final liste = _estCreance ? creances : dettes;
 
     return Column(children: [
       StatGrid(cards: [
-        StatCard(label: 'ENCAISSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA',
-          badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Payé', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
-        StatCard(label: 'EN ATTENTE', value: Fmt.millions(totalAttente), unit: 'FCFA'),
-        StatCard(label: 'EN RETARD', value: Fmt.millions(totalRetard), unit: 'FCFA', red: true),
+        StatCard(label: 'TOTAL CRÉANCES', value: Fmt.number(totalCreances), unit: 'FCFA'),
+        StatCard(label: 'TOTAL DETTES', value: Fmt.number(totalDettes), unit: 'FCFA'),
+        StatCard(label: 'SOLDE NET', value: Fmt.number(soldeNet), unit: 'FCFA', red: soldeNet < 0),
       ]),
       const SizedBox(height: 20),
+
+      // Deux listes distinctes : le type n'est plus une case à cocher du
+      // formulaire, c'est la liste dans laquelle on se trouve. Sélecteur à
+      // gauche, action à droite — une seule ligne au-dessus du tableau.
+      Row(children: [
+        Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppFilterChip(
+              label: 'Créances (${creances.length})',
+              active: _estCreance,
+              onTap: () => setState(() => _sens = 'creance'),
+            ),
+            const SizedBox(width: 4),
+            AppFilterChip(
+              label: 'Dettes (${dettes.length})',
+              active: !_estCreance,
+              onTap: () => setState(() => _sens = 'dette'),
+            ),
+          ]),
+        ),
+        const Spacer(),
+        PrimaryBtn(
+          label: _estCreance ? 'Nouvelle Créance' : 'Nouvelle Dette',
+          icon: Icons.add,
+          onTap: () => _ouvrirFormulaire(state),
+        ),
+      ]),
+      const SizedBox(height: 14),
 
       CardBox(
         padding: EdgeInsets.zero,
         child: HScrollTable(
-          minWidth: 940,
+          minWidth: 1000,
           child: Column(children: [
             Container(
               color: AppColors.bg,
               child: const Row(children: [
-                Expanded(flex: 3, child: ThCell('N° FACTURE')),
-                Expanded(flex: 4, child: ThCell('CLIENT')),
+                Expanded(flex: 2, child: ThCell('TYPE')),
+                Expanded(flex: 3, child: ThCell('RÉFÉRENCE')),
+                Expanded(flex: 4, child: ThCell('TIERS')),
                 Expanded(flex: 3, child: ThCell('MONTANT')),
                 Expanded(flex: 2, child: ThCell('STATUT')),
                 Expanded(flex: 3, child: ThCell('ÉCHÉANCE')),
+                Expanded(flex: 3, child: ThCell('RÉGLÉ LE')),
                 SizedBox(width: 60),
               ]),
             ),
             const Divider(height: 1, color: AppColors.border),
-            ...factures.asMap().entries.map((e) {
-              final f = e.value;
-              final isLast = e.key == factures.length - 1;
-              return Container(
-                decoration: BoxDecoration(
-                  border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
-                ),
-                child: Row(children: [
-                  Expanded(flex: 3, child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                    child: Text(f.num, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
-                  )),
-                  Expanded(flex: 4, child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(f.client, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, fontWeight: FontWeight.w500), overflow: TextOverflow.ellipsis),
-                  )),
-                  Expanded(flex: 3, child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(Fmt.money(f.montant), maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
-                  )),
-                  Expanded(flex: 2, child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: StatusBadge(status: f.statut),
-                  )),
-                  Expanded(flex: 3, child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(f.echeance, maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, color: f.statut == 'retard' ? AppColors.red : AppColors.text2)),
-                  )),
-                  SizedBox(width: 60, child: PopupMenuButton<String>(
-                    tooltip: 'Actions',
-                    icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
-                    padding: const EdgeInsets.all(6),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                    color: Colors.white,
-                    onSelected: (action) {
-                      if (action == 'paid') {
-                        context.read<AppState>().markFacturePaid(f.num);
-                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                          content: Text('Facture ${f.num} marquée comme payée.', style: const TextStyle(fontSize: 13)),
-                          backgroundColor: AppColors.green,
-                          behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                          margin: const EdgeInsets.all(16),
-                        ));
-                      }
-                    },
-                    itemBuilder: (ctx) => [
-                      if (f.statut != 'paye')
-                        PopupMenuItem(value: 'paid', child: Row(children: [
-                          const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
+            if (liste.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(30),
+                child: Center(child: Text(
+                  _estCreance ? 'Aucune créance enregistrée' : 'Aucune dette enregistrée',
+                  style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3),
+                )),
+              )
+            else
+              ...liste.asMap().entries.map((entry) {
+                final e = entry.value;
+                final isLast = entry.key == liste.length - 1;
+                return Container(
+                  decoration: BoxDecoration(
+                    color: e.regle ? Colors.white : const Color(0xFFFAFAFB),
+                    border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
+                  ),
+                  child: Row(children: [
+                    Expanded(flex: 2, child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        // Badge neutre : la couleur est réservée au statut,
+                        // qui est la seule information à repérer d'un coup d'œil.
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppColors.grayBg,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(e.estCreance ? 'Créance' : 'Dette',
+                              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                        ),
+                      ),
+                    )),
+                    _cell(e.num, flex: 3, color: AppColors.primary, bold: true),
+                    // Tiers + objet de l'engagement sur deux lignes.
+                    Expanded(flex: 4, child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(e.tiers, maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text1)),
+                        if (e.description.isNotEmpty) ...[
+                          const SizedBox(height: 2),
+                          Text(e.description, maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
+                        ],
+                      ]),
+                    )),
+                    _cell(Fmt.money(e.montant), flex: 3, bold: true),
+                    Expanded(flex: 2, child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                      child: StatusBadge(status: e.statut),
+                    )),
+                    _cell(e.echeance, flex: 3, color: e.statut == 'retard' ? AppColors.red : AppColors.text2),
+                    _cell(e.dateReglement ?? '—', flex: 3, color: e.regle ? AppColors.green : AppColors.text3),
+                    SizedBox(width: 60, child: PopupMenuButton<String>(
+                      tooltip: 'Actions',
+                      icon: const Icon(Icons.more_horiz, size: 16, color: AppColors.text3),
+                      padding: const EdgeInsets.all(6),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      color: Colors.white,
+                      onSelected: (action) {
+                        if (action == 'valider') {
+                          _valider(state, e);
+                        } else if (action == 'annuler') {
+                          state.annulerValidationEngagement(e.id);
+                        } else if (action == 'supprimer') {
+                          state.deleteEngagement(e.id);
+                        }
+                      },
+                      itemBuilder: (ctx) => [
+                        if (!e.regle)
+                          PopupMenuItem(value: 'valider', child: Row(children: [
+                            const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
+                            const SizedBox(width: 8),
+                            Text(e.estCreance ? 'Encaisser' : 'Marquer payée',
+                                style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                          ]))
+                        else
+                          PopupMenuItem(value: 'annuler', child: Row(children: [
+                            const Icon(Icons.undo, size: 15, color: AppColors.text3),
+                            const SizedBox(width: 8),
+                            Text('Annuler la validation', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                          ])),
+                        PopupMenuItem(value: 'supprimer', child: Row(children: [
+                          const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
                           const SizedBox(width: 8),
-                          Text('Marquer payée', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                        ]))
-                      else
-                        PopupMenuItem(enabled: false, child: Row(children: [
-                          const Icon(Icons.check_circle, size: 15, color: AppColors.green),
-                          const SizedBox(width: 8),
-                          Text('Déjà payée', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3)),
+                          Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
                         ])),
-                    ],
-                  )),
-                ]),
-              );
-            }),
+                      ],
+                    )),
+                  ]),
+                );
+              }),
           ]),
         ),
       ),
@@ -173,6 +452,10 @@ class _ComptaTabState extends State<_ComptaTab> {
   DateTime _date = DateTime.now();
   String _categorie = Expense.categories.first;
   String? _factureNumero; // null = générale
+  /// Mois consulté. La comptabilité ne montre qu'un mois à la fois : au
+  /// passage au mois suivant, l'écran repart à zéro sur le nouveau mois.
+  String? _mois;
+  bool _erreurDepense = false;
 
   @override
   void dispose() {
@@ -181,8 +464,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     super.dispose();
   }
 
-  String _fmtDate(DateTime d) =>
-      '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+  String _fmtDate(DateTime d) => Fmt.jour(d);
 
   Future<DateTime?> _pickDate(DateTime initial) => showDatePicker(
         context: context,
@@ -191,9 +473,11 @@ class _ComptaTabState extends State<_ComptaTab> {
         lastDate: DateTime(2100),
       );
 
-  void _addExpense(AppState state) {
+  /// Enregistre la dépense saisie. Retourne false si le formulaire est
+  /// incomplet, pour que la boîte reste ouverte et signale ce qui manque.
+  bool _addExpense(AppState state) {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
-    if (_labelCtrl.text.trim().isEmpty || montant <= 0) return;
+    if (_labelCtrl.text.trim().isEmpty || montant <= 0) return false;
     state.addExpense(Expense(
       id: DateTime.now().millisecondsSinceEpoch,
       date: _date,
@@ -202,9 +486,123 @@ class _ComptaTabState extends State<_ComptaTab> {
       category: _categorie,
       factureNumero: _factureNumero,
     ));
+    return true;
+  }
+
+  /// Questionnaire de saisie d'une dépense — même forme que les créances et
+  /// les dettes : un bouton, une boîte, la page reste sur les listes.
+  Future<void> _ouvrirFormulaireDepense(AppState state, List<DocumentItem> factures) async {
     _labelCtrl.clear();
     _montantCtrl.clear();
-    setState(() => _date = DateTime.now());
+    _date = DateTime.now();
+    _categorie = Expense.categories.first;
+    _factureNumero = null;
+    _erreurDepense = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => Dialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 480),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text('Nouvelle Dépense',
+                        style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+                    const SizedBox(height: 2),
+                    Text('Imputée au mois de sa date.',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                  ])),
+                  IconButton(
+                    tooltip: 'Fermer',
+                    icon: const Icon(Icons.close, size: 18, color: AppColors.text2),
+                    onPressed: () => Navigator.of(ctx).pop(),
+                  ),
+                ]),
+              ),
+              const Divider(height: 1, color: AppColors.border),
+
+              Flexible(child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  _field('LIBELLÉ', _tf(_labelCtrl, 'Ex : Achat matériel')),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 12, runSpacing: 14, crossAxisAlignment: WrapCrossAlignment.end, children: [
+                    _field('MONTANT (FCFA)', SizedBox(width: 190, child: _tf(_montantCtrl, '0', numeric: true))),
+                    _field('DATE', GestureDetector(
+                      onTap: () async {
+                        final d = await _pickDate(_date);
+                        if (d != null) setLocal(() => _date = d);
+                      },
+                      child: Container(
+                        width: 190, height: 40,
+                        alignment: Alignment.centerLeft,
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                        child: Row(children: [
+                          const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.text3),
+                          const SizedBox(width: 8),
+                          Text(_fmtDate(_date), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                        ]),
+                      ),
+                    )),
+                  ]),
+                  const SizedBox(height: 14),
+                  _field('RATTACHEMENT', _factureDropdown(factures, setLocal)),
+                  const SizedBox(height: 16),
+                  Text('CATÉGORIE', style: AppTheme.label),
+                  const SizedBox(height: 6),
+                  Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
+                    onTap: () => setLocal(() => _categorie = c),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _categorie == c ? AppColors.primary : AppColors.bg,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: _categorie == c ? AppColors.primary : AppColors.border),
+                      ),
+                      child: Text(c, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _categorie == c ? Colors.white : AppColors.text2)),
+                    ),
+                  )).toList()),
+
+                  if (_erreurDepense) ...[
+                    const SizedBox(height: 14),
+                    Text('Renseignez le libellé et un montant supérieur à 0.',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+                  ],
+                ]),
+              )),
+
+              const Divider(height: 1, color: AppColors.border),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+                  ),
+                  const SizedBox(width: 8),
+                  PrimaryBtn(label: 'Enregistrer', icon: Icons.check, onTap: () {
+                    if (_addExpense(state)) {
+                      Navigator.of(ctx).pop();
+                    } else {
+                      setLocal(() => _erreurDepense = true);
+                    }
+                  }),
+                ]),
+              ),
+            ]),
+          ),
+        ),
+      ),
+    );
+    if (mounted) setState(() {});
   }
 
   @override
@@ -212,61 +610,55 @@ class _ComptaTabState extends State<_ComptaTab> {
     final state = context.watch<AppState>();
     final factures = state.documents['facture'] ?? [];
     final expenses = state.expenses;
-    final t = Comptabilite.totaux(factures, expenses);
-    final rows = Comptabilite.bilanMensuel(factures, expenses, state.dimePaidMonths, state.dimePaidDates);
-    final generales = expenses.where((e) => e.factureNumero == null).toList();
+    final engagements = state.engagements;
+    final rows = Comptabilite.bilanMensuel(
+        factures, expenses, engagements, state.dimePaidMonths, state.dimePaidDates);
+
+    // Mois consultables : ceux qui ont connu du mouvement, plus le mois en
+    // cours (vide au premier jour du mois — c'est la « peau neuve »).
+    final moisDispo = <String>{...rows.map((r) => r.monthKey), state.moisCourant}.toList()..sort();
+    final mois = moisDispo.contains(_mois) ? _mois! : state.moisCourant;
+    final estMoisCourant = mois == state.moisCourant;
+    final bilan = Comptabilite.ligneMois(mois, rows);
+
+    // Les factures encaissées se rangent au mois de leur encaissement ; celles
+    // qui ne le sont pas encore restent sur le mois en cours, puisque c'est là
+    // qu'on les bascule.
+    final facturesMois = factures.where((f) => f.encaissee && f.dateEncaissement != null
+        ? Comptabilite.monthKeyFromDdMmYyyy(f.dateEncaissement!) == mois
+        : estMoisCourant).toList();
+    final generales = expenses.where((e) =>
+        e.factureNumero == null && Comptabilite.monthKeyFromDate(e.date) == mois).toList();
+    final engagementsMois = engagements.where((e) =>
+        e.regle && Comptabilite.monthKeyFromDdMmYyyy(e.dateReglement!) == mois).toList();
 
     return Column(children: [
-      // Synthèse
+      _selecteurMois(moisDispo, mois, estMoisCourant),
+      const SizedBox(height: 16),
+
+      // Synthèse du mois affiché
       StatGrid(cards: [
-        StatCard(label: 'REVENU HT ENCAISSÉ', value: Fmt.millions(t.revenuHt), unit: 'FCFA'),
-        StatCard(label: 'DÉPENSES', value: Fmt.millions(t.depenses), unit: 'FCFA'),
-        StatCard(label: 'BÉNÉFICE', value: Fmt.millions(t.benefice), unit: 'FCFA', red: t.benefice < 0),
-        StatCard(label: 'DÎME (10%)', value: Fmt.millions(t.dime), unit: 'FCFA'),
+        StatCard(label: 'REVENU HT ENCAISSÉ', value: Fmt.number(bilan?.revenuHt ?? 0), unit: 'FCFA'),
+        StatCard(label: 'DÉPENSES', value: Fmt.number(bilan?.depenses ?? 0), unit: 'FCFA'),
+        StatCard(label: 'BÉNÉFICE', value: Fmt.number(bilan?.benefice ?? 0), unit: 'FCFA', red: (bilan?.benefice ?? 0) < 0),
+        StatCard(label: 'DÎME (10%)', value: Fmt.number(bilan?.dime ?? 0), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
 
-      // Ajouter une dépense
-      CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('Ajouter une dépense', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
-        const SizedBox(height: 14),
-        Wrap(spacing: 12, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.end, children: [
-          _field('LIBELLÉ', SizedBox(width: 240, child: _tf(_labelCtrl, 'Ex : Achat matériel'))),
-          _field('MONTANT (FCFA)', SizedBox(width: 140, child: _tf(_montantCtrl, '0', numeric: true))),
-          _field('DATE', GestureDetector(
-            onTap: () async {
-              final d = await _pickDate(_date);
-              if (d != null) setState(() => _date = d);
-            },
-            child: Container(
-              width: 130, height: 40,
-              alignment: Alignment.centerLeft,
-              padding: const EdgeInsets.symmetric(horizontal: 10),
-              decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
-              child: Text(_fmtDate(_date), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-            ),
-          )),
-          _field('RATTACHEMENT', _factureDropdown(factures)),
-        ]),
-        const SizedBox(height: 12),
-        Text('CATÉGORIE', style: AppTheme.label),
-        const SizedBox(height: 6),
-        Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
-          onTap: () => setState(() => _categorie = c),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: _categorie == c ? AppColors.primary : AppColors.bg,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: _categorie == c ? AppColors.primary : AppColors.border),
-            ),
-            child: Text(c, style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: _categorie == c ? Colors.white : AppColors.text2)),
+      // La saisie se fait dans une boîte, comme pour les créances et les
+      // dettes — et seulement sur le mois en cours : on n'écrit pas dans un
+      // mois déjà clôturé.
+      if (estMoisCourant) ...[
+        Row(children: [
+          const Spacer(),
+          PrimaryBtn(
+            label: 'Nouvelle Dépense',
+            icon: Icons.add,
+            onTap: () => _ouvrirFormulaireDepense(state, factures),
           ),
-        )).toList()),
-        const SizedBox(height: 16),
-        PrimaryBtn(label: 'Ajouter la dépense', icon: Icons.add, onTap: () => _addExpense(state)),
-      ])),
-      const SizedBox(height: 20),
+        ]),
+        const SizedBox(height: 14),
+      ],
 
       // Bénéfice par facture
       CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -282,10 +674,10 @@ class _ComptaTabState extends State<_ComptaTab> {
             Expanded(flex: 3, child: ThCell('ENCAISSÉE')),
           ])),
           const Divider(height: 1, color: AppColors.border),
-          if (factures.isEmpty)
-            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune facture', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          if (facturesMois.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune facture sur ce mois', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
           else
-            ...factures.map((f) => _factureRow(state, f, expenses)),
+            ...facturesMois.map((f) => _factureRow(state, f, expenses)),
         ])),
       ])),
       const SizedBox(height: 20),
@@ -311,33 +703,73 @@ class _ComptaTabState extends State<_ComptaTab> {
       ])),
       const SizedBox(height: 20),
 
-      // Bilan mensuel
+      // Dettes & créances validées sur le mois — c'est ce qui explique
+      // l'écart entre les factures encaissées et le revenu du mois.
       CardBox(padding: EdgeInsets.zero, child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-          child: Text('Bilan mensuel', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 18, 20, 2),
+          child: Text('Dettes & créances réglées', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        Padding(padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+          child: Text('Validées depuis l\'onglet Engagements : les créances alimentent le revenu, les dettes les dépenses.',
+              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))),
         HScrollTable(minWidth: 720, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
-            Expanded(flex: 3, child: ThCell('MOIS')),
-            Expanded(flex: 3, child: ThCell('REVENU HT')),
-            Expanded(flex: 3, child: ThCell('DÉPENSES')),
-            Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
-            Expanded(flex: 3, child: ThCell('DÎME (10%)')),
+            Expanded(flex: 2, child: ThCell('TYPE')),
+            Expanded(flex: 3, child: ThCell('RÉFÉRENCE')),
+            Expanded(flex: 4, child: ThCell('TIERS')),
+            Expanded(flex: 3, child: ThCell('MONTANT')),
+            Expanded(flex: 3, child: ThCell('RÉGLÉ LE')),
           ])),
           const Divider(height: 1, color: AppColors.border),
-          if (rows.isEmpty)
-            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune activité', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          if (engagementsMois.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucun règlement sur ce mois', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
           else
-            ...rows.map((r) => Row(children: [
-              _cell(r.label, flex: 3, bold: true),
-              _cell(Fmt.money(r.revenuHt), flex: 3),
-              _cell(Fmt.money(r.depenses), flex: 3),
-              _cell(Fmt.money(r.benefice), flex: 3, color: r.benefice < 0 ? AppColors.red : AppColors.text1),
-              _cell(Fmt.money(r.dime), flex: 3, color: AppColors.primary, bold: true),
-            ])),
+            ...engagementsMois.map((e) => Container(
+              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
+              child: Row(children: [
+                _cell(e.estCreance ? 'Créance' : 'Dette', flex: 2, bold: true),
+                _cell(e.num, flex: 3, color: AppColors.primary),
+                _cell(e.tiers, flex: 4),
+                _cell('${e.estCreance ? '+' : '−'} ${Fmt.money(e.montant)}', flex: 3, bold: true,
+                    color: e.estCreance ? AppColors.green : AppColors.red),
+                _cell(e.dateReglement ?? '—', flex: 3, color: AppColors.text2),
+              ]),
+            )),
         ])),
       ])),
     ]);
   }
+
+  /// Sélecteur de mois : la comptabilité n'affiche qu'un mois à la fois.
+  Widget _selecteurMois(List<String> dispo, String mois, bool courant) => CardBox(
+    child: Wrap(spacing: 20, runSpacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+        Text('EXERCICE AFFICHÉ', style: AppTheme.label),
+        const SizedBox(height: 4),
+        Text(Comptabilite.monthLabel(mois),
+            style: GoogleFonts.dmSans(fontSize: 19, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      ]),
+      Container(
+        width: 190, height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+        child: DropdownButtonHideUnderline(child: DropdownButton<String>(
+          value: mois,
+          isExpanded: true,
+          style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+          items: dispo.reversed.map((k) => DropdownMenuItem<String>(
+            value: k, child: Text(Comptabilite.monthLabel(k), overflow: TextOverflow.ellipsis))).toList(),
+          onChanged: (v) => setState(() => _mois = v),
+        )),
+      ),
+      if (!courant)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+          decoration: BoxDecoration(color: AppColors.grayBg, borderRadius: BorderRadius.circular(20)),
+          child: Text('Mois clôturé — consultation seule',
+              style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text2)),
+        ),
+    ]),
+  );
 
   Widget _factureRow(AppState state, DocumentItem f, List<Expense> expenses) {
     final ht = Comptabilite.factureHt(f);
@@ -359,7 +791,7 @@ class _ComptaTabState extends State<_ComptaTab> {
           child: Row(children: [
             Switch(
               value: f.encaissee,
-              activeColor: AppColors.green,
+              activeThumbColor: AppColors.green,
               onChanged: (v) async {
                 if (v) {
                   final d = await _pickDate(DateTime.now());
@@ -394,8 +826,10 @@ class _ComptaTabState extends State<_ComptaTab> {
     ]),
   );
 
-  Widget _factureDropdown(List<DocumentItem> factures) => Container(
-    width: 200, height: 40,
+  /// `rebuild` vient du StatefulBuilder de la boîte : c'est lui qu'il faut
+  /// rafraîchir, pas l'onglet en arrière-plan.
+  Widget _factureDropdown(List<DocumentItem> factures, StateSetter rebuild) => Container(
+    height: 40,
     padding: const EdgeInsets.symmetric(horizontal: 10),
     decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
     child: DropdownButtonHideUnderline(child: DropdownButton<String?>(
@@ -407,43 +841,45 @@ class _ComptaTabState extends State<_ComptaTab> {
         DropdownMenuItem<String?>(value: null, child: Text('Générale', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2))),
         ...factures.map((f) => DropdownMenuItem<String?>(value: f.numero, child: Text(f.numero, overflow: TextOverflow.ellipsis))),
       ],
-      onChanged: (v) => setState(() => _factureNumero = v),
+      onChanged: (v) => rebuild(() => _factureNumero = v),
     )),
   );
 
-  Widget _field(String label, Widget child) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-    Text(label, style: AppTheme.label),
-    const SizedBox(height: 6),
-    child,
-  ]);
-
-  Widget _tf(TextEditingController c, String hint, {bool numeric = false}) => SizedBox(
-    height: 40,
-    child: TextField(
-      controller: c,
-      keyboardType: numeric ? TextInputType.number : TextInputType.text,
-      style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
-      decoration: InputDecoration(
-        hintText: hint,
-        hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
-        filled: true, fillColor: AppColors.bg,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-        enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
-      ),
-    ),
-  );
-
-  Widget _cell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(
-    flex: flex,
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-      child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
-        style: GoogleFonts.dmSans(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: color)),
-    ),
-  );
 }
+
+// ── Fabriques partagées par les onglets ───────────────────
+Widget _field(String label, Widget child) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+  Text(label, style: AppTheme.label),
+  const SizedBox(height: 6),
+  child,
+]);
+
+Widget _tf(TextEditingController c, String hint, {bool numeric = false}) => SizedBox(
+  height: 40,
+  child: TextField(
+    controller: c,
+    keyboardType: numeric ? TextInputType.number : TextInputType.text,
+    style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+    decoration: InputDecoration(
+      hintText: hint,
+      hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
+      filled: true, fillColor: AppColors.bg,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8), isDense: true,
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
+    ),
+  ),
+);
+
+Widget _cell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(
+  flex: flex,
+  child: Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+    child: Text(text, maxLines: 1, overflow: TextOverflow.ellipsis,
+      style: GoogleFonts.dmSans(fontSize: 13, fontWeight: bold ? FontWeight.w700 : FontWeight.w500, color: color)),
+  ),
+);
 
 // ── Dîme Tab (recalculée sur le bénéfice mensuel) ─────────
 class _DimeTab extends StatelessWidget {
@@ -456,16 +892,17 @@ class _DimeTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final factures = state.documents['facture'] ?? [];
-    final rows = Comptabilite.bilanMensuel(factures, state.expenses, state.dimePaidMonths, state.dimePaidDates);
+    final rows = Comptabilite.bilanMensuel(
+        factures, state.expenses, state.engagements, state.dimePaidMonths, state.dimePaidDates);
     final totalBenef = rows.fold<double>(0, (s, r) => s + (r.benefice > 0 ? r.benefice : 0));
     final totalDime = rows.fold<double>(0, (s, r) => s + r.dime);
     final totalPaye = rows.where((r) => r.dimePaid).fold<double>(0, (s, r) => s + r.dime);
 
     return Column(children: [
       StatGrid(cards: [
-        StatCard(label: 'BÉNÉFICE (MOIS +)', value: Fmt.millions(totalBenef), unit: 'FCFA'),
-        StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.millions(totalDime), unit: 'FCFA', red: true),
-        StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.millions(totalPaye), unit: 'FCFA'),
+        StatCard(label: 'BÉNÉFICE (MOIS +)', value: Fmt.number(totalBenef), unit: 'FCFA'),
+        StatCard(label: 'DÎME TOTALE (10%)', value: Fmt.number(totalDime), unit: 'FCFA', red: true),
+        StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.number(totalPaye), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
       CardBox(padding: EdgeInsets.zero, child: HScrollTable(minWidth: 880, child: Column(children: [
@@ -621,7 +1058,7 @@ class _TachesTabState extends State<_TachesTab> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
               decoration: BoxDecoration(
-                color: _priorite == p ? _priorityColors[p]!.withOpacity(0.12) : AppColors.bg,
+                color: _priorite == p ? _priorityColors[p]!.withValues(alpha: 0.12) : AppColors.bg,
                 borderRadius: BorderRadius.circular(6),
                 border: Border.all(color: _priorite == p ? _priorityColors[p]! : AppColors.border),
               ),
@@ -814,7 +1251,7 @@ class _NoteCardState extends State<_NoteCard> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppColors.border),
-            boxShadow: _hovered ? [BoxShadow(color: n.color.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))] : [],
+            boxShadow: _hovered ? [BoxShadow(color: n.color.withValues(alpha: 0.1), blurRadius: 10, offset: const Offset(0, 4))] : [],
           ),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             // Bandeau d'accent coloré en haut de la carte

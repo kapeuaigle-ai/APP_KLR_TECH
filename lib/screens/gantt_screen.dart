@@ -110,7 +110,7 @@ class _GanttRow extends StatelessWidget {
             width: barWidth, height: 20,
             child: Container(
               decoration: BoxDecoration(
-                color: project.color.withOpacity(0.15),
+                color: project.color.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(6),
               ),
             ),

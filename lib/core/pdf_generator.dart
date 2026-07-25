@@ -1,12 +1,14 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'document_pagination.dart';
 import 'models.dart';
+import 'signature_image.dart';
 import 'utils.dart';
 
 // ─────────────────────────────────────────────────────────
@@ -51,12 +53,11 @@ class PdfGenerator {
     return 'BON DE LIVRAISON';
   }
 
-  // Numérotation partagée proforma/facture/BL : KLR-01-180726
-  static String _numero(AppSettings s, String type) {
-    final n = DateTime.now();
-    final d = '${n.day.toString().padLeft(2,'0')}${n.month.toString().padLeft(2,'0')}${n.year.toString().substring(2)}';
-    return '${s.prefix}-01-$d';
-  }
+  // Repli si l'appelant ne fournit pas de numéro : premier document du jour de
+  // ce type (`PREFIX-{L}01-JJMMAAAA`). En pratique les écrans passent toujours
+  // le vrai numéro ; ce repli garde juste un format cohérent.
+  static String _numero(AppSettings s, String type) =>
+      DocNumero.next(s.prefix, type, const [], DateTime.now());
 
   static String _dateStr() {
     const m = ['Janvier','Février','Mars','Avril','Mai','Juin',
@@ -65,7 +66,29 @@ class PdfGenerator {
     return '${n.day} ${m[n.month - 1]} ${n.year}';
   }
 
-  // ── Losange KLR ──────────────────────────────────────
+  // ── Logo KLR ─────────────────────────────────────────
+  /// Logo officiel chargé depuis les assets, mémorisé pour ne le décoder
+  /// qu'une fois par session (il apparaît sur chaque page de chaque document).
+  static pw.ImageProvider? _logo;
+  static bool _logoTried = false;
+
+  static Future<pw.ImageProvider?> _loadLogo() async {
+    if (_logoTried) return _logo;
+    _logoTried = true;
+    try {
+      final data = await rootBundle.load('assets/logo/klr_mark.png');
+      _logo = pw.MemoryImage(data.buffer.asUint8List());
+    } catch (_) {
+      _logo = null; // asset indisponible : on retombe sur le losange dessiné
+    }
+    return _logo;
+  }
+
+  /// Marque affichée en tête de document : le vrai logo si disponible, sinon
+  /// le losange tracé (repli qui garantit un en-tête jamais vide).
+  static pw.Widget _mark(double size) =>
+      _logo != null ? pw.Image(_logo!, height: size, width: size) : _diamond(size: size);
+
   static pw.Widget _diamond({double size = 22}) => pw.CustomPaint(
     size: PdfPoint(size, size),
     painter: (canvas, s) {
@@ -85,7 +108,7 @@ class PdfGenerator {
     return pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
       pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
         pw.Row(children: [
-          _diamond(size: 26),
+          _mark(26),
           pw.SizedBox(width: 8),
           pw.Text('KLR TECH', style: _ts(14, font: bold, spacing: 0.5)),
         ]),
@@ -107,7 +130,7 @@ class PdfGenerator {
       pw.Font bold, pw.Font reg) {
     return pw.Column(children: [
       pw.Row(children: [
-        _diamond(size: 18),
+        _mark(18),
         pw.SizedBox(width: 6),
         pw.Text('KLR TECH', style: _ts(11, font: bold, spacing: 0.5)),
         pw.Spacer(),
@@ -213,14 +236,11 @@ class PdfGenerator {
   // casser silencieusement dans le moteur PDF.
   // CrossAxisAlignment.stretch → la boîte signature a la même hauteur
   // que la colonne conditions.
-  // Clause de garantie : source unique dans DocumentPagination.
-  static const _warrantyClause = DocumentPagination.warrantyClause;
-
-  static pw.Widget _conditionsRow(String conditions, pw.Font bold, pw.Font reg) {
-    const clause = _warrantyClause;
+  static pw.Widget _conditionsRow(String conditions, String warranty, pw.Font bold, pw.Font reg,
+      pw.ImageProvider? sigImage, String sigLabel) {
     // Hauteur exacte de la colonne conditions → hauteur de la case Signature,
     // pour qu'elle s'aligne au même niveau que le texte.
-    final boxH = DocumentPagination.conditionsLeftHeight(conditions, clause);
+    final boxH = DocumentPagination.conditionsLeftHeight(conditions, warranty);
 
     // Alignement `start` (pas `stretch`) : dans le moteur PDF, `stretch` effondre
     // le Row à hauteur nulle. La case reçoit donc une hauteur explicite calculée.
@@ -254,7 +274,7 @@ class PdfGenerator {
                   ),
                 )),
             pw.SizedBox(height: 5),
-            pw.Text(clause, style: _ts(6, color: _grey3)),
+            pw.Text(warranty, style: _ts(6, color: _grey3)),
           ],
         )),
 
@@ -272,6 +292,15 @@ class PdfGenerator {
                 borderRadius: pw.BorderRadius.circular(16),
               ),
             )),
+            // Signature du manager si présente : image + légende, à l'intérieur
+            // du cadre. Même agencement que l'aperçu.
+            if (sigImage != null)
+              pw.Positioned(top: 7, left: 8, right: 8, bottom: 5, child: pw.Column(children: [
+                pw.Expanded(child: pw.Center(child: pw.Image(sigImage, fit: pw.BoxFit.contain))),
+                if (sigLabel.isNotEmpty)
+                  pw.Text(sigLabel, textAlign: pw.TextAlign.center,
+                      style: _ts(6.5, color: _grey2, font: bold)),
+              ])),
             pw.Positioned(top: -5, left: 0, right: 0, child: pw.Center(child: pw.Container(
               color: PdfColors.white,
               padding: const pw.EdgeInsets.symmetric(horizontal: 6),
@@ -312,6 +341,7 @@ class PdfGenerator {
     String? date,
   }) async {
     final doc = pw.Document(title: _typeLabel(type));
+    await _loadLogo();
 
     // Google Fonts → supporte tous les caractères Unicode (é, è, •, —, …)
     // Fallback sur Helvetica si pas d'accès réseau.
@@ -325,6 +355,9 @@ class PdfGenerator {
     }
     final docNumero = numero ?? _numero(settings, type);
     final docDate   = date ?? _dateStr();
+    // Signature du manager décodée une seule fois, réutilisée sur la dernière page.
+    final sigBytes = decodeSignature(settings.signature);
+    final pw.ImageProvider? sigImage = sigBytes != null ? pw.MemoryImage(sigBytes) : null;
     final pageContext = DocumentContext(
       typeLabel: _typeLabel(type),
       numero: docNumero,
@@ -338,7 +371,7 @@ class PdfGenerator {
       objet: objet,
       montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
       conditions: conditions,
-      warranty: _warrantyClause,
+      warranty: settings.warranty,
       footerLine: settings.footerLine,
       showMontant: ttc > 0 && type != 'bl',
       tva: tva,
@@ -413,7 +446,7 @@ class PdfGenerator {
                         style: _ts(7.5, color: _grey3))),
 
                 // Conditions + Signature (dernière page)
-                if (isLast) _conditionsRow(conditions, bold, reg),
+                if (isLast) _conditionsRow(conditions, settings.warranty, bold, reg, sigImage, settings.signatureLabel),
               ],
             ),
           )),
@@ -432,15 +465,11 @@ class PdfGenerator {
   static Future<String?> saveWithDialog({
     required List<int> bytes,
     required String type,
+    required String numero,
   }) async {
-    final now = DateTime.now();
-    final d = '${now.day.toString().padLeft(2,'0')}'
-              '${now.month.toString().padLeft(2,'0')}'
-              '${now.year}';
-    final p = type == 'proforma' ? 'Proforma'
-            : type == 'facture'  ? 'Facture'
-            : 'BL';
-    final filename = 'KLR-$p-$d.pdf';
+    // Nom pré-rempli unique par document (compteur du jour repris du numéro) :
+    // voir DocNumero.fileName. Aucun renommage manuel nécessaire.
+    final filename = DocNumero.fileName(type, numero, DateTime.now());
 
     // Sur le web, dart:io/FilePicker ne peuvent pas écrire de fichier :
     // on déclenche le téléchargement du navigateur via le paquet printing.
@@ -489,7 +518,7 @@ class PdfGenerator {
     required AppSettings settings,
     required List<DimeEntry> dime,
     required List<Client> clients,
-    required List<FactureEntry> factures,
+    required List<Engagement> engagements,
   }) async {
     final doc = pw.Document(title: 'Rapport financier');
 
@@ -504,8 +533,8 @@ class PdfGenerator {
 
     final totalRevenu = dime.fold<double>(0, (s, d) => s + d.revenu);
     final totalDime = dime.fold<double>(0, (s, d) => s + d.dime);
-    final totalPaye = factures.where((f) => f.statut == 'paye').fold<double>(0, (s, f) => s + f.montant);
-    final totalRetard = factures.where((f) => f.statut == 'retard').fold<double>(0, (s, f) => s + f.montant);
+    final totalPaye = engagements.where((e) => e.estCreance && e.statut == 'paye').fold<double>(0, (s, e) => s + e.montant);
+    final totalRetard = engagements.where((e) => e.statut == 'retard').fold<double>(0, (s, e) => s + e.montant);
     final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
     final topClients = clients.where((c) => c.totalFacture > 0).toList()
       ..sort((a, b) => b.totalFacture.compareTo(a.totalFacture));
@@ -564,7 +593,7 @@ class PdfGenerator {
         pw.Row(children: [
           kpi('REVENU TOTAL', '${Fmt.number(totalRevenu)} FCFA'),
           kpi('DÎME (10%)', '${Fmt.number(totalDime)} FCFA'),
-          kpi('ENCAISSÉ', '${Fmt.number(totalPaye)} FCFA'),
+          kpi('CRÉANCES ENCAISSÉES', '${Fmt.number(totalPaye)} FCFA'),
           kpi('EN RETARD', '${Fmt.number(totalRetard)} FCFA'),
         ]),
 

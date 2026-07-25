@@ -3,7 +3,9 @@ import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/document_pagination.dart';
+import '../core/signature_image.dart';
 import '../core/utils.dart';
+import 'klr_logo.dart';
 
 // ─────────────────────────────────────────────────────────
 //  A4 Preview — paginated automatiquement
@@ -54,9 +56,6 @@ class DocumentPreview extends StatelessWidget {
     return '${n.day} ${months[n.month - 1]} ${n.year}';
   }
 
-  // Clause de garantie : source unique dans DocumentPagination.
-  static const warrantyClause = DocumentPagination.warrantyClause;
-
   DocumentContext _pageContext() => DocumentContext(
         typeLabel: _typeLabel,
         numero: numero,
@@ -70,7 +69,7 @@ class DocumentPreview extends StatelessWidget {
         objet: objet,
         montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
         conditions: conditions,
-        warranty: warrantyClause,
+        warranty: settings.warranty,
         footerLine: settings.footerLine,
         showMontant: ttc > 0 && !_isBl,
         tva: tva,
@@ -122,7 +121,7 @@ class DocumentPreview extends StatelessWidget {
                 // En-tête complet (page 1)
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Row(children: [
-                    CustomPaint(size: const Size(26, 26), painter: _DiamondPainter()),
+                    const KlrLogo(height: 26, markOnly: true),
                     const SizedBox(width: 8),
                     Text('KLR TECH', style: GoogleFonts.dmSans(
                         fontSize: 14, fontWeight: FontWeight.w900, color: AppColors.text1, letterSpacing: 0.5)),
@@ -162,7 +161,7 @@ class DocumentPreview extends StatelessWidget {
               ] else ...[
                 // Mini en-tête de continuation
                 Row(children: [
-                  CustomPaint(size: const Size(18, 18), painter: _DiamondPainter()),
+                  const KlrLogo(height: 18, markOnly: true),
                   const SizedBox(width: 6),
                   Text('KLR TECH', style: GoogleFonts.dmSans(
                       fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.text1, letterSpacing: 0.5)),
@@ -235,27 +234,13 @@ class DocumentPreview extends StatelessWidget {
                       )),
                       const SizedBox(height: 5),
                       Text(
-                        warrantyClause,
+                        settings.warranty,
                         style: GoogleFonts.dmSans(fontSize: 6, color: AppColors.text3, height: 1.25),
                       ),
                     ])),
                     const SizedBox(width: 16),
                     // Case signature étirée sur la hauteur des conditions.
-                    Expanded(child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        Positioned.fill(child: CustomPaint(painter: _DashedRectPainter())),
-                        Positioned(
-                          top: -5, left: 0, right: 0,
-                          child: Center(child: Container(
-                            color: Colors.white,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            child: Text('Signature', style: GoogleFonts.dmSans(
-                                fontSize: 7.5, fontWeight: FontWeight.w600, color: AppColors.text3)),
-                          )),
-                        ),
-                      ],
-                    )),
+                    _signatureBox(),
                   ],
                 )),
             ]),
@@ -277,6 +262,41 @@ class DocumentPreview extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  // Case « Signature » de la dernière page. Vide, elle garde son cadre pointillé
+  // pour une signature manuscrite ; renseignée, elle affiche l'image et la
+  // légende du manager (rendu identique au PDF via la même source base64).
+  Widget _signatureBox() {
+    final bytes = decodeSignature(settings.signature);
+    return Expanded(child: Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Positioned.fill(child: CustomPaint(painter: _DashedRectPainter())),
+        if (bytes != null)
+          Positioned.fill(child: Padding(
+            padding: const EdgeInsets.fromLTRB(10, 9, 10, 5),
+            child: Column(children: [
+              Expanded(child: Center(child: Image.memory(bytes, fit: BoxFit.contain))),
+              if (settings.signatureLabel.isNotEmpty) ...[
+                const SizedBox(height: 2),
+                Text(settings.signatureLabel,
+                    textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(fontSize: 6.5, fontWeight: FontWeight.w600, color: AppColors.text2)),
+              ],
+            ]),
+          )),
+        Positioned(
+          top: -5, left: 0, right: 0,
+          child: Center(child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 6),
+            child: Text('Signature', style: GoogleFonts.dmSans(
+                fontSize: 7.5, fontWeight: FontWeight.w600, color: AppColors.text3)),
+          )),
+        ),
+      ],
+    ));
   }
 
   @override
@@ -323,18 +343,14 @@ class DocumentPreview extends StatelessWidget {
 //  Dashed rounded-rect painter  (PathMetrics → coins arrondis)
 // ─────────────────────────────────────────────────────────
 class _DashedRectPainter extends CustomPainter {
-  final Color color;
-  final double dashWidth;
-  final double dashSpace;
-  final double borderRadius;
+  // Valeurs fixes : la case signature est le seul usage de ce painter.
+  static const Color color = AppColors.border;
+  static const double dashWidth = 4;
+  static const double dashSpace = 3;
+  static const double borderRadius = 16;
   static const double strokeWidth = 0.8;
 
-  const _DashedRectPainter({
-    this.color = AppColors.border,
-    this.dashWidth = 4,
-    this.dashSpace = 3,
-    this.borderRadius = 16,
-  });
+  const _DashedRectPainter();
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -358,10 +374,9 @@ class _DashedRectPainter extends CustomPainter {
     }
   }
 
+  // Painter sans état (uniquement des constantes) : jamais besoin de repeindre.
   @override
-  bool shouldRepaint(covariant _DashedRectPainter old) =>
-      old.color != color || old.dashWidth != dashWidth ||
-      old.dashSpace != dashSpace || old.borderRadius != borderRadius;
+  bool shouldRepaint(covariant _DashedRectPainter old) => false;
 }
 
 // ─────────────────────────────────────────────────────────
@@ -532,28 +547,4 @@ class _ToolIconState extends State<_ToolIcon> {
   }
 }
 
-// ── Diamond logo painter ──────────────────────────────────
-class _DiamondPainter extends CustomPainter {
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = AppColors.primary;
-    final path = Path()
-      ..moveTo(size.width / 2, 0)
-      ..lineTo(size.width, size.height / 2)
-      ..lineTo(size.width / 2, size.height)
-      ..lineTo(0, size.height / 2)
-      ..close();
-    canvas.drawPath(path, paint);
-    final inner = Paint()..color = Colors.white.withAlpha(60);
-    final ip = Path()
-      ..moveTo(size.width / 2, size.height * 0.28)
-      ..lineTo(size.width * 0.72, size.height / 2)
-      ..lineTo(size.width / 2, size.height * 0.72)
-      ..lineTo(size.width * 0.28, size.height / 2)
-      ..close();
-    canvas.drawPath(ip, inner);
-  }
-  @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
-}
 

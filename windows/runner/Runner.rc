@@ -90,12 +90,12 @@ BEGIN
         BLOCK "040904e4"
         BEGIN
             VALUE "CompanyName", "ci.klrtech" "\0"
-            VALUE "FileDescription", "klr_tech_app" "\0"
+            VALUE "FileDescription", "KLR TECH - Gestion" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "klr_tech_app" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 ci.klrtech. All rights reserved." "\0"
             VALUE "OriginalFilename", "klr_tech_app.exe" "\0"
-            VALUE "ProductName", "klr_tech_app" "\0"
+            VALUE "ProductName", "KLR TECH - Gestion" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

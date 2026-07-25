@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../core/theme.dart';
-import '../core/data.dart';
+import '../core/app_state.dart';
 import '../widgets/common.dart';
 
 class ActivitesScreen extends StatefulWidget {
@@ -14,28 +15,30 @@ class ActivitesScreen extends StatefulWidget {
 class _ActivitesScreenState extends State<ActivitesScreen> {
   String _filter = 'tous';
 
+  // Uniquement les types d'activités réellement journalisés par l'app
+  // (voir les appels à _logActivity dans AppState).
   static const _types = [
     ('tous', 'Tous'),
+    ('comptabilite', 'Comptabilité'),
     ('facture', 'Factures'),
     ('paiement', 'Paiements'),
-    ('projet', 'Projets'),
     ('client', 'Clients'),
     ('document', 'Documents'),
-    ('equipe', 'Équipe'),
   ];
 
   static const _typeIcons = {
+    'comptabilite': Icons.account_balance_wallet_outlined,
     'facture': Icons.description_outlined,
     'paiement': Icons.credit_card_outlined,
-    'projet': Icons.dashboard_customize_outlined,
     'client': Icons.person_outline_rounded,
     'document': Icons.folder_outlined,
-    'equipe': Icons.group_outlined,
   };
 
   @override
   Widget build(BuildContext context) {
-    final activities = SampleData.activities;
+    // Le fil est alimenté en direct : clôtures de mois et validations
+    // d'engagements viennent s'y inscrire au fur et à mesure.
+    final activities = context.watch<AppState>().activities;
     final filtered = _filter == 'tous' ? activities : activities.where((a) => a.type == _filter).toList();
 
     return SingleChildScrollView(
@@ -64,7 +67,9 @@ class _ActivitesScreenState extends State<ActivitesScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Activity feed
+            // Activity feed (la carte n'apparaît que s'il y a des activités,
+            // sinon seul l'état vide est affiché)
+            if (filtered.isNotEmpty)
             CardBox(
               child: Column(children: filtered.asMap().entries.map((e) {
                 final a = e.value;
@@ -80,7 +85,7 @@ class _ActivitesScreenState extends State<ActivitesScreen> {
                         Container(
                           width: 36, height: 36,
                           decoration: BoxDecoration(
-                            color: a.color.withOpacity(0.1),
+                            color: a.color.withValues(alpha: 0.1),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(icon, size: 16, color: a.color),

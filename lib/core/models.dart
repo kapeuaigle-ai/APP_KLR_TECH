@@ -1,4 +1,13 @@
 import 'package:flutter/material.dart';
+import 'auth.dart';
+
+/// Encodage couleur ⇄ entier ARGB, pour la persistance JSON.
+int colorToInt(Color c) => c.toARGB32();
+Color colorFromInt(int v) => Color(v);
+
+/// Conversion JSON → double. Défini au niveau bibliothèque car la classe
+/// Engagement possède un champ `num` qui masque le type `num` dans son corps.
+double _toDouble(dynamic v) => (v as num).toDouble();
 
 // ── Client ──────────────────────────────────────────────
 class Client {
@@ -10,15 +19,26 @@ class Client {
   final String email;
   final String phone;
   final double totalFacture;
-  final String status; // 'actif' | 'attente' | 'cours'
   final String address;
 
   const Client({
     required this.id, required this.initials, required this.color,
     required this.name, required this.contact, required this.email,
-    required this.phone, required this.totalFacture, required this.status,
+    required this.phone, required this.totalFacture,
     this.address = '',
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'initials': initials, 'color': colorToInt(color), 'name': name,
+    'contact': contact, 'email': email, 'phone': phone,
+    'totalFacture': totalFacture, 'address': address,
+  };
+
+  factory Client.fromJson(Map<String, dynamic> j) => Client(
+    id: j['id'], initials: j['initials'], color: colorFromInt(j['color']),
+    name: j['name'], contact: j['contact'], email: j['email'], phone: j['phone'],
+    totalFacture: (j['totalFacture'] as num).toDouble(), address: j['address'] ?? '',
+  );
 }
 
 // ── Document ─────────────────────────────────────────────
@@ -45,6 +65,22 @@ class DocumentItem {
     this.clientAddr = '', this.lines = const [],
     this.encaissee = false, this.dateEncaissement,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'numero': numero, 'date': date, 'clientId': clientId,
+    'client': client, 'clientAddr': clientAddr, 'objet': objet,
+    'montant': montant, 'statut': statut,
+    'lines': lines.map((l) => l.toJson()).toList(),
+    'encaissee': encaissee, 'dateEncaissement': dateEncaissement,
+  };
+
+  factory DocumentItem.fromJson(Map<String, dynamic> j) => DocumentItem(
+    id: j['id'], numero: j['numero'], date: j['date'], clientId: j['clientId'],
+    client: j['client'], clientAddr: j['clientAddr'] ?? '', objet: j['objet'],
+    montant: (j['montant'] as num).toDouble(), statut: j['statut'],
+    lines: (j['lines'] as List? ?? []).map((l) => LineItem.fromJson(l)).toList(),
+    encaissee: j['encaissee'] ?? false, dateEncaissement: j['dateEncaissement'],
+  );
 }
 
 // ── Employee ─────────────────────────────────────────────
@@ -99,18 +135,49 @@ class DimeEntry {
   });
 }
 
-// ── Facture History ──────────────────────────────────────
-class FactureEntry {
-  final String num;
-  final String client;
+// ── Engagement : dette ou créance ────────────────────────
+/// Ce que l'entreprise doit (dette) ou ce qu'on lui doit (créance).
+///
+/// Tant qu'il est en cours, un engagement reste hors comptabilité : seule
+/// sa validation (= encaissement d'une créance, paiement d'une dette) le
+/// fait entrer au bilan, dans le mois de son règlement — la comptabilité
+/// de l'app étant tenue en base caisse.
+class Engagement {
+  final int id;
+  final String sens;   // 'creance' (on nous doit) | 'dette' (nous devons)
+  final String num;    // référence libre (n° de facture, de contrat…)
+  final String tiers;  // débiteur pour une créance, créancier pour une dette
+  final String description; // objet de l'engagement, affiché sous le tiers
   final double montant;
-  String statut;
-  final String echeance;
+  String statut;       // 'cours' | 'retard' | 'paye'
+  final String echeance;     // 'dd/MM/yyyy'
+  String? dateReglement;     // 'dd/MM/yyyy' — rempli à la validation
+  final String categorie;    // catégorie de dépense (dettes)
 
-  FactureEntry({
-    required this.num, required this.client, required this.montant,
-    required this.statut, required this.echeance,
+  Engagement({
+    required this.id, required this.sens, required this.num,
+    required this.tiers, required this.montant, required this.statut,
+    required this.echeance, this.description = '',
+    this.dateReglement, this.categorie = 'Autres',
   });
+
+  bool get estCreance => sens == 'creance';
+
+  /// Validé ET daté : les deux conditions pour compter en comptabilité.
+  bool get regle => statut == 'paye' && dateReglement != null;
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'sens': sens, 'num': num, 'tiers': tiers,
+    'description': description, 'montant': montant, 'statut': statut,
+    'echeance': echeance, 'dateReglement': dateReglement, 'categorie': categorie,
+  };
+
+  factory Engagement.fromJson(Map<String, dynamic> j) => Engagement(
+    id: j['id'], sens: j['sens'], num: j['num'], tiers: j['tiers'],
+    description: j['description'] ?? '', montant: _toDouble(j['montant']),
+    statut: j['statut'], echeance: j['echeance'], dateReglement: j['dateReglement'],
+    categorie: j['categorie'] ?? 'Autres',
+  );
 }
 
 // ── Task ─────────────────────────────────────────────────
@@ -125,6 +192,15 @@ class Task {
     required this.id, required this.texte, required this.titre,
     required this.priorite, this.done = false,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'texte': texte, 'titre': titre, 'priorite': priorite, 'done': done,
+  };
+
+  factory Task.fromJson(Map<String, dynamic> j) => Task(
+    id: j['id'], texte: j['texte'], titre: j['titre'],
+    priorite: j['priorite'], done: j['done'] ?? false,
+  );
 }
 
 // ── Note ─────────────────────────────────────────────────
@@ -139,6 +215,16 @@ class Note {
     required this.id, required this.titre, required this.contenu,
     required this.color, required this.date,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'titre': titre, 'contenu': contenu,
+    'color': colorToInt(color), 'date': date,
+  };
+
+  factory Note.fromJson(Map<String, dynamic> j) => Note(
+    id: j['id'], titre: j['titre'], contenu: j['contenu'],
+    color: colorFromInt(j['color']), date: j['date'],
+  );
 }
 
 // ── Activity ─────────────────────────────────────────────
@@ -157,6 +243,18 @@ class ActivityItem {
     required this.desc, required this.auteur, required this.initiales,
     required this.time, required this.color,
   });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'type': type, 'titre': titre, 'desc': desc,
+    'auteur': auteur, 'initiales': initiales, 'time': time,
+    'color': colorToInt(color),
+  };
+
+  factory ActivityItem.fromJson(Map<String, dynamic> j) => ActivityItem(
+    id: j['id'], type: j['type'], titre: j['titre'], desc: j['desc'],
+    auteur: j['auteur'], initiales: j['initiales'], time: j['time'],
+    color: colorFromInt(j['color']),
+  );
 }
 
 // ── Project Card ─────────────────────────────────────────
@@ -178,6 +276,17 @@ class ProjectCard {
   });
 }
 
+/// Clause de garantie par défaut, affichée en bas de la dernière page des
+/// documents. Éditable dans les Paramètres (`AppSettings.warranty`) ; sert
+/// aussi de valeur de repli pour les anciennes sauvegardes et la pagination.
+const kDefaultWarranty =
+    'Tout produit, sauf mention contraire, bénéficie d\'une période de garantie '
+    'contre tout vice de fabrication (retour atelier sans frais de réparation ou '
+    'échange standard dans la limite des stocks disponibles) soumise à '
+    'l\'expertise constructeur, à compter de la date de facturation et à '
+    'condition qu\'il soit tenu en bon état et que les étiquettes de code '
+    'ne soient pas retirées ou déchirées.';
+
 // ── App Settings ─────────────────────────────────────────
 class AppSettings {
   String company;
@@ -191,18 +300,75 @@ class AppSettings {
   String startNum;
   double tva;
   String conditions;
+  /// Signature électronique du manager, image PNG encodée en base64.
+  /// Vide = aucune signature : la case du document reste alors vierge.
+  String signature;
+  /// Légende libre affichée sous la signature (ex. « La Direction »).
+  String signatureLabel;
+  /// Clause de garantie affichée en bas de la dernière page. Personnalisable.
+  String warranty;
+
+  // ── Accès à l'application ──────────────────────────────
+  /// Identifiant de connexion du manager.
+  String username;
+  /// Sel du mot de passe. Vide tant que le mot de passe par défaut est en place.
+  String passwordSalt;
+  /// Empreinte SHA-256 salée. Le mot de passe en clair n'est jamais conservé.
+  String passwordHash;
 
   AppSettings({
     required this.company, required this.address, required this.bp,
     required this.rccm, required this.regime, required this.tel,
     required this.email, required this.prefix,
     required this.startNum, required this.tva, required this.conditions,
+    this.signature = '', this.signatureLabel = '',
+    this.warranty = kDefaultWarranty,
+    this.username = kDefaultUsername,
+    this.passwordSalt = '', this.passwordHash = '',
   });
+
+  /// Vrai tant que le manager n'a pas défini son propre mot de passe : l'app
+  /// accepte alors l'accès d'usine et affiche une alerte dans les Paramètres.
+  bool get usesDefaultPassword => passwordHash.isEmpty;
+
+  /// Vérifie un mot de passe saisi. Tant qu'aucun mot de passe n'a été défini,
+  /// seul l'accès par défaut est accepté.
+  bool checkPassword(String password) => usesDefaultPassword
+      ? secureEquals(password, kDefaultPassword)
+      : secureEquals(hashPassword(password, passwordSalt), passwordHash);
+
+  /// Définit un nouveau mot de passe : nouveau sel, nouvelle empreinte.
+  void setPassword(String password) {
+    passwordSalt = newSalt();
+    passwordHash = hashPassword(password, passwordSalt);
+  }
 
   /// Ligne légale affichée en pied de page des documents.
   String get footerLine =>
       '$company $address - $bp - RCCM: $rccm '
       'Régime d\'imposition $regime - Tel: $tel - Email: $email';
+
+  Map<String, dynamic> toJson() => {
+    'company': company, 'address': address, 'bp': bp, 'rccm': rccm,
+    'regime': regime, 'tel': tel, 'email': email, 'prefix': prefix,
+    'startNum': startNum, 'tva': tva, 'conditions': conditions,
+    'signature': signature, 'signatureLabel': signatureLabel,
+    'warranty': warranty,
+    'username': username,
+    'passwordSalt': passwordSalt, 'passwordHash': passwordHash,
+  };
+
+  factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
+    company: j['company'], address: j['address'], bp: j['bp'], rccm: j['rccm'],
+    regime: j['regime'], tel: j['tel'], email: j['email'], prefix: j['prefix'],
+    startNum: j['startNum'], tva: (j['tva'] as num).toDouble(), conditions: j['conditions'],
+    // Rétro-compatible : les sauvegardes antérieures n'ont pas ces clés.
+    signature: j['signature'] ?? '', signatureLabel: j['signatureLabel'] ?? '',
+    warranty: j['warranty'] ?? kDefaultWarranty,
+    // Sauvegarde antérieure à la connexion : on repart de l'accès par défaut.
+    username: j['username'] ?? kDefaultUsername,
+    passwordSalt: j['passwordSalt'] ?? '', passwordHash: j['passwordHash'] ?? '',
+  );
 }
 
 // ── Document Line Item ───────────────────────────────────
@@ -215,6 +381,15 @@ class LineItem {
   LineItem({required this.ref, required this.designation, required this.qte, required this.pu});
 
   double get total => qte * pu;
+
+  Map<String, dynamic> toJson() => {
+    'ref': ref, 'designation': designation, 'qte': qte, 'pu': pu,
+  };
+
+  factory LineItem.fromJson(Map<String, dynamic> j) => LineItem(
+    ref: j['ref'], designation: j['designation'], qte: j['qte'],
+    pu: (j['pu'] as num).toDouble(),
+  );
 }
 
 // ── Dépense (comptabilité) ───────────────────────────────
@@ -231,9 +406,20 @@ class Expense {
     required this.amount, required this.category, this.factureNumero,
   });
 
+  Map<String, dynamic> toJson() => {
+    'id': id, 'date': date.toIso8601String(), 'label': label,
+    'amount': amount, 'category': category, 'factureNumero': factureNumero,
+  };
+
+  factory Expense.fromJson(Map<String, dynamic> j) => Expense(
+    id: j['id'], date: DateTime.parse(j['date']), label: j['label'],
+    amount: (j['amount'] as num).toDouble(), category: j['category'],
+    factureNumero: j['factureNumero'],
+  );
+
   static const categories = [
     'Achat matériel', 'Transport', 'Sous-traitance',
-    'Loyer & charges', 'Salaires', 'Autre',
+    'Loyer & charges', 'Salaires', 'Autres',
   ];
 }
 
