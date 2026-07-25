@@ -285,6 +285,34 @@ Rien n'est déclaré terminé sans la sortie de commande correspondante.
 7. Lancement sur émulateur : connexion, création de proforma, aperçu plein
    écran, partage PDF, pavé de signature. Captures d'écran à l'appui.
 
+### Résultats obtenus
+
+| Vérification | Résultat |
+|---|---|
+| `flutter analyze` | aucun problème |
+| `flutter test` | **384 tests verts** (345 avant le chantier, +39) |
+| `flutter build windows` | succès — non-régression bureau |
+| `flutter build apk --debug` | succès |
+| Émulateur Pixel 7 (1080 × 2400) | parcouru, **aucune exception Flutter** |
+
+Confirmé sur l'appareil, capture à l'appui : barre du bas avec l'onglet actif,
+« Plus » sans entrée Projets, cartes Clients et Documents avec bande de statut,
+barre d'onglets du Suivi défilante (Notes hors écran, sans débordement),
+sélecteur Créances/Dettes empilé au-dessus du bouton pleine largeur, dialogue
+de détail tenant dans la largeur, aperçu A4 plein écran, pavé de signature
+tracé au doigt puis reporté dans la carte, et **feuille de partage Android
+ouverte sur `KLR-P02-10012026.pdf`** — la preuve que le chemin
+`FilePicker.saveFile` cassé est bien contourné.
+
+Deux limites de vérification, notées telles quelles :
+
+- **iOS n'a été ni compilé ni testé** : impossible depuis Windows. Le dossier
+  est généré et le nom d'affichage réglé, rien de plus.
+- Le panneau navigateur intégré **ne peut pas faire de capture** de Flutter web
+  quand il est masqué (les frames ne sont pas composées). L'arbre
+  d'accessibilité et la console ont servi à la place — console vierge à
+  390 × 844 — et la preuve visuelle vient de l'émulateur.
+
 ---
 
 ## 11. Fichiers touchés
@@ -299,6 +327,30 @@ réduit : 24 + 36 de marges ne laissent que 240 px utiles sur 360),
 
 `lib/widgets/sidebar.dart` n'est **pas** modifié : la sidebar n'est simplement
 pas montée sous 700 px. C'est la barre du bas qui décide des entrées visibles.
+
+### Écarts constatés à la réalisation
+
+Trois points découverts en cours de route, absents de la conception initiale :
+
+1. **`document_create` n'a pas gardé son `HScrollTable`.** La grille de saisie
+   à cinq colonnes obligeait à défiler latéralement *pendant la frappe*, ce qui
+   est la pire manipulation au doigt. Les lignes d'article sont donc empilées
+   sur téléphone : désignation sur sa propre ligne, quantité / P.U. / montant
+   dessous.
+2. **`saveRapport` n'avait aucun garde de plateforme**, pas même `kIsWeb`.
+   L'export de rapport était donc cassé **aussi sur le web** : `saveFile`
+   levait, puis `_saveToDownloads` levait à son tour en lisant
+   `Platform.environment`. Corrigé au même endroit que `saveWithDialog`.
+3. **`flutter create` a réécrit `.metadata` de façon destructive**, remplaçant
+   les entrées `web` et `windows` par `android` et `ios` au lieu de les
+   ajouter. Les quatre plateformes ont été rétablies à la main ; sans quoi une
+   future `flutter migrate` ignorerait le bureau et le web.
+
+Trois extractions non prévues se sont imposées pour partager le comportement
+entre ligne de tableau et carte : `_DocActions` (sortie de l'ancien `State` de
+`_DocRow`), `_clientActionMenu` / `_engagementMenu`, et `_SectionCompta`.
+`SectionHeader`, qui existait sans être utilisé nulle part alors que six écrans
+réimplémentaient le même en-tête, est devenu le widget partagé.
 
 **Ajoutés** — `lib/widgets/signature_pad.dart`,
 `lib/widgets/mobile_shell.dart` (barre du bas + feuille « Plus »),
