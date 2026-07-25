@@ -136,29 +136,41 @@ class _TypeTabs extends StatelessWidget {
   final ValueChanged<String> onChanged;
   const _TypeTabs({required this.current, required this.onChanged});
 
-  static const _tabs = [('proforma', 'Proformas'), ('facture', 'Factures'), ('bl', 'Bons de Livraison')];
+  // (clé, libellé bureau, libellé téléphone)
+  static const _tabs = [
+    ('proforma', 'Proformas', 'Proformas'),
+    ('facture', 'Factures', 'Factures'),
+    ('bl', 'Bons de Livraison', 'BL'),
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final phone = isPhone(context);
     return Container(
       decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border, width: 2))),
-      child: Row(children: _tabs.map((t) {
-        final active = t.$1 == current;
-        return GestureDetector(
-          onTap: () => onChanged(t.$1),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
-              border: Border(bottom: BorderSide(color: active ? AppColors.primary : Colors.transparent, width: 2)),
+      // « Bons de Livraison » pousse la rangée au-delà de 360 px : on la rend
+      // défilante. Sur grand écran elle tient et rien ne bouge.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(mainAxisSize: MainAxisSize.min, children: _tabs.map((t) {
+          final active = t.$1 == current;
+          return GestureDetector(
+            onTap: () => onChanged(t.$1),
+            child: Container(
+              padding: EdgeInsets.symmetric(horizontal: phone ? 14 : 20, vertical: 10),
+              decoration: BoxDecoration(
+                border: Border(bottom: BorderSide(color: active ? AppColors.primary : Colors.transparent, width: 2)),
+              ),
+              // Libellé raccourci sur téléphone, où la place est comptée.
+              child: Text(phone ? (t.$3) : t.$2, style: GoogleFonts.dmSans(
+                fontSize: 14,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+                color: active ? AppColors.primary : AppColors.text2,
+              )),
             ),
-            child: Text(t.$2, style: GoogleFonts.dmSans(
-              fontSize: 14,
-              fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-              color: active ? AppColors.primary : AppColors.text2,
-            )),
-          ),
-        );
-      }).toList()),
+          );
+        }).toList()),
+      ),
     );
   }
 }

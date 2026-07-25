@@ -1,6 +1,37 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
 
+/// Largeur en dessous de laquelle on bascule en mise en page téléphone.
+/// Reprend le seuil déjà utilisé par [ResponsiveSplit] dans l'écran de
+/// création : une seule valeur de référence dans tout le projet.
+const double kPhoneBreakpoint = 700;
+
+/// Vrai sur un écran étroit : téléphone en portrait, ou fenêtre de bureau
+/// réduite.
+///
+/// Le choix se fait volontairement sur la **largeur** et non sur la
+/// plateforme (`Platform.isAndroid`). Trois bénéfices : l'app Windows en
+/// fenêtre étroite devient utilisable, une tablette ou un téléphone en
+/// paysage garde la mise en page riche, et tout se vérifie dans un
+/// navigateur redimensionné sans démarrer d'émulateur.
+bool isPhone(BuildContext context) =>
+    MediaQuery.sizeOf(context).width < kPhoneBreakpoint;
+
+/// Marge intérieure d'un écran. Le bureau respire, le téléphone récupère
+/// les 24 px de large que coûtait le padding de bureau.
+EdgeInsets pagePadding(BuildContext context) => isPhone(context)
+    ? const EdgeInsets.fromLTRB(16, 16, 16, 24)
+    : const EdgeInsets.fromLTRB(28, 28, 28, 40);
+
+/// Largeur utile pour le contenu d'un dialogue : la largeur souhaitée sur
+/// grand écran, bornée par l'écran réel moins les marges qu'`AlertDialog`
+/// s'octroie (40 px de chaque côté, plus une petite réserve).
+///
+/// Sans cette borne, un `SizedBox(width: 420)` déborde sur un écran de
+/// 360 px et lève une exception de rendu en debug.
+double dialogWidth(BuildContext context, double preferred) =>
+    min(preferred, MediaQuery.sizeOf(context).width - 96);
+
 /// Grille de cartes statistiques : répartit les cartes sur une ligne
 /// quand la largeur le permet, sinon passe sur plusieurs rangées.
 class StatGrid extends StatelessWidget {
@@ -21,6 +52,36 @@ class StatGrid extends StatelessWidget {
         children: cards.map((c) => SizedBox(width: itemW, child: c)).toList(),
       );
     });
+  }
+}
+
+/// Barre « contenu à gauche, action à droite » qui s'empile sur téléphone.
+///
+/// Sur grand écran, `left` et `right` partagent une ligne, séparés par un
+/// `Spacer`. Sous le seuil, `right` passe en dessous et prend toute la
+/// largeur : un bouton d'action pleine largeur se vise mieux au pouce, et
+/// surtout les deux réunis dépassent souvent 360 px.
+class StackingRow extends StatelessWidget {
+  final Widget left;
+  final Widget right;
+  final double spacing;
+  const StackingRow({
+    super.key,
+    required this.left,
+    required this.right,
+    this.spacing = 12,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (isPhone(context)) {
+      return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Align(alignment: Alignment.centerLeft, child: left),
+        SizedBox(height: spacing),
+        SizedBox(width: double.infinity, child: right),
+      ]);
+    }
+    return Row(children: [left, const Spacer(), right]);
   }
 }
 

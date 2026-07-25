@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
+import 'responsive.dart';
 
 // ── Status Badge ─────────────────────────────────────────
 class StatusBadge extends StatelessWidget {
@@ -322,33 +323,47 @@ class AppTabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final row = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: tabs.asMap().entries.map((e) {
+        final active = e.key == selected;
+        return GestureDetector(
+          onTap: () => onChanged(e.key),
+          child: Container(
+            // Onglets un peu plus serrés sur téléphone : les cinq onglets du
+            // Suivi restent atteignables sans trop défiler.
+            padding: EdgeInsets.symmetric(
+              horizontal: isPhone(context) ? 14 : 20,
+              vertical: 10,
+            ),
+            decoration: BoxDecoration(
+              border: Border(
+                bottom: BorderSide(
+                  color: active ? AppColors.primary : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+            ),
+            child: Text(e.value, style: GoogleFonts.dmSans(
+              fontSize: 14,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w400,
+              color: active ? AppColors.primary : AppColors.text2,
+            )),
+          ),
+        );
+      }).toList(),
+    );
+
     return Container(
       decoration: const BoxDecoration(
         border: Border(bottom: BorderSide(color: AppColors.border, width: 2)),
       ),
-      child: Row(
-        children: tabs.asMap().entries.map((e) {
-          final active = e.key == selected;
-          return GestureDetector(
-            onTap: () => onChanged(e.key),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-              decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(
-                    color: active ? AppColors.primary : Colors.transparent,
-                    width: 2,
-                  ),
-                ),
-              ),
-              child: Text(e.value, style: GoogleFonts.dmSans(
-                fontSize: 14,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w400,
-                color: active ? AppColors.primary : AppColors.text2,
-              )),
-            ),
-          );
-        }).toList(),
+      // Défilement horizontal : les cinq onglets du Suivi débordaient d'un
+      // écran de 360 px et levaient une exception de rendu. Sur grand écran
+      // la rangée tient d'elle-même et rien ne défile.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: row,
       ),
     );
   }

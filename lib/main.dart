@@ -7,6 +7,8 @@ import 'core/app_state.dart';
 import 'core/persistence.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/app_header.dart';
+import 'widgets/mobile_shell.dart';
+import 'widgets/responsive.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/documents_list_screen.dart';
@@ -57,6 +59,11 @@ class AppShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Sous 700 px : barre de navigation basse, pas de sidebar. Le choix se
+    // fait sur la largeur, donc la fenêtre de bureau réduite en bénéficie
+    // aussi. Voir isPhone dans widgets/responsive.dart.
+    if (isPhone(context)) return const _PhoneShell();
+
     return Scaffold(
       backgroundColor: AppColors.bg,
       body: LayoutBuilder(builder: (context, constraints) {
@@ -77,6 +84,39 @@ class AppShell extends StatelessWidget {
         );
       }),
     );
+  }
+}
+
+/// Coquille téléphone. Se charge aussi de quitter un écran devenu
+/// inaccessible : si la fenêtre rétrécit alors que Projets est affiché,
+/// l'écran n'a plus d'entrée de navigation, donc on revient au tableau de
+/// bord. La redirection est différée d'une frame — on ne mute pas l'état
+/// pendant un build.
+class _PhoneShell extends StatelessWidget {
+  const _PhoneShell();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+
+    // La création de document est un parcours de saisie, pas une
+    // destination : elle prend tout l'écran, sans barre du bas. Son propre
+    // en-tête porte déjà le retour, Annuler et Enregistrer.
+    if (state.creating || state.screen == NavScreen.documentCreate) {
+      return const Scaffold(
+        backgroundColor: AppColors.bg,
+        body: SafeArea(child: DocumentCreateScreen()),
+      );
+    }
+
+    if (isPhoneUnreachable(state.screen)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (isPhoneUnreachable(state.screen)) state.navigate(NavScreen.dashboard);
+      });
+      return const MobileShell(child: SizedBox.shrink());
+    }
+
+    return const MobileShell(child: _ContentArea());
   }
 }
 

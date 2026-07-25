@@ -286,9 +286,10 @@ class _EngagementsTabState extends State<_EngagementsTab> {
 
       // Deux listes distinctes : le type n'est plus une case à cocher du
       // formulaire, c'est la liste dans laquelle on se trouve. Sélecteur à
-      // gauche, action à droite — une seule ligne au-dessus du tableau.
-      Row(children: [
-        Container(
+      // gauche, action à droite — une seule ligne au-dessus du tableau, qui
+      // s'empile sur téléphone (les deux ensemble réclament 378 px).
+      StackingRow(
+        left: Container(
           padding: const EdgeInsets.all(5),
           decoration: BoxDecoration(
             color: AppColors.surface,
@@ -309,13 +310,12 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             ),
           ]),
         ),
-        const Spacer(),
-        PrimaryBtn(
+        right: PrimaryBtn(
           label: _estCreance ? 'Nouvelle Créance' : 'Nouvelle Dette',
           icon: Icons.add,
           onTap: () => _ouvrirFormulaire(state),
         ),
-      ]),
+      ),
       const SizedBox(height: 14),
 
       CardBox(

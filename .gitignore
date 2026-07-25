@@ -46,3 +46,6 @@ app.*.map.json
 
 #Folder
 .claude
+
+# Paquets de distribution (generes par tool/, non versionnes)
+/dist/
