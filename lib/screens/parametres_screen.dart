@@ -398,8 +398,10 @@ class _DonneesTab extends StatelessWidget {
         title: Text('Réinitialiser les données ?', style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
         content: Text(
           'Toutes tes données (clients, documents, engagements, dépenses, '
-          'activités) seront effacées et remplacées par les données de départ. '
-          'Cette action est irréversible.',
+          'tâches, notes, activités) seront définitivement effacées, y compris '
+          'les données d\'exemple. L\'application repartira totalement vide.\n\n'
+          'Tes réglages sont conservés : entreprise, numérotation, conditions, '
+          'signature et accès.\n\nCette action est irréversible.',
           style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.5),
         ),
         actions: [
@@ -448,8 +450,8 @@ class _DonneesTab extends StatelessWidget {
           Text('Zone sensible', style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.red)),
           const SizedBox(height: 4),
           Text(
-            'Repartir des données de départ. À utiliser pour nettoyer après des '
-            'essais, ou recommencer à zéro.',
+            'Effacer toutes les données, y compris les exemples fournis, pour '
+            'démarrer sur une application vierge. Les réglages sont conservés.',
             style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.5),
           ),
           const SizedBox(height: 14),

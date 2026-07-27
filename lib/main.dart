@@ -127,9 +127,13 @@ class _ContentArea extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
 
-    // Document create overlay
+    // Écran document : création, ou modification d'une proforma existante.
     if (state.creating) {
-      return const DocumentCreateScreen();
+      return DocumentCreateScreen(
+        // La clé force un état neuf quand on passe d'un document à un autre.
+        key: ValueKey(state.editingProforma?.id ?? 'nouveau'),
+        existing: state.editingProforma,
+      );
     }
 
     return switch (state.screen) {

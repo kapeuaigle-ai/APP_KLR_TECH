@@ -28,8 +28,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
       c.email.toLowerCase().contains(_search.toLowerCase())
     ).toList();
 
-    final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
-
     return SingleChildScrollView(
       padding: pagePadding(context),
       child: ConstrainedBox(
@@ -45,15 +43,6 @@ class _ClientsScreenState extends State<ClientsScreen> {
               ],
             ),
             const SizedBox(height: 24),
-
-            // Stat cards
-            StatGrid(cards: [
-              StatCard(label: 'TOTAL CLIENTS', value: '${clients.length}', sub: 'Entreprises partenaires'),
-              StatCard(label: 'CA CUMULÉ', value: Fmt.number(totalCA), unit: 'FCFA'),
-              StatCard(label: 'CA MOY./CLIENT',
-                value: Fmt.number(clients.isEmpty ? 0 : totalCA / clients.length), unit: 'FCFA'),
-            ]),
-            const SizedBox(height: 20),
 
             // Compteur + recherche, au-dessus de la liste dans les deux modes.
             StackingRow(

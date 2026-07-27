@@ -72,7 +72,7 @@ void main() {
     expect(b.activities.any((x) => x.type == 'paiement'), isTrue);
   });
 
-  test('réinitialiser efface la sauvegarde et repart du premier lancement', () async {
+  test('réinitialiser vide toutes les données métier', () async {
     final store = MemoryStore();
     final a = AppState(store: store);
     a.addClient(Client(id: 900, initials: 'ZZ', color: const Color(0xFF123456),
@@ -80,14 +80,42 @@ void main() {
     await a.flush();
 
     await a.resetData();
-    expect(a.clients.any((c) => c.id == 900), isFalse); // client de test parti
-    expect(a.clients, isNotEmpty);                      // seed de démo revenu
+    expect(a.clients, isEmpty);                    // y compris les clients de démo
+    expect(a.documents['proforma'], isEmpty);
+    expect(a.documents['facture'], isEmpty);
+    expect(a.documents['bl'], isEmpty);
+    expect(a.engagements, isEmpty);
+    expect(a.expenses, isEmpty);
     expect(a.activities, isEmpty);
+    expect(a.tasks, isEmpty);
+    expect(a.notes, isEmpty);
+  });
 
-    // Le store est vidé : un rechargement redonne le premier lancement.
+  test('réinitialiser conserve les réglages (accès, entreprise, signature)', () async {
+    final a = AppState(store: MemoryStore());
+    a.settings.company = 'MON ENTREPRISE';
+    a.settings.signatureLabel = 'La Direction';
+    a.changeCredentials(currentPassword: 'admin', newPassword: 'Secret#2026');
+
+    await a.resetData();
+
+    expect(a.settings.company, 'MON ENTREPRISE');
+    expect(a.settings.signatureLabel, 'La Direction');
+    expect(a.settings.checkPassword('Secret#2026'), isTrue); // pas de retour à admin
+  });
+
+  test('l\'application reste vide après redémarrage (pas de retour des démos)', () async {
+    final store = MemoryStore();
+    final a = AppState(store: store);
+    await a.resetData();
+
+    // Piège corrigé : le constructeur sème les données d'exemple, donc l'état
+    // vide doit être ÉCRIT, sinon init() ne trouve rien et les démos reviennent.
     final b = AppState(store: store);
     await b.init();
-    expect(b.clients.any((c) => c.id == 900), isFalse);
+    expect(b.clients, isEmpty);
+    expect(b.documents['proforma'], isEmpty);
+    expect(b.engagements, isEmpty);
   });
 
   test('init sans sauvegarde : garde le seed, ne plante pas', () async {

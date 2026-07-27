@@ -65,10 +65,12 @@ class _EngagementsTabState extends State<_EngagementsTab> {
   final _tiersCtrl = TextEditingController();
   final _descCtrl = TextEditingController();
   final _montantCtrl = TextEditingController();
+  final _acompteCtrl = TextEditingController();
   /// Liste affichée : 'creance' ou 'dette'. Détermine aussi ce que crée le
   /// bouton — pas de sélecteur de type dans le formulaire.
   String _sens = 'creance';
   DateTime _echeance = DateTime.now();
+  DateTime _dateAcompte = DateTime.now();
   String _categorie = Expense.categories.first;
   bool _erreur = false;
 
@@ -80,6 +82,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     _tiersCtrl.dispose();
     _descCtrl.dispose();
     _montantCtrl.dispose();
+    _acompteCtrl.dispose();
     super.dispose();
   }
 
@@ -96,6 +99,10 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
     if (_tiersCtrl.text.trim().isEmpty || montant <= 0) return false;
     final enRetard = _echeance.isBefore(DateUtils.dateOnly(DateTime.now()));
+    // Acompte facultatif : déjà versé au moment où l'engagement est saisi.
+    // Plafonné au montant, il entre en comptabilité au mois de son versement.
+    final saisi = double.tryParse(_acompteCtrl.text.replaceAll(' ', '')) ?? 0;
+    final acompte = saisi <= 0 ? 0.0 : (saisi > montant ? montant : saisi);
     state.addEngagement(Engagement(
       id: DateTime.now().millisecondsSinceEpoch,
       sens: _sens,
@@ -106,6 +113,8 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       statut: enRetard ? 'retard' : 'cours',
       echeance: Fmt.jour(_echeance),
       categorie: _categorie,
+      acompte: acompte,
+      dateAcompte: acompte > 0 ? Fmt.jour(_dateAcompte) : null,
     ));
     return true;
   }
@@ -117,7 +126,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     _tiersCtrl.clear();
     _descCtrl.clear();
     _montantCtrl.clear();
+    _acompteCtrl.clear();
     _echeance = DateTime.now();
+    _dateAcompte = DateTime.now();
     _categorie = Expense.categories.first;
     _erreur = false;
 
@@ -182,6 +193,54 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                       ]),
                     ),
                   )),
+
+                  // ── Acompte déjà versé (facultatif) ────────────
+                  // Il entre en comptabilité à SA date ; seul le solde entrera
+                  // à la validation. La date n'est demandée qu'une fois un
+                  // montant saisi, pour ne pas alourdir le formulaire.
+                  const SizedBox(height: 16),
+                  const Divider(height: 1, color: AppColors.border),
+                  const SizedBox(height: 14),
+                  Wrap(spacing: 12, runSpacing: 14, crossAxisAlignment: WrapCrossAlignment.end, children: [
+                    _field(
+                      _estCreance ? 'ACOMPTE DÉJÀ REÇU (FCFA)' : 'ACOMPTE DÉJÀ VERSÉ (FCFA)',
+                      SizedBox(width: 190, child: _tf(_acompteCtrl, 'Aucun', numeric: true,
+                          onChanged: (_) => setLocal(() {}))),
+                    ),
+                    if ((double.tryParse(_acompteCtrl.text.replaceAll(' ', '')) ?? 0) > 0)
+                      _field('DATE DE L\'ACOMPTE', GestureDetector(
+                        onTap: () async {
+                          final d = await _pickDate(_dateAcompte);
+                          if (d != null) setLocal(() => _dateAcompte = d);
+                        },
+                        child: Container(
+                          width: 190, height: 40,
+                          alignment: Alignment.centerLeft,
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                          child: Row(children: [
+                            const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.text3),
+                            const SizedBox(width: 8),
+                            Text(Fmt.jour(_dateAcompte), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                          ]),
+                        ),
+                      )),
+                  ]),
+                  Builder(builder: (_) {
+                    final m = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
+                    final a = double.tryParse(_acompteCtrl.text.replaceAll(' ', '')) ?? 0;
+                    if (a <= 0 || m <= 0) return const SizedBox.shrink();
+                    final reste = a >= m ? 0.0 : m - a;
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        reste == 0
+                            ? 'L\'acompte couvre la totalité du montant.'
+                            : 'Restera à régler : ${Fmt.money(reste)}',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2),
+                      ),
+                    );
+                  }),
 
                   // La catégorie ne sert qu'aux dettes : c'est la ligne de
                   // dépense sous laquelle le paiement sera classé.
@@ -330,6 +389,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             trailing: _engagementMenu(context, state, e, large: true),
             fields: [
               ('MONTANT', CardValue(Fmt.money(e.montant), bold: true)),
+              if (e.aAcompte)
+                ('ACOMPTE', CardValue('${Fmt.money(e.acompte)} · reste ${Fmt.money(e.reste)}',
+                    color: AppColors.blue)),
               if (e.description.isNotEmpty) ('OBJET', CardValue(e.description)),
               ('ÉCHÉANCE', CardValue(e.echeance,
                   color: e.statut == 'retard' ? AppColors.red : null)),
@@ -402,7 +464,21 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                         ],
                       ]),
                     )),
-                    _cell(Fmt.money(e.montant), flex: 3, bold: true),
+                    // Montant, et sous lui le solde restant si un acompte a
+                    // déjà été versé.
+                    Expanded(flex: 3, child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
+                        Text(Fmt.money(e.montant), maxLines: 1, overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                        if (e.aAcompte) ...[
+                          const SizedBox(height: 2),
+                          Text('Acompte ${Fmt.money(e.acompte)} · reste ${Fmt.money(e.reste)}',
+                              maxLines: 1, overflow: TextOverflow.ellipsis,
+                              style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.blue)),
+                        ],
+                      ]),
+                    )),
                     Expanded(flex: 2, child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                       child: StatusBadge(status: e.statut),
@@ -499,11 +575,15 @@ Future<void> _validerEngagement(
   if (d == null || !context.mounted) return;
   state.validerEngagement(e.id, Fmt.jour(d));
   if (!context.mounted) return;
+  // Avec un acompte, seul le solde entre à cette date : l'acompte a déjà été
+  // compté au mois de son versement.
+  final entrant = Fmt.money(e.montantAuReglement);
+  final mois = Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d));
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(
       e.estCreance
-          ? 'Créance encaissée : ${Fmt.money(e.montant)} entrent en revenu (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).'
-          : 'Dette payée : ${Fmt.money(e.montant)} entrent en dépense (${Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d))}).',
+          ? 'Créance encaissée : $entrant entrent en revenu ($mois).'
+          : 'Dette payée : $entrant entrent en dépense ($mois).',
       style: const TextStyle(fontSize: 13),
     ),
     backgroundColor: e.estCreance ? AppColors.green : AppColors.orange,
@@ -514,9 +594,114 @@ Future<void> _validerEngagement(
   ));
 }
 
+/// Saisie d'un acompte sur un engagement déjà enregistré : le client a versé
+/// une partie avant l'échéance. L'acompte entre en comptabilité au mois de son
+/// versement, le solde suivra à la validation.
+Future<void> _saisirAcompte(
+    BuildContext context, AppState state, Engagement e) async {
+  final ctrl = TextEditingController(
+      text: e.acompte > 0 ? e.acompte.toStringAsFixed(0) : '');
+  var date = DateTime.now();
+  final estCreance = e.estCreance;
+
+  final valide = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        final saisi = double.tryParse(ctrl.text.replaceAll(' ', '')) ?? 0;
+        final plafonne = saisi > e.montant ? e.montant : saisi;
+        final reste = e.montant - plafonne;
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text(e.acompte > 0 ? 'Modifier l\'acompte' : 'Enregistrer un acompte',
+              style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+          content: SizedBox(
+            width: 360,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${e.tiers} · ${e.num}\nMontant total : ${Fmt.money(e.montant)}',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3, height: 1.5)),
+              const SizedBox(height: 16),
+              Text(estCreance ? 'MONTANT REÇU (FCFA)' : 'MONTANT VERSÉ (FCFA)', style: AppTheme.label),
+              const SizedBox(height: 6),
+              _tf(ctrl, '0', numeric: true, onChanged: (_) => setLocal(() {})),
+              const SizedBox(height: 14),
+              Text('DATE DE L\'ACOMPTE', style: AppTheme.label),
+              const SizedBox(height: 6),
+              GestureDetector(
+                onTap: () async {
+                  final d = await showDatePicker(
+                    context: ctx, initialDate: date,
+                    firstDate: DateTime(2020), lastDate: DateTime(2100),
+                  );
+                  if (d != null) setLocal(() => date = d);
+                },
+                child: Container(
+                  height: 40,
+                  alignment: Alignment.centerLeft,
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+                  child: Row(children: [
+                    const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.text3),
+                    const SizedBox(width: 8),
+                    Text(Fmt.jour(date), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                  ]),
+                ),
+              ),
+              if (plafonne > 0) ...[
+                const SizedBox(height: 14),
+                Text(
+                  reste == 0
+                      ? 'L\'acompte couvre la totalité : il ne restera rien à régler.'
+                      : 'Restera à régler : ${Fmt.money(reste)}',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.4),
+                ),
+              ],
+            ]),
+          ),
+          actions: [
+            if (e.acompte > 0)
+              TextButton(
+                onPressed: () { state.setAcompte(e.id, 0, Fmt.jour(date)); Navigator.of(ctx).pop(false); },
+                child: Text('Retirer l\'acompte', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
+              ),
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+            ),
+            TextButton(
+              onPressed: plafonne <= 0 ? null : () {
+                state.setAcompte(e.id, plafonne, Fmt.jour(date));
+                Navigator.of(ctx).pop(true);
+              },
+              child: Text('Enregistrer', style: GoogleFonts.dmSans(
+                  fontSize: 13, fontWeight: FontWeight.w700,
+                  color: plafonne <= 0 ? AppColors.text3 : AppColors.primary)),
+            ),
+          ],
+        );
+      },
+    ),
+  );
+
+  ctrl.dispose();
+  if (valide != true || !context.mounted) return;
+  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(
+      estCreance ? 'Acompte encaissé et porté en comptabilité.'
+                 : 'Acompte versé et porté en comptabilité.',
+      style: const TextStyle(fontSize: 13),
+    ),
+    backgroundColor: estCreance ? AppColors.green : AppColors.orange,
+    behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    margin: const EdgeInsets.all(16),
+  ));
+}
+
 /// Menu d'actions d'un engagement, partagé par la ligne de tableau (bureau)
-/// et la carte (téléphone) : encaisser ou payer, annuler la validation,
-/// supprimer. Le contenu est identique ; seule la taille de la cible change.
+/// et la carte (téléphone) : encaisser ou payer, acompte, annuler la
+/// validation, supprimer. Seule la taille de la cible change.
 Widget _engagementMenu(
   BuildContext context,
   AppState state,
@@ -536,6 +721,8 @@ Widget _engagementMenu(
     onSelected: (action) {
       if (action == 'valider') {
         _validerEngagement(context, state, e);
+      } else if (action == 'acompte') {
+        _saisirAcompte(context, state, e);
       } else if (action == 'annuler') {
         state.annulerValidationEngagement(e.id);
       } else if (action == 'supprimer') {
@@ -543,13 +730,21 @@ Widget _engagementMenu(
       }
     },
     itemBuilder: (ctx) => [
-      if (!e.regle)
+      if (!e.regle) ...[
         PopupMenuItem(value: 'valider', child: Row(children: [
           const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
           const SizedBox(width: 8),
-          Text(e.estCreance ? 'Encaisser' : 'Marquer payée',
+          Text(e.estCreance ? 'Encaissée' : 'Marquer payée',
               style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ]))
+        ])),
+        // Versement partiel reçu avant l'échéance.
+        PopupMenuItem(value: 'acompte', child: Row(children: [
+          const Icon(Icons.savings_outlined, size: 15, color: AppColors.blue),
+          const SizedBox(width: 8),
+          Text(e.acompte > 0 ? 'Modifier l\'acompte' : 'Enregistrer un acompte',
+              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ])),
+      ]
       else
         PopupMenuItem(value: 'annuler', child: Row(children: [
           const Icon(Icons.undo, size: 15, color: AppColors.text3),
@@ -1060,10 +1255,11 @@ Widget _field(String label, Widget child) => Column(crossAxisAlignment: CrossAxi
   child,
 ]);
 
-Widget _tf(TextEditingController c, String hint, {bool numeric = false}) => SizedBox(
+Widget _tf(TextEditingController c, String hint, {bool numeric = false, ValueChanged<String>? onChanged}) => SizedBox(
   height: 40,
   child: TextField(
     controller: c,
+    onChanged: onChanged,
     keyboardType: numeric ? TextInputType.number : TextInputType.text,
     style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
     decoration: InputDecoration(

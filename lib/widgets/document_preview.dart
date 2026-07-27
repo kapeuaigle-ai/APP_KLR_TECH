@@ -19,6 +19,8 @@ class DocumentPreview extends StatelessWidget {
   final bool tva;
   final double ht, tvaAmt, ttc;
   final AppSettings settings;
+  /// Date imprimée sur le document, saisie librement. Vide = pas de ligne date.
+  final String date;
   final VoidCallback? onPrint;
   final VoidCallback? onDownload;
   /// Masquer la barre « Aperçu » quand l'appelant fournit déjà son en-tête.
@@ -37,6 +39,7 @@ class DocumentPreview extends StatelessWidget {
     required this.objet, required this.lines, required this.tva,
     required this.ht, required this.tvaAmt, required this.ttc,
     required this.conditions,
+    this.date = '',
     this.onPrint, this.onDownload, this.showToolbar = true,
   });
 
@@ -49,17 +52,14 @@ class DocumentPreview extends StatelessWidget {
     return 'BON DE LIVRAISON';
   }
 
-  String get _dateStr {
-    const months = ['Janvier','Février','Mars','Avril','Mai','Juin',
-                    'Juillet','Août','Septembre','Octobre','Novembre','Décembre'];
-    final n = DateTime.now();
-    return '${n.day} ${months[n.month - 1]} ${n.year}';
-  }
+  /// Ligne date de l'en-tête, vide si le manager n'a rien saisi.
+  String get _dateStr => date.trim().isEmpty ? '' : 'Date : ${date.trim()}';
 
   DocumentContext _pageContext() => DocumentContext(
         typeLabel: _typeLabel,
         numero: numero,
-        date: _dateStr,
+        date: _dateStr, // vide si non saisie : l'en-tête est alors plus court
+
         deLines: [settings.company, settings.address, settings.bp],
         attentionLines: [
           if (client.isNotEmpty) client,
@@ -133,7 +133,8 @@ class DocumentPreview extends StatelessWidget {
                 const SizedBox(height: 6),
                 Align(alignment: Alignment.centerRight, child: Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
                   Text('N°  $numero', style: GoogleFonts.dmSans(fontSize: 9.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                  Text('Date : $_dateStr', style: GoogleFonts.dmSans(fontSize: 9, color: AppColors.text3)),
+                  if (_dateStr.isNotEmpty)
+                    Text(_dateStr, style: GoogleFonts.dmSans(fontSize: 9, color: AppColors.text3)),
                 ])),
                 const SizedBox(height: 14),
                 Row(crossAxisAlignment: CrossAxisAlignment.start, children: [

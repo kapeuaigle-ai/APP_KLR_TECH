@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
-import '../core/data.dart';
 import '../core/app_state.dart';
+import '../core/comptabilite.dart';
 import '../core/utils.dart';
 import '../core/pdf_generator.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
+import '../widgets/periode_selector.dart';
 import '../widgets/responsive.dart';
 
 class RapportsScreen extends StatefulWidget {
@@ -20,6 +21,17 @@ class RapportsScreen extends StatefulWidget {
 class _RapportsScreenState extends State<RapportsScreen> {
   int _tab = 0;
   bool _exporting = false;
+  Periode _periode = Periode.ceMois();
+
+  /// Rapport recalculé à chaque build : l'écran et le PDF téléchargé montrent
+  /// donc toujours exactement les mêmes chiffres.
+  RapportPeriode _rapport(AppState state) => Comptabilite.rapport(
+        debut: _periode.debut,
+        fin: _periode.fin,
+        factures: state.documents['facture'] ?? [],
+        expenses: state.expenses,
+        engagements: state.engagements,
+      );
 
   Future<void> _exportPdf() async {
     if (_exporting) return;
@@ -28,9 +40,7 @@ class _RapportsScreenState extends State<RapportsScreen> {
     try {
       final bytes = await PdfGenerator.generateRapport(
         settings: state.settings,
-        dime: SampleData.dimeHistory,
-        clients: state.clients,
-        engagements: state.engagements,
+        rapport: _rapport(state),
       );
       final path = await PdfGenerator.saveRapport(bytes);
       if (mounted && path != null) {
@@ -71,19 +81,26 @@ class _RapportsScreenState extends State<RapportsScreen> {
               title: 'Rapports',
               subtitle: 'Analyses financières, clients et projets.',
               actions: [
-                SecondaryBtn(
-                  label: _exporting ? 'Export en cours...' : 'Exporter PDF',
+                PrimaryBtn(
+                  label: _exporting ? 'Export en cours...' : 'Télécharger le rapport',
                   icon: Icons.download_outlined,
-                  onTap: _exportPdf,
+                  onTap: _exporting ? null : _exportPdf,
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 20),
+
+            // Le sélecteur pilote à la fois l'affichage et le PDF téléchargé.
+            PeriodeSelector(
+              selection: _periode,
+              onChanged: (p) => setState(() => _periode = p),
+            ),
+            const SizedBox(height: 20),
 
             AppTabBar(tabs: const ['Financier', 'Clients', 'Projets'], selected: _tab, onChanged: (i) => setState(() => _tab = i)),
             const SizedBox(height: 20),
 
-            if (_tab == 0) const _FinancierTab()
+            if (_tab == 0) _FinancierTab(rapport: _rapport(context.watch<AppState>()))
             else if (_tab == 1) const _ClientsTab()
             else const _ProjetsTab(),
           ],
@@ -94,73 +111,168 @@ class _RapportsScreenState extends State<RapportsScreen> {
 }
 
 // ── Financier Tab ─────────────────────────────────────────
+/// Tout est calculé sur la période choisie, à partir des données réelles de
+/// l'application : ce que l'écran affiche est exactement ce que contient le
+/// PDF téléchargé.
 class _FinancierTab extends StatelessWidget {
-  const _FinancierTab();
+  final RapportPeriode rapport;
+  const _FinancierTab({required this.rapport});
+
+  static const _palette = [
+    AppColors.primary, Color(0xFF374151), AppColors.orange,
+    AppColors.blue, AppColors.teal, Color(0xFFD1D5DB),
+  ];
 
   @override
   Widget build(BuildContext context) {
-    final dime = SampleData.dimeHistory;
-    final totalRevenu = dime.fold<double>(0, (s, d) => s + d.revenu);
-    final totalDime = dime.fold<double>(0, (s, d) => s + d.dime);
+    final categories = rapport.depensesParCategorie.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     return Column(children: [
       StatGrid(cards: [
-        StatCard(label: 'CA ANNUEL 2026', value: '81,0', unit: 'M FCFA',
-          badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('↗ +12%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
-        StatCard(label: 'REVENU TOTAL', value: Fmt.number(totalRevenu), unit: 'FCFA'),
-        StatCard(label: 'DÎME TOTALE', value: Fmt.number(totalDime), unit: 'FCFA', red: true),
-        StatCard(label: 'TAUX RECOUVREMENT', value: '87', unit: '%',
-          badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('Bon', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'ENCAISSEMENTS', value: Fmt.number(rapport.revenu), unit: 'FCFA'),
+        StatCard(label: 'DÉCAISSEMENTS', value: Fmt.number(rapport.depenses), unit: 'FCFA'),
+        StatCard(
+          label: 'BÉNÉFICE', value: Fmt.number(rapport.benefice), unit: 'FCFA',
+          badge: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: rapport.benefice >= 0 ? AppColors.greenBg : AppColors.redBg,
+              borderRadius: BorderRadius.circular(20)),
+            child: Text(rapport.benefice >= 0 ? 'Positif' : 'Négatif',
+                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700,
+                    color: rapport.benefice >= 0 ? AppColors.green : AppColors.red)),
+          ),
+        ),
+        StatCard(label: 'DÎME (10%)', value: Fmt.number(rapport.dime), unit: 'FCFA', red: true),
       ]),
       const SizedBox(height: 20),
 
-      ResponsiveSplit(
-        sideWidth: 300,
-        breakpoint: 820,
-        main: CardBox(
-          padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Évolution mensuelle du CA', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
-            Text('Revenus mensuels 2026 (en millions FCFA)', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-            const SizedBox(height: 16),
-            SizedBox(height: 180, child: BarLineChart(
-              barValues: dime.map((d) => d.revenu / 1000000).toList(),
-              lineValues: dime.map((d) => d.dime / 100000).toList(),
-              labels: dime.map((d) => d.mois.substring(0, 3)).toList(),
-            )),
-            const SizedBox(height: 8),
-            Row(children: [
-              _Legend(color: const Color(0xFF374151), label: 'Revenu'),
-              const SizedBox(width: 16),
-              _Legend(color: AppColors.primary, label: 'Dîme (×10)'),
-            ]),
+      if (rapport.estVide)
+        CardBox(child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 40),
+          child: Column(children: [
+            const Icon(Icons.insights_outlined, size: 40, color: AppColors.text3),
+            const SizedBox(height: 12),
+            Text('Aucun mouvement sur cette période',
+                style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text2)),
+            const SizedBox(height: 4),
+            Text('Choisis une autre période, ou enregistre des encaissements et des dépenses.',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
           ]),
+        ))
+      else ...[
+        ResponsiveSplit(
+          sideWidth: 300,
+          breakpoint: 820,
+          main: CardBox(
+            padding: const EdgeInsets.fromLTRB(22, 20, 22, 16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('Évolution mensuelle', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+              Text('Encaissements et bénéfice, en milliers de FCFA',
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+              const SizedBox(height: 16),
+              if (rapport.mois.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 30),
+                  child: Center(child: Text('Pas assez de données pour un graphique',
+                      style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))),
+                )
+              else ...[
+                SizedBox(height: 180, child: BarLineChart(
+                  barValues: rapport.mois.map((m) => m.revenuHt / 1000).toList(),
+                  lineValues: rapport.mois.map((m) => m.benefice / 1000).toList(),
+                  labels: rapport.mois.map((m) => m.label.split(' ').first.substring(0, 3)).toList(),
+                )),
+                const SizedBox(height: 8),
+                Row(children: [
+                  _Legend(color: const Color(0xFF374151), label: 'Encaissé'),
+                  const SizedBox(width: 16),
+                  _Legend(color: AppColors.primary, label: 'Bénéfice'),
+                ]),
+              ],
+            ]),
+          ),
+          side: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Dépenses par catégorie', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+            const SizedBox(height: 16),
+            if (categories.isEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Center(child: Text('Aucune dépense sur la période',
+                    style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))),
+              )
+            else ...[
+              Center(child: DonutChart(
+                segments: [
+                  for (final (i, c) in categories.take(6).indexed)
+                    DonutSegment(
+                      pct: rapport.depenses > 0 ? c.value / rapport.depenses * 100 : 0,
+                      color: _palette[i % _palette.length],
+                      label: c.key,
+                    ),
+                ],
+                total: categories.length,
+              )),
+              const SizedBox(height: 16),
+              for (final (i, c) in categories.take(6).indexed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(children: [
+                    Container(width: 10, height: 10, decoration: BoxDecoration(
+                        color: _palette[i % _palette.length], shape: BoxShape.circle)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(c.key, overflow: TextOverflow.ellipsis,
+                        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2))),
+                    Text(Fmt.money(c.value), style: GoogleFonts.dmSans(
+                        fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                  ]),
+                ),
+            ],
+          ])),
         ),
-        side: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Répartition par statut', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
-          const SizedBox(height: 16),
-          const Center(child: DonutChart(segments: [
-            DonutSegment(pct: 65, color: AppColors.primary, label: 'Payées'),
-            DonutSegment(pct: 20, color: Color(0xFF374151), label: 'Impayées'),
-            DonutSegment(pct: 15, color: Color(0xFFD1D5DB), label: 'En cours'),
-          ], total: 142)),
-          const SizedBox(height: 16),
-          for (final s in [('Factures payées', '65%', AppColors.primary), ('Impayées', '20%', const Color(0xFF374151)), ('En cours', '15%', Color(0xFFD1D5DB))])
+        const SizedBox(height: 20),
+
+        // Détail des mouvements : la matière du rapport téléchargé.
+        CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Expanded(child: Text('Mouvements de la période',
+                style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+            Text('${rapport.mouvements.length}',
+                style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text3)),
+          ]),
+          const SizedBox(height: 4),
+          Text('Créances en cours (restant dû) : ${Fmt.money(rapport.creancesEnCours)}',
+              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+          const SizedBox(height: 12),
+          for (final m in rapport.mouvements.take(20))
             Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
-                Container(width: 10, height: 10, decoration: BoxDecoration(color: s.$3, shape: BoxShape.circle)),
+                Icon(m.entree ? Icons.south_west_rounded : Icons.north_east_rounded,
+                    size: 15, color: m.entree ? AppColors.green : AppColors.red),
+                const SizedBox(width: 10),
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(m.libelle, maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                  Text('${Fmt.jour(m.date)} · ${m.detail}', maxLines: 1, overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
+                ])),
                 const SizedBox(width: 8),
-                Expanded(child: Text(s.$1, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2))),
-                Text(s.$2, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: s.$3)),
+                Text('${m.entree ? '+' : '−'} ${Fmt.money(m.montant)}',
+                    style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700,
+                        color: m.entree ? AppColors.green : AppColors.red)),
               ]),
             ),
+          if (rapport.mouvements.length > 20)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text('… et ${rapport.mouvements.length - 20} autres — tous figurent dans le PDF.',
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+            ),
         ])),
-      ),
+      ],
     ]);
   }
 }

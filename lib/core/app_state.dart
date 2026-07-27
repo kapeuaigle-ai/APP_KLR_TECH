@@ -87,13 +87,37 @@ class AppState extends ChangeNotifier {
     verifierCloture();
   }
 
-  /// Efface la sauvegarde et repart du premier lancement.
+  /// Vide toutes les données métier — clients, documents, engagements,
+  /// dépenses, tâches, notes, activités.
+  ///
+  /// Les RÉGLAGES sont conservés (entreprise, numérotation, conditions,
+  /// garantie, signature, accès) : ils relèvent de la configuration, pas des
+  /// données. Le manager repart d'une application vierge sans avoir à tout
+  /// reparamétrer ni à retrouver son mot de passe.
+  void _clearData() {
+    clients = [];
+    documents = {'proforma': [], 'facture': [], 'bl': []};
+    tasks = [];
+    notes = [];
+    engagements = [];
+    expenses = [];
+    activities = [];
+    _dimePaidMonths.clear();
+    _dimePaidDates.clear();
+    _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
+    _nextActivityId = 1000;
+  }
+
+  /// Réinitialise l'application : plus aucune donnée de démonstration.
+  ///
+  /// L'état vide est ÉCRIT sur le disque (et non simplement effacé) : sans
+  /// cela, le prochain démarrage ne trouverait pas de sauvegarde et
+  /// réafficherait les données d'exemple semées au constructeur.
   Future<void> resetData() async {
-    _restoring = true;
-    _seed();
-    _restoring = false;
-    await _store.clear();
+    _clearData();
     notifyListeners();
+    _persist();
+    await flush();
   }
 
   // ── Sérialisation ──────────────────────────────────────
@@ -173,7 +197,23 @@ class AppState extends ChangeNotifier {
   }
 
   void setDocType(String t) { _docType = t; notifyListeners(); }
-  void setCreating(bool v) { _creating = v; notifyListeners(); }
+  void setCreating(bool v) {
+    _creating = v;
+    if (!v) _editingProforma = null; // sortie de l'écran : on quitte l'édition
+    notifyListeners();
+  }
+
+  /// Proforma en cours de modification, `null` en création. Volatil : c'est un
+  /// état d'écran, pas une donnée.
+  DocumentItem? _editingProforma;
+  DocumentItem? get editingProforma => _editingProforma;
+
+  /// Ouvre l'écran document sur une proforma existante, pour la modifier.
+  void startEditProforma(DocumentItem doc) {
+    _editingProforma = doc;
+    _creating = true;
+    notifyListeners();
+  }
 
   // ── Activités ──────────────────────────────────────────
   void _logActivity(String type, String titre, String desc, Color color,
@@ -232,12 +272,44 @@ class AppState extends ChangeNotifier {
     final e = match.first;
     e.statut = 'paye';
     e.dateReglement = date;
+    // Avec un acompte, seul le solde entre ici : l'acompte a déjà été compté
+    // au mois de son versement.
     _logActivity(
       'paiement',
       e.estCreance
-          ? 'Créance encaissée — ${Fmt.money(e.montant)}'
-          : 'Dette payée — ${Fmt.money(e.montant)}',
-      '${e.tiers} · ${e.num} — entrée en comptabilité le $date',
+          ? 'Créance encaissée — ${Fmt.money(e.montantAuReglement)}'
+          : 'Dette payée — ${Fmt.money(e.montantAuReglement)}',
+      e.aAcompte
+          ? '${e.tiers} · ${e.num} — solde le $date (acompte ${Fmt.money(e.acompte)} déjà compté)'
+          : '${e.tiers} · ${e.num} — entrée en comptabilité le $date',
+      e.estCreance ? AppColors.green : AppColors.orange,
+    );
+    _emit();
+  }
+
+  /// Enregistre (ou corrige) l'acompte déjà versé sur un engagement en cours.
+  /// L'acompte entre en comptabilité au mois de `date` ; le solde suivra à la
+  /// validation. Un montant nul ou négatif retire l'acompte.
+  void setAcompte(int id, double montant, String date) {
+    final match = engagements.where((e) => e.id == id);
+    if (match.isEmpty) return;
+    final e = match.first;
+
+    if (montant <= 0) {
+      e.acompte = 0;
+      e.dateAcompte = null;
+      _emit();
+      return;
+    }
+    // Un acompte ne peut pas dépasser le montant de l'engagement.
+    e.acompte = montant > e.montant ? e.montant : montant;
+    e.dateAcompte = date;
+    _logActivity(
+      'paiement',
+      e.estCreance
+          ? 'Acompte encaissé — ${Fmt.money(e.acompte)}'
+          : 'Acompte versé — ${Fmt.money(e.acompte)}',
+      '${e.tiers} · ${e.num} — reste ${Fmt.money(e.reste)}',
       e.estCreance ? AppColors.green : AppColors.orange,
     );
     _emit();
@@ -427,6 +499,7 @@ class AppState extends ChangeNotifier {
       final now = DateTime.now().millisecondsSinceEpoch;
       documents['facture']!.add(DocumentItem(
         id: now, numero: factureNum, date: p.date,
+        dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: p.montant, statut: 'cours',
         lines: p.lines,
@@ -434,6 +507,7 @@ class AppState extends ChangeNotifier {
       // Le BL ne porte aucun montant.
       documents['bl']!.add(DocumentItem(
         id: now + 1, numero: blNum, date: p.date,
+        dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: 0, statut: 'cours',
         lines: p.lines,

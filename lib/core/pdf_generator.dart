@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
+import 'comptabilite.dart';
 import 'document_pagination.dart';
 import 'models.dart';
 import 'signature_image.dart';
@@ -119,7 +120,8 @@ class PdfGenerator {
       pw.Align(alignment: pw.Alignment.centerRight, child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
           pw.Text('N°  $numero', style: _ts(9.5, font: bold)),
-          pw.Text('Date : $dateStr', style: _ts(9, color: _grey3)),
+          // Date omise si le manager ne l'a pas saisie.
+          if (dateStr.isNotEmpty) pw.Text(dateStr, style: _ts(9, color: _grey3)),
         ],
       )),
     ]);
@@ -354,7 +356,9 @@ class PdfGenerator {
       reg  = pw.Font.helvetica();
     }
     final docNumero = numero ?? _numero(settings, type);
-    final docDate   = date ?? _dateStr();
+    // Date libre saisie par le manager : absente, aucune date n'est imprimée
+    // (le PDF doit être le calque exact de l'aperçu).
+    final docDate = (date == null || date.trim().isEmpty) ? '' : 'Date : ${date.trim()}';
     // Signature du manager décodée une seule fois, réutilisée sur la dernière page.
     final sigBytes = decodeSignature(settings.signature);
     final pw.ImageProvider? sigImage = sigBytes != null ? pw.MemoryImage(sigBytes) : null;
@@ -531,13 +535,14 @@ class PdfGenerator {
   }
 
   // ── Rapport financier ─────────────────────────────────
+  /// Rapport d'activité sur la période choisie. Tout provient des données
+  /// réelles de l'application, via [Comptabilite.rapport] : aucun chiffre n'est
+  /// inventé, et un exercice vide produit un rapport vide mais valide.
   static Future<List<int>> generateRapport({
     required AppSettings settings,
-    required List<DimeEntry> dime,
-    required List<Client> clients,
-    required List<Engagement> engagements,
+    required RapportPeriode rapport,
   }) async {
-    final doc = pw.Document(title: 'Rapport financier');
+    final doc = pw.Document(title: 'Rapport d\'activité');
 
     pw.Font bold, reg;
     try {
@@ -547,14 +552,14 @@ class PdfGenerator {
       bold = pw.Font.helveticaBold();
       reg  = pw.Font.helvetica();
     }
+    await _loadLogo();
 
-    final totalRevenu = dime.fold<double>(0, (s, d) => s + d.revenu);
-    final totalDime = dime.fold<double>(0, (s, d) => s + d.dime);
-    final totalPaye = engagements.where((e) => e.estCreance && e.statut == 'paye').fold<double>(0, (s, e) => s + e.montant);
-    final totalRetard = engagements.where((e) => e.statut == 'retard').fold<double>(0, (s, e) => s + e.montant);
-    final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
-    final topClients = clients.where((c) => c.totalFacture > 0).toList()
-      ..sort((a, b) => b.totalFacture.compareTo(a.totalFacture));
+    String jour(DateTime d) =>
+        '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
+    final periodeLabel = '${jour(rapport.debut)} — ${jour(rapport.fin)}';
+
+    final categories = rapport.depensesParCategorie.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
 
     pw.Widget kpi(String label, String value) => pw.Expanded(
       child: pw.Container(
@@ -591,6 +596,8 @@ class PdfGenerator {
       build: (ctx) => [
         // En-tête
         pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+          _mark(30),
+          pw.SizedBox(width: 10),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.Text(settings.company, style: _ts(14, font: bold)),
             pw.Text(settings.address, style: _ts(8, color: _grey2)),
@@ -598,81 +605,146 @@ class PdfGenerator {
           ]),
           pw.Spacer(),
           pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.end, children: [
-            pw.Text('RAPPORT FINANCIER', style: _ts(14, font: bold, color: _red)),
+            pw.Text('RAPPORT D\'ACTIVITÉ', style: _ts(14, font: bold, color: _red)),
+            pw.Text(periodeLabel, style: _ts(9, font: bold, color: _grey1)),
             pw.Text('Édité le ${_dateStr()}', style: _ts(8, color: _grey2)),
           ]),
         ]),
         pw.SizedBox(height: 14),
         pw.Divider(color: _border, height: 1),
 
-        // KPIs
-        sectionTitle('Synthèse'),
+        // ── Synthèse ───────────────────────────────────────
+        sectionTitle('Synthèse de la période'),
         pw.Row(children: [
-          kpi('REVENU TOTAL', '${Fmt.number(totalRevenu)} FCFA'),
-          kpi('DÎME (10%)', '${Fmt.number(totalDime)} FCFA'),
-          kpi('CRÉANCES ENCAISSÉES', '${Fmt.number(totalPaye)} FCFA'),
-          kpi('EN RETARD', '${Fmt.number(totalRetard)} FCFA'),
+          kpi('ENCAISSEMENTS', '${Fmt.number(rapport.revenu)} FCFA'),
+          kpi('DÉCAISSEMENTS', '${Fmt.number(rapport.depenses)} FCFA'),
+          kpi('BÉNÉFICE', '${Fmt.number(rapport.benefice)} FCFA'),
+          kpi('DÎME (10%)', '${Fmt.number(rapport.dime)} FCFA'),
         ]),
-
-        // Dîme mensuelle
-        sectionTitle('Revenus et dîme par mois'),
-        pw.Table(
-          border: pw.TableBorder.all(color: _border, width: 0.5),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(3),
-            1: const pw.FlexColumnWidth(3),
-            2: const pw.FlexColumnWidth(3),
-            3: const pw.FlexColumnWidth(2),
-          },
-          children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: _red),
-              children: [
-                cell('Mois', head: true),
-                cell('Revenu net', head: true, right: true),
-                cell('Dîme (10%)', head: true, right: true),
-                cell('Statut', head: true),
-              ],
-            ),
-            ...dime.asMap().entries.map((e) => pw.TableRow(
-              decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
-              children: [
-                cell(e.value.mois),
-                cell(Fmt.number(e.value.revenu), right: true),
-                cell(Fmt.number(e.value.dime), right: true),
-                cell(e.value.statut == 'paye' ? 'Versée' : 'En attente'),
-              ],
-            )),
-          ],
+        pw.SizedBox(height: 8),
+        pw.Text(
+          'Comptabilité tenue en base caisse : seules les sommes réellement '
+          'encaissées ou décaissées entre le ${jour(rapport.debut)} et le '
+          '${jour(rapport.fin)} figurent dans ce rapport.',
+          style: _ts(7.5, color: _grey3),
         ),
 
-        // Top clients
-        sectionTitle('Top clients par chiffre d\'affaires'),
-        pw.Table(
-          border: pw.TableBorder.all(color: _border, width: 0.5),
-          columnWidths: {
-            0: const pw.FlexColumnWidth(4),
-            1: const pw.FlexColumnWidth(3),
-            2: const pw.FlexColumnWidth(2),
-          },
-          children: [
-            pw.TableRow(
-              decoration: const pw.BoxDecoration(color: _red),
+        if (rapport.estVide) ...[
+          pw.SizedBox(height: 30),
+          pw.Center(child: pw.Text('Aucun mouvement sur cette période.',
+              style: _ts(11, color: _grey2, font: bold))),
+        ] else ...[
+          // ── Détail mensuel ───────────────────────────────
+          if (rapport.mois.isNotEmpty) ...[
+            sectionTitle('Détail par mois'),
+            pw.Table(
+              border: pw.TableBorder.all(color: _border, width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(3),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(3),
+                3: const pw.FlexColumnWidth(3),
+                4: const pw.FlexColumnWidth(3),
+              },
               children: [
-                cell('Client', head: true),
-                cell('CA facturé', head: true, right: true),
-                cell('Part', head: true, right: true),
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: _red),
+                  children: [
+                    cell('Mois', head: true),
+                    cell('Encaissé', head: true, right: true),
+                    cell('Dépensé', head: true, right: true),
+                    cell('Bénéfice', head: true, right: true),
+                    cell('Dîme', head: true, right: true),
+                  ],
+                ),
+                ...rapport.mois.asMap().entries.map((e) => pw.TableRow(
+                  decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
+                  children: [
+                    cell(e.value.label),
+                    cell(Fmt.number(e.value.revenuHt), right: true),
+                    cell(Fmt.number(e.value.depenses), right: true),
+                    cell(Fmt.number(e.value.benefice), right: true),
+                    cell(Fmt.number(e.value.dime), right: true),
+                  ],
+                )),
               ],
             ),
-            ...topClients.take(8).toList().asMap().entries.map((e) => pw.TableRow(
-              decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
-              children: [
-                cell(e.value.name),
-                cell(Fmt.number(e.value.totalFacture), right: true),
-                cell(totalCA > 0 ? '${(e.value.totalFacture / totalCA * 100).round()}%' : '—', right: true),
-              ],
-            )),
           ],
+
+          // ── Dépenses par catégorie ───────────────────────
+          if (categories.isNotEmpty) ...[
+            sectionTitle('Dépenses par catégorie'),
+            pw.Table(
+              border: pw.TableBorder.all(color: _border, width: 0.5),
+              columnWidths: {
+                0: const pw.FlexColumnWidth(5),
+                1: const pw.FlexColumnWidth(3),
+                2: const pw.FlexColumnWidth(2),
+              },
+              children: [
+                pw.TableRow(
+                  decoration: const pw.BoxDecoration(color: _red),
+                  children: [
+                    cell('Catégorie', head: true),
+                    cell('Montant', head: true, right: true),
+                    cell('Part', head: true, right: true),
+                  ],
+                ),
+                ...categories.asMap().entries.map((e) => pw.TableRow(
+                  decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
+                  children: [
+                    cell(e.value.key),
+                    cell(Fmt.number(e.value.value), right: true),
+                    cell(rapport.depenses > 0
+                        ? '${(e.value.value / rapport.depenses * 100).round()}%'
+                        : '—', right: true),
+                  ],
+                )),
+              ],
+            ),
+          ],
+
+          // ── Mouvements détaillés ─────────────────────────
+          sectionTitle('Détail des mouvements (${rapport.mouvements.length})'),
+          pw.Table(
+            border: pw.TableBorder.all(color: _border, width: 0.5),
+            columnWidths: {
+              0: const pw.FlexColumnWidth(2),
+              1: const pw.FlexColumnWidth(4),
+              2: const pw.FlexColumnWidth(4),
+              3: const pw.FlexColumnWidth(3),
+            },
+            children: [
+              pw.TableRow(
+                decoration: const pw.BoxDecoration(color: _red),
+                children: [
+                  cell('Date', head: true),
+                  cell('Libellé', head: true),
+                  cell('Tiers / catégorie', head: true),
+                  cell('Montant', head: true, right: true),
+                ],
+              ),
+              ...rapport.mouvements.asMap().entries.map((e) => pw.TableRow(
+                decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
+                children: [
+                  cell(jour(e.value.date)),
+                  cell(e.value.libelle),
+                  cell(e.value.detail),
+                  // Le signe distingue une entrée d'une sortie d'argent.
+                  cell('${e.value.entree ? '+' : '-'} ${Fmt.number(e.value.montant)}',
+                      right: true),
+                ],
+              )),
+            ],
+          ),
+        ],
+
+        // ── Situation des créances ─────────────────────────
+        sectionTitle('Situation à date'),
+        pw.Text(
+          'Créances encore en cours (restant dû, acomptes déduits) : '
+          '${Fmt.number(rapport.creancesEnCours)} FCFA',
+          style: _ts(9),
         ),
       ],
       footer: (ctx) => pw.Container(

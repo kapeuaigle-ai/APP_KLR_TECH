@@ -16,7 +16,9 @@ import '../widgets/responsive.dart';
 //  Main Screen
 // ─────────────────────────────────────────────────────────
 class DocumentCreateScreen extends StatefulWidget {
-  const DocumentCreateScreen({super.key});
+  /// Proforma à modifier. `null` = création d'une nouvelle proforma.
+  final DocumentItem? existing;
+  const DocumentCreateScreen({super.key, this.existing});
 
   @override
   State<DocumentCreateScreen> createState() => _DocumentCreateScreenState();
@@ -29,7 +31,10 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   final _clientCtrl    = TextEditingController();
   final _clientAddrCtrl = TextEditingController();
   final _objetCtrl     = TextEditingController();
+  final _dateCtrl      = TextEditingController();
   final List<LineItem> _lines = [];
+
+  bool get _isEdit => widget.existing != null;
 
   double get _ht      => _lines.fold(0, (s, l) => s + l.total);
   double get _tvaAmt  => _tvaEnabled ? _ht * 0.05 : 0;
@@ -75,6 +80,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       id: _docId!,
       numero: _committedNumero!,
       date: _committedDate!,
+      dateAffichee: _dateCtrl.text.trim(),
       clientId: 0,
       client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
       clientAddr: _clientAddrCtrl.text,
@@ -93,6 +99,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     settings: state.settings,
     type: _type,
     numero: _numeroFor(state),
+    date: _dateCtrl.text,
     client: _clientCtrl.text,
     clientAddr: _clientAddrCtrl.text,
     objet: _objetCtrl.text,
@@ -176,10 +183,27 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   @override
   void initState() {
     super.initState();
-    _lines.add(LineItem(ref: '01', designation: '', qte: 1, pu: 0));
+    final doc = widget.existing;
+    if (doc != null) {
+      // Modification : on reprend le document tel quel. Numéro, date de
+      // création et id sont conservés, donc l'enregistrement met à jour la
+      // proforma existante au lieu d'en créer une seconde.
+      _committedNumero = doc.numero;
+      _committedDate = doc.date;
+      _docId = doc.id;
+      _clientCtrl.text = doc.client;
+      _clientAddrCtrl.text = doc.clientAddr;
+      _objetCtrl.text = doc.objet;
+      _dateCtrl.text = doc.dateAffichee;
+      _lines.addAll(doc.lines.map((l) =>
+          LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu)));
+    }
+    // Une ligne vide de départ, pour saisir sans avoir à cliquer « Ajouter ».
+    if (_lines.isEmpty) _lines.add(LineItem(ref: '01', designation: '', qte: 1, pu: 0));
     _clientCtrl.addListener(_rebuild);
     _clientAddrCtrl.addListener(_rebuild);
     _objetCtrl.addListener(_rebuild);
+    _dateCtrl.addListener(_rebuild);
   }
 
   void _rebuild() => setState(() {});
@@ -189,6 +213,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     _clientCtrl.dispose();
     _clientAddrCtrl.dispose();
     _objetCtrl.dispose();
+    _dateCtrl.dispose();
     super.dispose();
   }
 
@@ -214,6 +239,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     type: _type,
     numero: _numeroFor(state),
     settings: state.settings,
+    date: _dateCtrl.text,
     client: _clientCtrl.text,
     clientAddr: _clientAddrCtrl.text,
     objet: _objetCtrl.text,
@@ -230,6 +256,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     clientCtrl: _clientCtrl,
     clientAddrCtrl: _clientAddrCtrl,
     objetCtrl: _objetCtrl,
+    dateCtrl: _dateCtrl,
     lines: _lines,
     onAddLine: _addLine,
     onRemoveLine: _removeLine,
@@ -279,10 +306,13 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
               ),
               const SizedBox(width: 12),
               Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text('Nouvelle Proforma', style: AppTheme.h1),
+                Text(_isEdit ? 'Modifier la proforma' : 'Nouvelle Proforma', style: AppTheme.h1),
                 const SizedBox(height: 3),
-                Text('Remplissez la proforma : la facture et le BL seront générés à sa validation.',
-                    style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
+                Text(
+                  _isEdit
+                      ? 'Proforma ${widget.existing!.numero} — le numéro et la date de création sont conservés.'
+                      : 'Remplissez la proforma : la facture et le BL seront générés à sa validation.',
+                  style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3)),
               ])),
               // Sur téléphone, Annuler et Enregistrer descendent dans la
               // barre d'actions basse, toujours visible.
@@ -405,7 +435,7 @@ class _ApercuPleinEcran extends StatelessWidget {
 //  Form Panel  (TVA & conditions removed — managed in Paramètres)
 // ─────────────────────────────────────────────────────────
 class _FormPanel extends StatelessWidget {
-  final TextEditingController clientCtrl, clientAddrCtrl, objetCtrl;
+  final TextEditingController clientCtrl, clientAddrCtrl, objetCtrl, dateCtrl;
   final List<LineItem> lines;
   final VoidCallback onAddLine;
   final ValueChanged<int> onRemoveLine;
@@ -417,7 +447,7 @@ class _FormPanel extends StatelessWidget {
 
   const _FormPanel({
     required this.clientCtrl, required this.clientAddrCtrl,
-    required this.objetCtrl,
+    required this.objetCtrl, required this.dateCtrl,
     required this.lines, required this.onAddLine, required this.onRemoveLine,
     required this.tva,
     required this.ht, required this.tvaAmt, required this.ttc,
@@ -443,6 +473,10 @@ class _FormPanel extends StatelessWidget {
         _LabelField(label: 'ADRESSE CLIENT', controller: clientAddrCtrl, hint: 'Adresse du client', maxLines: 2),
         const SizedBox(height: 10),
         _LabelField(label: 'OBJET', controller: objetCtrl, hint: 'Objet du document'),
+        const SizedBox(height: 10),
+        // Saisie libre : laissée vide, aucune date n'apparaît sur le document.
+        _LabelField(label: 'DATE (OPTIONNELLE)', controller: dateCtrl,
+            hint: 'Ex. 25 Juillet 2026 — vide : aucune date affichée'),
       ])),
       const SizedBox(height: 14),
 

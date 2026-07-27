@@ -211,7 +211,9 @@ class _DocActions {
       settings: s,
       type: type,
       numero: doc.numero,
-      date: doc.date,
+      // Date imprimée = celle saisie par le manager (et non la date interne
+      // de création, qui ne sert qu'à la numérotation).
+      date: doc.dateAffichee,
       client: doc.client,
       clientAddr: doc.clientAddr,
       objet: doc.objet,
@@ -272,6 +274,7 @@ class _DocActions {
                         type: type,
                         numero: doc.numero,
                         settings: s,
+                        date: doc.dateAffichee,
                         client: doc.client,
                         clientAddr: doc.clientAddr,
                         objet: doc.objet,
@@ -289,6 +292,17 @@ class _DocActions {
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                  // Seule la proforma se modifie : facture et BL en sont dérivés
+                  // automatiquement à la validation.
+                  if (type == 'proforma')
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.of(ctx).pop();
+                        context.read<AppState>().startEditProforma(doc);
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 16, color: AppColors.text2),
+                      label: Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+                    ),
                   TextButton.icon(
                     onPressed: () => printPdf(context),
                     icon: const Icon(Icons.print_outlined, size: 16, color: AppColors.text2),
