@@ -97,7 +97,7 @@ void main() {
     expect(r.creancesEnCours, 600);
   });
 
-  test('un engagement annulé ne compte ni en attendu ni en flux', () {
+  test('un engagement annulé sans règlement ne compte nulle part', () {
     final annule = _entrant(1000, [])..annule = true;
     final r = Comptabilite.rapport(
       debut: DateTime(2026, 1, 1), fin: DateTime(2026, 12, 31),
@@ -105,6 +105,31 @@ void main() {
     );
     expect(r.revenu, 0);
     expect(r.creancesEnCours, 0);
+  });
+
+  test('annuler un engagement ne retire pas les règlements déjà encaissés', () {
+    // Base caisse : la somme a réellement circulé, l'annulation ne porte que
+    // sur ce qui restait attendu.
+    final annule = _entrant(1000, [_r(400, DateTime(2026, 3, 3))])..annule = true;
+    final r = Comptabilite.rapport(
+      debut: DateTime(2026, 1, 1), fin: DateTime(2026, 12, 31),
+      engagements: [annule],
+    );
+    expect(r.revenu, 400, reason: 'l\'encaissement passé demeure');
+    expect(r.creancesEnCours, 0, reason: 'mais plus rien n\'est attendu');
+    expect(r.mouvements, hasLength(1));
+  });
+
+  test('annuler ne réécrit pas un mois déjà clôturé', () {
+    final annule = _entrant(1000, [_r(400, DateTime(2026, 3, 3))])..annule = true;
+    final rows = Comptabilite.bilanMensuel([annule], const {}, const {});
+    expect(Comptabilite.ligneMois('2026-03', rows)!.revenuHt, 400);
+  });
+
+  test('un décaissement passé demeure lui aussi après annulation', () {
+    final annule = _sortant(600, [_r(600, DateTime(2026, 3, 5))])..annule = true;
+    final t = Comptabilite.totaux([annule]);
+    expect(t.depenses, 600);
   });
 
   test('les mouvements sortent triés du plus ancien au plus récent', () {

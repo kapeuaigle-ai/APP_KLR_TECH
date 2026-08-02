@@ -80,9 +80,13 @@ class Comptabilite {
       f.lines.fold(0.0, (s, l) => s + l.total);
 
   /// Décaissements rattachés à une facture — sert au bénéfice par facture.
+  ///
+  /// `regle` est déjà la somme réellement versée : un achat annulé après un
+  /// paiement partiel continue de peser sur le bénéfice à hauteur de ce qui a
+  /// circulé, par le même principe qu'en `_flux`.
   static double depensesFacture(String numero, List<Engagement> engagements) =>
       engagements
-          .where((e) => !e.estEntrant && !e.annule && e.documentNumero == numero)
+          .where((e) => !e.estEntrant && e.documentNumero == numero)
           .fold(0.0, (s, e) => s + e.regle);
 
   static double beneficeFacture(DocumentItem f, List<Engagement> engagements) =>
@@ -101,11 +105,16 @@ class Comptabilite {
     return '${_moisFr[int.parse(p[1])]} ${p[0]}';
   }
 
-  /// Tous les règlements d'une liste d'engagements non annulés, avec leur sens.
+  /// Tous les règlements d'une liste d'engagements, avec leur sens.
+  ///
+  /// Un engagement annulé n'est PAS écarté : ses règlements ont réellement eu
+  /// lieu, et en base caisse une somme encaissée l'est restée. L'annulation
+  /// retire l'engagement des montants ATTENDUS — voir `creancesEnCours` — pas
+  /// des mouvements passés. Sans quoi annuler un engagement partiellement payé
+  /// réécrirait des mois déjà clôturés, dont la dîme est peut-être versée.
   static Iterable<({Engagement engagement, Reglement reglement})> _flux(
       List<Engagement> engagements) sync* {
     for (final e in engagements) {
-      if (e.annule) continue;
       for (final r in e.reglements) {
         yield (engagement: e, reglement: r);
       }
