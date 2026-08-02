@@ -6,6 +6,7 @@ import 'theme.dart';
 import 'comptabilite.dart';
 import 'utils.dart';
 import 'persistence.dart';
+import 'migration.dart';
 
 class AppState extends ChangeNotifier {
   NavScreen _screen = NavScreen.dashboard;
@@ -18,7 +19,6 @@ class AppState extends ChangeNotifier {
   late List<Task> tasks;
   late List<Note> notes;
   late List<Engagement> engagements;
-  late List<Expense> expenses;
   late List<ActivityItem> activities;
   final Set<String> _dimePaidMonths = {};
   final Map<String, String> _dimePaidDates = {};
@@ -27,6 +27,11 @@ class AppState extends ChangeNotifier {
   String _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
   /// Les activités générées par l'app se numérotent au-dessus des ids métier.
   int _nextActivityId = 1000;
+  /// Compteur pour les ids de règlement : une horloge de départ, ensuite
+  /// simplement incrémentée. Un nouvel horodatage à chaque appel collisionne
+  /// dès que deux règlements sont ajoutés coup sur coup, la résolution de
+  /// l'horloge n'étant pas garantie à la microseconde près.
+  int _nextReglementId = DateTime.now().microsecondsSinceEpoch;
 
   // ── Persistance ────────────────────────────────────────
   final Store _store;
@@ -64,8 +69,10 @@ class AppState extends ChangeNotifier {
     );
     tasks = SampleData.initialTasks;
     notes = SampleData.initialNotes;
-    engagements = SampleData.initialEngagements;
-    expenses = List.from(SampleData.initialExpenses);
+    engagements = [
+      ...SampleData.initialEngagements,
+      ...SampleData.initialEngagementsSortants,
+    ];
     activities = [];
     _dimePaidMonths.clear();
     _dimePaidDates.clear();
@@ -88,7 +95,7 @@ class AppState extends ChangeNotifier {
   }
 
   /// Vide toutes les données métier — clients, documents, engagements,
-  /// dépenses, tâches, notes, activités.
+  /// tâches, notes, activités.
   ///
   /// Les RÉGLAGES sont conservés (entreprise, numérotation, conditions,
   /// garantie, signature, accès) : ils relèvent de la configuration, pas des
@@ -100,7 +107,6 @@ class AppState extends ChangeNotifier {
     tasks = [];
     notes = [];
     engagements = [];
-    expenses = [];
     activities = [];
     _dimePaidMonths.clear();
     _dimePaidDates.clear();
@@ -127,7 +133,6 @@ class AppState extends ChangeNotifier {
       for (final k in documents.keys) k: documents[k]!.map((d) => d.toJson()).toList(),
     },
     'engagements': engagements.map((e) => e.toJson()).toList(),
-    'expenses': expenses.map((e) => e.toJson()).toList(),
     'activities': activities.map((a) => a.toJson()).toList(),
     'tasks': tasks.map((t) => t.toJson()).toList(),
     'notes': notes.map((n) => n.toJson()).toList(),
@@ -136,9 +141,11 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
+    'version': 2,
   };
 
-  void loadFromJson(Map<String, dynamic> j) {
+  void loadFromJson(Map<String, dynamic> brut) {
+    final j = migrerV1versV2(brut);
     _restoring = true;
     clients = (j['clients'] as List).map((e) => Client.fromJson(e)).toList();
     final docs = (j['documents'] as Map).cast<String, dynamic>();
@@ -148,7 +155,6 @@ class AppState extends ChangeNotifier {
       'bl': (docs['bl'] as List? ?? []).map((e) => DocumentItem.fromJson(e)).toList(),
     };
     engagements = (j['engagements'] as List).map((e) => Engagement.fromJson(e)).toList();
-    expenses = (j['expenses'] as List).map((e) => Expense.fromJson(e)).toList();
     activities = (j['activities'] as List).map((e) => ActivityItem.fromJson(e)).toList();
     tasks = (j['tasks'] as List).map((e) => Task.fromJson(e)).toList();
     notes = (j['notes'] as List).map((e) => Note.fromJson(e)).toList();
@@ -263,64 +269,69 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
-  /// Valide un engagement : la créance est encaissée, la dette est payée.
-  /// C'est ce geste qui le fait entrer en comptabilité — au mois de `date`,
-  /// en revenu pour une créance, en dépense pour une dette.
-  void validerEngagement(int id, String date) {
-    final match = engagements.where((e) => e.id == id);
-    if (match.isEmpty) return;
-    final e = match.first;
-    e.statut = 'paye';
-    e.dateReglement = date;
-    // Avec un acompte, seul le solde entre ici : l'acompte a déjà été compté
-    // au mois de son versement.
+  /// Vide toutes les données. Exposé pour les tests, qui ont besoin d'un état
+  /// nu sans passer par le jeu de démonstration.
+  void viderDonnees() {
+    _clearData();
+    notifyListeners();
+  }
+
+  int _prochainId() => _nextReglementId++;
+
+  Engagement? _engagement(int id) {
+    final m = engagements.where((e) => e.id == id);
+    return m.isEmpty ? null : m.first;
+  }
+
+  /// Enregistre un mouvement d'argent réel sur un engagement.
+  ///
+  /// C'est le SEUL geste qui fait entrer une somme en comptabilité, au mois de
+  /// `date`. Un montant nul, un engagement annulé ou déjà soldé sont refusés
+  /// en silence ; un montant supérieur au reste dû est écrêté.
+  void ajouterReglement(int engagementId, double montant, DateTime date,
+      {String moyen = 'especes'}) {
+    final e = _engagement(engagementId);
+    if (e == null || e.annule || montant <= 0 || e.reste <= 0) return;
+
+    final effectif = montant > e.reste ? e.reste : montant;
+    e.reglements.add(Reglement(
+      id: _prochainId(), date: date, montant: effectif, moyen: moyen));
+
     _logActivity(
       'paiement',
-      e.estCreance
-          ? 'Créance encaissée — ${Fmt.money(e.montantAuReglement)}'
-          : 'Dette payée — ${Fmt.money(e.montantAuReglement)}',
-      e.aAcompte
-          ? '${e.tiers} · ${e.num} — solde le $date (acompte ${Fmt.money(e.acompte)} déjà compté)'
-          : '${e.tiers} · ${e.num} — entrée en comptabilité le $date',
-      e.estCreance ? AppColors.green : AppColors.orange,
+      e.estEntrant
+          ? 'Encaissement — ${Fmt.money(effectif)}'
+          : 'Décaissement — ${Fmt.money(effectif)}',
+      e.solde
+          ? '${e.tiers} — soldé'
+          : '${e.tiers} — reste ${Fmt.money(e.reste)}',
+      e.estEntrant ? AppColors.green : AppColors.orange,
     );
     _emit();
   }
 
-  /// Enregistre (ou corrige) l'acompte déjà versé sur un engagement en cours.
-  /// L'acompte entre en comptabilité au mois de `date` ; le solde suivra à la
-  /// validation. Un montant nul ou négatif retire l'acompte.
-  void setAcompte(int id, double montant, String date) {
-    final match = engagements.where((e) => e.id == id);
-    if (match.isEmpty) return;
-    final e = match.first;
-
-    if (montant <= 0) {
-      e.acompte = 0;
-      e.dateAcompte = null;
-      _emit();
-      return;
-    }
-    // Un acompte ne peut pas dépasser le montant de l'engagement.
-    e.acompte = montant > e.montant ? e.montant : montant;
-    e.dateAcompte = date;
-    _logActivity(
-      'paiement',
-      e.estCreance
-          ? 'Acompte encaissé — ${Fmt.money(e.acompte)}'
-          : 'Acompte versé — ${Fmt.money(e.acompte)}',
-      '${e.tiers} · ${e.num} — reste ${Fmt.money(e.reste)}',
-      e.estCreance ? AppColors.green : AppColors.orange,
-    );
+  /// Retire un règlement : la somme ressort de la comptabilité.
+  void supprimerReglement(int engagementId, int reglementId) {
+    final e = _engagement(engagementId);
+    if (e == null) return;
+    e.reglements.removeWhere((r) => r.id == reglementId);
     _emit();
   }
 
-  /// Annule la validation : l'engagement ressort de la comptabilité.
-  void annulerValidationEngagement(int id) {
-    final match = engagements.where((e) => e.id == id);
-    if (match.isEmpty) return;
-    match.first.statut = 'cours';
-    match.first.dateReglement = null;
+  /// Annule un engagement : il sort des montants attendus, et n'accepte plus
+  /// de règlement. Les règlements déjà passés restent en comptabilité — ils
+  /// ont réellement eu lieu.
+  void annulerEngagement(int id) {
+    final e = _engagement(id);
+    if (e == null) return;
+    e.annule = true;
+    _emit();
+  }
+
+  void reactiverEngagement(int id) {
+    final e = _engagement(id);
+    if (e == null) return;
+    e.annule = false;
     _emit();
   }
 
@@ -337,8 +348,8 @@ class AppState extends ChangeNotifier {
     final aClore = Comptabilite.moisAClore(_moisCourant, now);
     if (aClore.isEmpty) return;
 
-    final rows = Comptabilite.bilanMensuel(documents['facture'] ?? [],
-        expenses, engagements, _dimePaidMonths, _dimePaidDates);
+    final rows = Comptabilite.bilanMensuel(
+        engagements, _dimePaidMonths, _dimePaidDates);
 
     // Du plus ancien au plus récent, mais insérées en tête : on parcourt à
     // l'envers pour que le mois le plus récent finisse en haut du fil.
@@ -517,29 +528,6 @@ class AppState extends ChangeNotifier {
     }
     _emit();
     return !alreadyGenerated;
-  }
-
-  // ── Comptabilité : dépenses ────────────────────────────
-  void addExpense(Expense e) {
-    expenses.add(e);
-    _logActivity('comptabilite', 'Dépense — ${e.label}',
-        '${e.category} · ${Fmt.money(e.amount)}', AppColors.red);
-    _emit();
-  }
-
-  void deleteExpense(int id) {
-    expenses.removeWhere((e) => e.id == id);
-    _emit();
-  }
-
-  // ── Comptabilité : encaissement des factures ───────────
-  void setFactureEncaissee(int id, bool encaissee, {String? date}) {
-    final f = documents['facture']?.where((d) => d.id == id);
-    if (f != null && f.isNotEmpty) {
-      f.first.encaissee = encaissee;
-      f.first.dateEncaissement = encaissee ? date : null;
-      _emit();
-    }
   }
 
   // ── Comptabilité : versement de la dîme ────────────────
