@@ -146,6 +146,15 @@ class AppState extends ChangeNotifier {
 
   void loadFromJson(Map<String, dynamic> brut) {
     final j = migrerV1versV2(brut);
+    // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
+    // on les retire du JSON — ils ne doivent pas être persistés — et on les
+    // journalise pour que le manager puisse les vérifier.
+    final ambigus = <String>[];
+    for (final e in (j['engagements'] as List).cast<Map<String, dynamic>>()) {
+      if (e.remove('fusionAmbigue') == true) {
+        ambigus.add('${e['tiers']} · ${e['documentNumero']}');
+      }
+    }
     _restoring = true;
     clients = (j['clients'] as List).map((e) => Client.fromJson(e)).toList();
     final docs = (j['documents'] as Map).cast<String, dynamic>();
@@ -168,6 +177,16 @@ class AppState extends ChangeNotifier {
     _moisCourant = j['moisCourant'] ?? _moisCourant;
     _nextActivityId = j['nextActivityId'] ?? _nextActivityId;
     _restoring = false;
+
+    for (final a in ambigus) {
+      _logActivity(
+        'comptabilite',
+        'Rapprochement à vérifier',
+        '$a — une créance saisie à la main a été rattachée à cette facture '
+        'sur la seule concordance du client et du montant.',
+        AppColors.orange,
+      );
+    }
   }
 
   /// Écrit l'état courant sur le store. Fire-and-forget, mais chaîné : la
