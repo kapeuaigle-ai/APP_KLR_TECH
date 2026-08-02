@@ -585,15 +585,25 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
   }
 
   // ── 4. Nettoyage des documents ──────────────────────────
+  // Chaque document est RECOPIÉ dans une map neuve avant d'être modifié, au
+  // lieu d'être muté sur place. Sans cela, un littéral de map ne contenant
+  // aucun `null` est inféré `Map<String, Object>` par Dart, et y écrire
+  // `projetId = null` lève à l'exécution. Les données réelles viennent de
+  // `jsonDecode`, toujours `Map<String, dynamic>` — mais les fixtures de test
+  // en souffrent, et la copie rend au passage la fonction non mutante.
   for (final type in ['proforma', 'facture', 'bl']) {
-    for (final d in (documents[type] as List? ?? []).cast<Map<String, dynamic>>()) {
-      d.remove('encaissee');
-      d.remove('dateEncaissement');
-      d['projetId'] = null;
-      for (final l in (d['lines'] as List? ?? []).cast<Map<String, dynamic>>()) {
-        l['qteLivree'] = 0;
-      }
-    }
+    final liste = (documents[type] as List? ?? []).cast<Map<String, dynamic>>();
+    documents[type] = liste.map((d) {
+      final dd = Map<String, dynamic>.from(d);
+      dd.remove('encaissee');
+      dd.remove('dateEncaissement');
+      dd['projetId'] = null;
+      dd['lines'] = (d['lines'] as List? ?? [])
+          .cast<Map<String, dynamic>>()
+          .map((l) => Map<String, dynamic>.from(l)..['qteLivree'] = 0)
+          .toList();
+      return dd;
+    }).toList();
   }
 
   final v2 = Map<String, dynamic>.from(j);
@@ -611,16 +621,22 @@ Map<String, dynamic> _depuisEngagementV1(Map<String, dynamic> e, _Ids ids) {
   final reglements = <Map<String, dynamic>>[];
   final montant = _double(e['montant']);
   final acompte = e['acompte'] == null ? 0.0 : _double(e['acompte']);
-  final aAcompte = acompte > 0 && e['dateAcompte'] != null;
+  // Une date illisible vaut une date absente : v1 excluait déjà des comptes un
+  // acompte sans date. Surtout, la migration s'exécute au chargement de
+  // l'application — un enregistrement malformé doit être ignoré, jamais faire
+  // échouer l'ouverture de toute la sauvegarde.
+  final dAcompte = _jour(e['dateAcompte']);
+  final aAcompte = acompte > 0 && dAcompte != null;
 
   if (aAcompte) {
-    reglements.add(_reglement(ids.suivant(), _jour(e['dateAcompte'])!, acompte));
+    reglements.add(_reglement(ids.suivant(), dAcompte, acompte));
   }
-  if (e['statut'] == 'paye' && e['dateReglement'] != null) {
+  final dReglement = _jour(e['dateReglement']);
+  if (e['statut'] == 'paye' && dReglement != null) {
     // Le solde seulement : l'acompte a déjà été porté à sa propre date.
     final solde = aAcompte ? montant - acompte : montant;
     if (solde > 0) {
-      reglements.add(_reglement(ids.suivant(), _jour(e['dateReglement'])!, solde));
+      reglements.add(_reglement(ids.suivant(), dReglement, solde));
     }
   }
 
@@ -643,7 +659,10 @@ Map<String, dynamic> _depuisEngagementV1(Map<String, dynamic> e, _Ids ids) {
 }
 
 Map<String, dynamic> _depuisDepenseV1(Map<String, dynamic> d, _Ids ids) {
-  final date = DateTime.parse(d['date']);
+  // Date illisible : on garde la dépense, sans règlement. Perdre la date ne
+  // doit pas faire disparaître le montant — le manager verra un engagement
+  // non soldé et pourra le corriger.
+  final date = _iso(d['date']);
   final montant = _double(d['amount']);
   return {
     'id': ids.suivant(),
@@ -654,9 +673,11 @@ Map<String, dynamic> _depuisDepenseV1(Map<String, dynamic> d, _Ids ids) {
     'tiers': '',
     'description': d['label'] ?? '',
     'montant': montant,
-    'echeance': date.toIso8601String(),
+    'echeance': (date ?? DateTime(2026)).toIso8601String(),
     'categorie': d['category'] ?? 'Autres',
-    'reglements': [_reglement(ids.suivant(), date, montant)],
+    'reglements': date == null
+        ? <Map<String, dynamic>>[]
+        : [_reglement(ids.suivant(), date, montant)],
     'annule': false,
   };
 }
@@ -744,6 +765,9 @@ Map<String, dynamic> _reglement(int id, DateTime date, double montant) => {
 
 double _double(dynamic v) => (v as num).toDouble();
 
+/// ISO 8601 → DateTime, ou null si la chaîne est inexploitable.
+DateTime? _iso(dynamic s) => s is String ? DateTime.tryParse(s) : null;
+
 /// 'dd/MM/yyyy' → DateTime, ou null si inexploitable.
 DateTime? _jour(dynamic s) {
   if (s is! String) return null;
@@ -769,7 +793,18 @@ String _joindre(dynamic description, dynamic num) {
 - [ ] **Step 4: Lancer le test et vérifier qu'il passe**
 
 Run: `flutter test test/migration_v1_v2_test.dart`
-Expected: PASS, 11 tests.
+Expected: PASS, 11 tests — puis 15 une fois ajoutés les tests de tolérance aux
+dates illisibles (voir ci-dessous).
+
+**Tolérance aux dates illisibles.** Une date non nulle mais inexploitable
+(`'12-04-2026'`, `''`, `'n/a'`) ne doit jamais interrompre la migration : elle
+s'exécute pendant `loadFromJson`, donc au démarrage de l'application. Un seul
+enregistrement malformé empêcherait le manager d'ouvrir ses données. Une telle
+date vaut une date absente — la règle que v1 appliquait déjà pour un acompte
+sans date. Quatre tests couvrent ces cas : acompte illisible, règlement
+illisible, dépense à date illisible (le montant est conservé, sans règlement),
+et sauvegarde partiellement corrompue dont les enregistrements sains sont bien
+migrés.
 
 - [ ] **Step 5: Commit**
 
