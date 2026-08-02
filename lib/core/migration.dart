@@ -83,16 +83,22 @@ Map<String, dynamic> _depuisEngagementV1(Map<String, dynamic> e, _Ids ids) {
   final reglements = <Map<String, dynamic>>[];
   final montant = _double(e['montant']);
   final acompte = e['acompte'] == null ? 0.0 : _double(e['acompte']);
-  final aAcompte = acompte > 0 && e['dateAcompte'] != null;
+  // Une date illisible vaut une date absente : v1 excluait déjà des comptes
+  // un acompte sans date. Surtout, la migration s'exécute au chargement de
+  // l'application — un enregistrement malformé doit être ignoré, jamais faire
+  // échouer l'ouverture de toute la sauvegarde.
+  final dAcompte = _jour(e['dateAcompte']);
+  final aAcompte = acompte > 0 && dAcompte != null;
 
   if (aAcompte) {
-    reglements.add(_reglement(ids.suivant(), _jour(e['dateAcompte'])!, acompte));
+    reglements.add(_reglement(ids.suivant(), dAcompte, acompte));
   }
-  if (e['statut'] == 'paye' && e['dateReglement'] != null) {
+  final dReglement = _jour(e['dateReglement']);
+  if (e['statut'] == 'paye' && dReglement != null) {
     // Le solde seulement : l'acompte a déjà été porté à sa propre date.
     final solde = aAcompte ? montant - acompte : montant;
     if (solde > 0) {
-      reglements.add(_reglement(ids.suivant(), _jour(e['dateReglement'])!, solde));
+      reglements.add(_reglement(ids.suivant(), dReglement, solde));
     }
   }
 
@@ -115,7 +121,10 @@ Map<String, dynamic> _depuisEngagementV1(Map<String, dynamic> e, _Ids ids) {
 }
 
 Map<String, dynamic> _depuisDepenseV1(Map<String, dynamic> d, _Ids ids) {
-  final date = DateTime.parse(d['date']);
+  // Une date illisible ne fait pas disparaître la dépense : elle ressort
+  // comme un engagement sortant sans règlement, l'argent reste visible en
+  // « reste dû » au lieu d'être perdu ou de bloquer le chargement.
+  final date = _iso(d['date']);
   final montant = _double(d['amount']);
   return {
     'id': ids.suivant(),
@@ -126,9 +135,11 @@ Map<String, dynamic> _depuisDepenseV1(Map<String, dynamic> d, _Ids ids) {
     'tiers': '',
     'description': d['label'] ?? '',
     'montant': montant,
-    'echeance': date.toIso8601String(),
+    'echeance': (date ?? DateTime(2026)).toIso8601String(),
     'categorie': d['category'] ?? 'Autres',
-    'reglements': [_reglement(ids.suivant(), date, montant)],
+    'reglements': date != null
+        ? [_reglement(ids.suivant(), date, montant)]
+        : <Map<String, dynamic>>[],
     'annule': false,
   };
 }
@@ -225,6 +236,9 @@ DateTime? _jour(dynamic s) {
   if (d == null || m == null || y == null) return null;
   return DateTime(y, m, d);
 }
+
+/// ISO 8601 → DateTime, ou null si la chaîne est inexploitable.
+DateTime? _iso(dynamic s) => s is String ? DateTime.tryParse(s) : null;
 
 String _normaliser(String s) =>
     s.toUpperCase().replaceAll(RegExp(r'[\s\-_/]'), '');

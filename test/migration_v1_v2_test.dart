@@ -159,4 +159,69 @@ void main() {
       expect(l['qteLivree'], 0);
     }
   });
+
+  test('une date d\'acompte illisible n\'interrompt pas la migration', () {
+    final v1 = _v1();
+    (v1['engagements'] as List).add({
+      'id': 12, 'sens': 'creance', 'num': 'X', 'tiers': 'DELTA',
+      'description': '', 'montant': 500.0, 'statut': 'cours',
+      'echeance': '30/06/2026', 'dateReglement': null, 'categorie': 'Autres',
+      'acompte': 200.0, 'dateAcompte': 'pas une date',
+    });
+
+    final v2 = migrerV1versV2(v1);
+    final delta = _parTiers(v2, 'DELTA')!;
+    expect((delta['reglements'] as List), isEmpty,
+        reason: 'l\'acompte sans date exploitable est ignoré, comme en v1');
+    expect(delta['montant'], 500.0, reason: 'l\'engagement lui-même est conservé');
+  });
+
+  test('une date de règlement illisible n\'interrompt pas la migration', () {
+    final v1 = _v1();
+    (v1['engagements'] as List).add({
+      'id': 13, 'sens': 'dette', 'num': 'Y', 'tiers': 'EPSILON',
+      'description': '', 'montant': 700.0, 'statut': 'paye',
+      'echeance': '30/06/2026', 'dateReglement': '', 'categorie': 'Autres',
+      'acompte': 0.0, 'dateAcompte': null,
+    });
+
+    final v2 = migrerV1versV2(v1);
+    final eps = _parTiers(v2, 'EPSILON')!;
+    expect((eps['reglements'] as List), isEmpty);
+    expect(eps['montant'], 700.0);
+  });
+
+  test('une dépense à date illisible garde son montant, sans règlement', () {
+    final v1 = _v1();
+    // Reconstruit la liste en List<Map<String, dynamic>> : la liste à un
+    // seul élément de `_v1()` n'a aucune valeur `null`, donc Dart l'infère
+    // `List<Map<String, Object>>` (non nullable), ce qui ferait échouer
+    // `.add` d'une map contenant `factureNumero: null` avant même d'appeler
+    // la migration — même piège d'inférence que pour les documents.
+    v1['expenses'] = List<Map<String, dynamic>>.from(v1['expenses'] as List)
+      ..add({
+        'id': 21, 'date': 'corrompu', 'label': 'Dépense abîmée',
+        'amount': 90.0, 'category': 'Transport', 'factureNumero': null,
+      });
+
+    final v2 = migrerV1versV2(v1);
+    final dep = _engs(v2).firstWhere((e) => e['description'] == 'Dépense abîmée');
+    expect(dep['montant'], 90.0, reason: 'le montant ne doit pas disparaître');
+    expect((dep['reglements'] as List), isEmpty);
+  });
+
+  test('les enregistrements sains d\'une sauvegarde partiellement corrompue sont migrés', () {
+    final v1 = _v1();
+    (v1['engagements'] as List).add({
+      'id': 14, 'sens': 'creance', 'num': 'Z', 'tiers': 'ZETA',
+      'description': '', 'montant': 100.0, 'statut': 'paye',
+      'echeance': 'illisible', 'dateReglement': 'illisible',
+      'categorie': 'Autres', 'acompte': 0.0, 'dateAcompte': null,
+    });
+
+    final v2 = migrerV1versV2(v1);
+    // Les conversions d'origine sont intactes.
+    expect(_parTiers(v2, 'GAMMA')!['reglements'], hasLength(1));
+    expect(_parTiers(v2, 'Fournisseur X')!['reglements'], hasLength(2));
+  });
 }
