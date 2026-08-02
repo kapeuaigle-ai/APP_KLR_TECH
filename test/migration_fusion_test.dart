@@ -1,25 +1,30 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:klr_tech_app/core/comptabilite.dart';
 import 'package:klr_tech_app/core/migration.dart';
+import 'package:klr_tech_app/core/models.dart';
 
 Map<String, dynamic> _facture({
   required int id, required String numero, required int clientId,
   required String client, required double pu,
+  bool encaissee = false, String? dateEncaissement,
 }) => {
   'id': id, 'numero': numero, 'date': '10/01/2026', 'clientId': clientId,
   'client': client, 'clientAddr': '', 'objet': 'Fourniture',
   'montant': pu, 'statut': 'validee',
   'lines': [{'ref': 'A', 'designation': 'Article', 'qte': 1, 'pu': pu}],
-  'encaissee': false, 'dateEncaissement': null, 'dateAffichee': '',
+  'encaissee': encaissee, 'dateEncaissement': dateEncaissement, 'dateAffichee': '',
 };
 
 Map<String, dynamic> _creance({
   required int id, required String num, required String tiers,
   required double montant,
+  String statut = 'cours', double acompte = 0.0, String? dateAcompte,
+  String? dateReglement,
 }) => {
   'id': id, 'sens': 'creance', 'num': num, 'tiers': tiers,
-  'description': '', 'montant': montant, 'statut': 'cours',
-  'echeance': '30/06/2026', 'dateReglement': null, 'categorie': 'Autres',
-  'acompte': 0.0, 'dateAcompte': null,
+  'description': '', 'montant': montant, 'statut': statut,
+  'echeance': '30/06/2026', 'dateReglement': dateReglement, 'categorie': 'Autres',
+  'acompte': acompte, 'dateAcompte': dateAcompte,
 };
 
 Map<String, dynamic> _save({
@@ -104,5 +109,105 @@ void main() {
       engagements: [dette],
     ));
     expect(_engs(v2).length, 2);
+  });
+
+  // ── Défaut 1 : un encaissement réel ne doit jamais disparaître dans une
+  //    fusion (§ 8.1). ──────────────────────────────────────────────────
+
+  test('un encaissement réel de la facture est reporté sur l\'engagement fusionné (branche 1)', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 800,
+          encaissee: true, dateEncaissement: '15/02/2026')],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800)],
+    ));
+    final e = _engs(v2).single;
+    final regs = (e['reglements'] as List).cast<Map<String, dynamic>>();
+    expect(regs, hasLength(1));
+    expect(regs.single['montant'], 800.0);
+    expect(DateTime.parse(regs.single['date']), DateTime(2026, 2, 15));
+    expect(e['fusionAmbigue'], isTrue);
+  });
+
+  test('même chose via la branche 2 (même client, même montant)', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 800,
+          encaissee: true, dateEncaissement: '15/02/2026')],
+      engagements: [_creance(id: 10, num: 'Bon de commande 42', tiers: 'ACME', montant: 800)],
+    ));
+    final e = _engs(v2).single;
+    final regs = (e['reglements'] as List).cast<Map<String, dynamic>>();
+    expect(regs, hasLength(1));
+    expect(regs.single['montant'], 800.0);
+    expect(DateTime.parse(regs.single['date']), DateTime(2026, 2, 15));
+    expect(e['fusionAmbigue'], isTrue);
+  });
+
+  test('une créance déjà soldée absorbe l\'encaissement facture sans le doubler', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 800,
+          encaissee: true, dateEncaissement: '15/02/2026')],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800,
+          statut: 'paye', dateReglement: '01/02/2026')],
+    ));
+    final e = _engs(v2).single;
+    final regs = (e['reglements'] as List).cast<Map<String, dynamic>>();
+    expect(regs, hasLength(1), reason: 'le règlement de la créance seul, pas les deux');
+    expect(regs.single['montant'], 800.0);
+    expect(DateTime.parse(regs.single['date']), DateTime(2026, 2, 1),
+        reason: 'la date du règlement de la créance, pas celle de la facture');
+    expect(e['fusionAmbigue'], isTrue);
+  });
+
+  test('un acompte déjà présent sur la créance n\'est pas complété par la facture', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 800,
+          encaissee: true, dateEncaissement: '15/02/2026')],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800,
+          acompte: 300, dateAcompte: '05/01/2026')],
+    ));
+    final e = _engs(v2).single;
+    final regs = (e['reglements'] as List).cast<Map<String, dynamic>>();
+    expect(regs, hasLength(1));
+    expect(regs.single['montant'], 300.0);
+    expect(e['fusionAmbigue'], isTrue);
+  });
+
+  test('une facture non encaissée ne fait apparaître aucun règlement', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 800)],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800)],
+    ));
+    final e = _engs(v2).single;
+    expect((e['reglements'] as List), isEmpty);
+    expect(e['fusionAmbigue'], isNot(true), reason: 'rien à vérifier : aucun paiement en jeu');
+  });
+
+  test('le montant fusionné retient le plus grand des deux (facture > créance)', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 900)],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800)],
+    ));
+    expect(_engs(v2).single['montant'], 900.0);
+  });
+
+  test('le montant fusionné retient le plus grand des deux (créance > facture)', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F01-10012026', clientId: 5, client: 'ACME', pu: 700)],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F01-10012026', tiers: 'ACME', montant: 800)],
+    ));
+    expect(_engs(v2).single['montant'], 800.0);
+  });
+
+  test('§ 8.2 appliqué au cas corrigé : le revenu du mois d\'encaissement '
+      'égale la somme des lignes de la facture', () {
+    final v2 = migrerV1versV2(_save(
+      factures: [_facture(id: 1, numero: 'KLR-F09-20012026', clientId: 5, client: 'ACME', pu: 1234.5,
+          encaissee: true, dateEncaissement: '15/02/2026')],
+      engagements: [_creance(id: 10, num: 'Facture KLR-F09-20012026', tiers: 'ACME', montant: 1234.5)],
+    ));
+    final engagements = _engs(v2).map((e) => Engagement.fromJson(e)).toList();
+    final bilan = Comptabilite.bilanMensuel(engagements, const {}, const {});
+    final fevrier = bilan.firstWhere((r) => r.monthKey == '2026-02');
+    expect(fevrier.revenuHt, 1234.5);
   });
 }

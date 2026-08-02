@@ -145,6 +145,20 @@ class AppState extends ChangeNotifier {
   };
 
   void loadFromJson(Map<String, dynamic> brut) {
+    // Capturé avant conversion : `migrerV1versV2` rend `brut` inchangé s'il
+    // est déjà en v2 (`j['version'] == 2`), donc c'est le seul moment où l'on
+    // peut encore distinguer « rien à migrer » de « migration effectuée ».
+    final migration = brut['version'] != 2;
+    if (migration) {
+      // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
+      // avant toute réécriture, pour que la conversion reste réversible en
+      // cas d'anomalie découverte tardivement. Fire-and-forget, comme
+      // `_persist` : une erreur d'écriture ne doit jamais empêcher
+      // l'application de démarrer.
+      _writeChain = _writeChain
+          .then((_) => _store.writeBackup(jsonEncode(brut)))
+          .catchError((_) {});
+    }
     final j = migrerV1versV2(brut);
     // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
     // on les retire du JSON — ils ne doivent pas être persistés — et on les
@@ -187,6 +201,13 @@ class AppState extends ChangeNotifier {
         AppColors.orange,
       );
     }
+
+    // La conversion v1 → v2 (et les activités de rapprochement ci-dessus) ne
+    // doivent pas rester seulement en mémoire : `_logActivity` n'appelle pas
+    // `_emit()`, donc sans cet appel explicite le fichier resterait en v1
+    // jusqu'à la prochaine mutation, et la migration se répéterait à chaque
+    // démarrage. Rien à écrire si la sauvegarde était déjà en v2.
+    if (migration) _persist();
   }
 
   /// Écrit l'état courant sur le store. Fire-and-forget, mais chaîné : la

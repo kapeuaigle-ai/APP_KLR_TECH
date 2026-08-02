@@ -45,6 +45,7 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
       // Fusion : la créance saisie à la main EST cette facture.
       apparie['documentNumero'] = f['numero'];
       apparie['clientId'] = f['clientId'];
+      _fusionnerPaiement(apparie, f, generateur);
       continue;
     }
     engagements.add(_depuisFactureV1(f, generateur));
@@ -210,6 +211,54 @@ Map<String, dynamic>? _apparier(
     }
   }
   return null;
+}
+
+/// Concilie l'argent au moment d'une fusion facture/créance (§ 8.1).
+///
+/// Sans cette étape, un encaissement réel de la facture disparaît en silence
+/// dès que la créance appariée n'en porte aucune trace : c'est le bug
+/// critique corrigé ici. Trois cas :
+///
+/// 1. la créance porte déjà un ou plusieurs règlements (acompte et/ou statut
+///    'paye') : la même somme a probablement été saisie deux fois en v1 — on
+///    garde les règlements de la créance, on n'ajoute rien de la facture, et
+///    on journalise pour que le manager vérifie, même sur une fusion certaine
+///    (branche 1) ;
+/// 2. la créance n'a aucun règlement et la facture a été encaissée : c'est
+///    l'encaissement qui, sans conciliation, se perdrait — on l'ajoute, à la
+///    date et au montant de la facture, et on journalise aussi (l'argent
+///    associé à cette fusion mérite une vérification) ;
+/// 3. ni l'une ni l'autre n'a enregistré de paiement : rien à faire, le
+///    comportement d'avant cette correction était déjà le bon.
+///
+/// Dans tous les cas de fusion, le montant attendu conservé est le plus
+/// grand des deux : une créance saisie à la main a pu être arrondie, et
+/// sous-estimer ce qui reste dû serait dangereux.
+void _fusionnerPaiement(
+  Map<String, dynamic> apparie,
+  Map<String, dynamic> facture,
+  _Ids ids,
+) {
+  final montantFacture = _montantFacture(facture);
+  if (montantFacture > _double(apparie['montant'])) {
+    apparie['montant'] = montantFacture;
+  }
+
+  if (facture['encaissee'] != true) return; // cas 3 : rien à réconcilier
+
+  final reglements = (apparie['reglements'] as List).cast<Map<String, dynamic>>();
+  if (reglements.isNotEmpty) {
+    // Cas 1 : ne pas compter deux fois le même argent.
+    apparie['fusionAmbigue'] = true;
+    return;
+  }
+
+  // Cas 2 : l'encaissement de la facture est la seule trace de ce paiement.
+  final dateEnc = _jour(facture['dateEncaissement']);
+  if (dateEnc != null) {
+    reglements.add(_reglement(ids.suivant(), dateEnc, montantFacture));
+  }
+  apparie['fusionAmbigue'] = true;
 }
 
 /// Montant d'une facture : la SOMME DE SES LIGNES, et non son champ
