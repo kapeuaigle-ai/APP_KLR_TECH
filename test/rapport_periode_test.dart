@@ -10,21 +10,33 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(loadTestFonts);
 
-  DocumentItem facture(String numero, double pu, {String? encaissementLe}) =>
-      DocumentItem(
-        id: numero.hashCode, numero: numero, date: '01/07/2026', clientId: 0,
-        client: 'Client', objet: 'O', montant: pu, statut: 'validee',
-        lines: [LineItem(ref: '01', designation: 'x', qte: 1, pu: pu)],
-        encaissee: encaissementLe != null, dateEncaissement: encaissementLe,
+  Reglement reg(double montant, DateTime date) =>
+      Reglement(id: date.microsecondsSinceEpoch, date: date, montant: montant);
+
+  /// Une facture encaissée : engagement entrant rattaché à son numéro,
+  /// soldé par un unique règlement à la date d'encaissement. Sans date
+  /// d'encaissement, l'engagement reste sans règlement — non encaissée.
+  Engagement facture(String numero, double pu, {String? encaissementLe}) =>
+      Engagement(
+        id: numero.hashCode, sens: 'entrant', tiers: 'Client',
+        montant: pu, echeance: DateTime(2026, 7, 1), documentNumero: numero,
+        reglements: encaissementLe == null
+            ? []
+            : [reg(pu, Comptabilite.parseJour(encaissementLe)!)],
+      );
+
+  /// Une dépense au comptant : engagement sortant réglé le jour même.
+  Engagement depense(double amount, DateTime date, String category, String label) =>
+      Engagement(
+        id: date.microsecondsSinceEpoch, sens: 'sortant', tiers: label,
+        montant: amount, echeance: date, categorie: category,
+        reglements: [reg(amount, date)],
       );
 
   RapportPeriode rapport(DateTime debut, DateTime fin, {
-    List<DocumentItem> factures = const [],
-    List<Expense> expenses = const [],
     List<Engagement> engagements = const [],
   }) =>
-      Comptabilite.rapport(debut: debut, fin: fin, factures: factures,
-          expenses: expenses, engagements: engagements);
+      Comptabilite.rapport(debut: debut, fin: fin, engagements: engagements);
 
   group('bornes', () {
     test('parseJour lit dd/MM/yyyy, rejette le reste', () {
@@ -44,7 +56,7 @@ void main() {
 
   group('revenus', () {
     test('seules les factures encaissées DANS la période comptent', () {
-      final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31), factures: [
+      final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31), engagements: [
         facture('F1', 100000, encaissementLe: '10/07/2026'), // dedans
         facture('F2', 200000, encaissementLe: '10/08/2026'), // hors période
         facture('F3', 400000),                               // non encaissée
@@ -64,13 +76,10 @@ void main() {
 
   group('dépenses', () {
     test('dépenses de la période, regroupées par catégorie', () {
-      final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31), expenses: [
-        Expense(id: 1, date: DateTime(2026, 7, 5), label: 'Carburant',
-            amount: 15000, category: 'Transport'),
-        Expense(id: 2, date: DateTime(2026, 7, 20), label: 'Taxi',
-            amount: 5000, category: 'Transport'),
-        Expense(id: 3, date: DateTime(2026, 8, 2), label: 'Hors période',
-            amount: 99000, category: 'Transport'),
+      final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31), engagements: [
+        depense(15000, DateTime(2026, 7, 5), 'Transport', 'Carburant'),
+        depense(5000, DateTime(2026, 7, 20), 'Transport', 'Taxi'),
+        depense(99000, DateTime(2026, 8, 2), 'Transport', 'Hors période'),
       ]);
       expect(r.depenses, 20000);
       expect(r.depensesParCategorie['Transport'], 20000);
@@ -78,11 +87,21 @@ void main() {
   });
 
   group('engagements', () {
+    /// Créance avec acompte + solde : deux règlements — l'acompte à sa date,
+    /// le solde (montant - acompte) à la date de règlement.
     Engagement creance({double acompte = 0, String? dateAcompte,
-            String statut = 'cours', String? dateReglement}) =>
-        Engagement(id: 1, sens: 'creance', num: 'C-1', tiers: 'Advans',
-            montant: 1000000, statut: statut, echeance: '31/08/2026',
-            acompte: acompte, dateAcompte: dateAcompte, dateReglement: dateReglement);
+            String? dateReglement}) {
+      final montant = 1000000.0;
+      final regs = <Reglement>[];
+      if (acompte > 0 && dateAcompte != null) {
+        regs.add(reg(acompte, Comptabilite.parseJour(dateAcompte)!));
+      }
+      if (dateReglement != null) {
+        regs.add(reg(montant - acompte, Comptabilite.parseJour(dateReglement)!));
+      }
+      return Engagement(id: 1, sens: 'entrant', tiers: 'Advans',
+          montant: montant, echeance: DateTime(2026, 8, 31), reglements: regs);
+    }
 
     test('acompte compté dans le mois de son versement seulement', () {
       final e = creance(acompte: 300000, dateAcompte: '10/07/2026');
@@ -92,7 +111,7 @@ void main() {
 
     test('règlement : le solde seulement, jamais l\'acompte une 2e fois', () {
       final e = creance(acompte: 300000, dateAcompte: '10/07/2026',
-          statut: 'paye', dateReglement: '15/08/2026');
+          dateReglement: '15/08/2026');
       expect(rapport(DateTime(2026, 8, 1), DateTime(2026, 8, 31), engagements: [e]).revenu, 700000);
       // Sur les deux mois réunis : le montant total, pas davantage.
       expect(rapport(DateTime(2026, 7, 1), DateTime(2026, 8, 31), engagements: [e]).revenu, 1000000);
@@ -108,9 +127,10 @@ void main() {
   group('synthèse', () {
     test('bénéfice et dîme calculés sur la période', () {
       final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31),
-        factures: [facture('F1', 1000000, encaissementLe: '10/07/2026')],
-        expenses: [Expense(id: 1, date: DateTime(2026, 7, 12), label: 'Achat',
-            amount: 400000, category: 'Achat matériel')],
+        engagements: [
+          facture('F1', 1000000, encaissementLe: '10/07/2026'),
+          depense(400000, DateTime(2026, 7, 12), 'Achat matériel', 'Achat'),
+        ],
       );
       expect(r.revenu, 1000000);
       expect(r.depenses, 400000);
@@ -120,8 +140,7 @@ void main() {
 
     test('bénéfice négatif : pas de dîme', () {
       final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31),
-        expenses: [Expense(id: 1, date: DateTime(2026, 7, 12), label: 'Achat',
-            amount: 400000, category: 'Achat matériel')],
+        engagements: [depense(400000, DateTime(2026, 7, 12), 'Achat matériel', 'Achat')],
       );
       expect(r.benefice, -400000);
       expect(r.dime, 0);
@@ -129,9 +148,10 @@ void main() {
 
     test('mouvements triés du plus ancien au plus récent', () {
       final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31),
-        factures: [facture('F1', 100000, encaissementLe: '25/07/2026')],
-        expenses: [Expense(id: 1, date: DateTime(2026, 7, 3), label: 'Achat',
-            amount: 5000, category: 'Transport')],
+        engagements: [
+          facture('F1', 100000, encaissementLe: '25/07/2026'),
+          depense(5000, DateTime(2026, 7, 3), 'Transport', 'Achat'),
+        ],
       );
       expect(r.mouvements.first.date, DateTime(2026, 7, 3));
       expect(r.mouvements.last.date, DateTime(2026, 7, 25));
@@ -147,9 +167,10 @@ void main() {
 
     testWidgets('rapport garni : PDF valide', (tester) async {
       final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31),
-        factures: [facture('F1', 1000000, encaissementLe: '10/07/2026')],
-        expenses: [Expense(id: 1, date: DateTime(2026, 7, 12), label: 'Achat',
-            amount: 400000, category: 'Achat matériel')],
+        engagements: [
+          facture('F1', 1000000, encaissementLe: '10/07/2026'),
+          depense(400000, DateTime(2026, 7, 12), 'Achat matériel', 'Achat'),
+        ],
       );
       final bytes = await PdfGenerator.generateRapport(settings: settings(), rapport: r);
       expect(String.fromCharCodes(bytes.take(5)), '%PDF-');
