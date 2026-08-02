@@ -296,10 +296,21 @@ class AppState extends ChangeNotifier {
     }
   }
 
+  /// Supprime un client et délie tout ce qui le désignait : `clientId` est
+  /// un `int?` (« null = aucun »), même convention que `projetId` — voir
+  /// `deleteProjet`. Le nom dénormalisé (`Projet.client`, `Engagement.tiers`)
+  /// reste : il enregistre qui était la contrepartie, l'id seul ne pointe
+  /// plus vers rien.
   void deleteClient(int id) {
     final match = clients.where((x) => x.id == id);
     final nom = match.isNotEmpty ? match.first.name : '—';
     clients.removeWhere((x) => x.id == id);
+    for (final p in projets) {
+      if (p.clientId == id) p.clientId = null;
+    }
+    for (final e in engagements) {
+      if (e.clientId == id) e.clientId = null;
+    }
     _logActivity('client', 'Client supprimé — $nom', '', AppColors.text3);
     _emit();
   }
