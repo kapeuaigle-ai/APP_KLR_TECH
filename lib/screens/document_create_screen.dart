@@ -33,8 +33,10 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   final _objetCtrl     = TextEditingController();
   final _dateCtrl      = TextEditingController();
   final List<LineItem> _lines = [];
-  // Client sélectionné dans l'autocomplete, pour filtrer la liste des
-  // projets proposés. Distinct de `clientId` du document, non encore branché.
+  // Client sélectionné dans l'autocomplete : sert à filtrer la liste des
+  // projets proposés ET devient le `clientId` du document enregistré.
+  // `null` tant qu'aucun client n'a été choisi dans l'autocomplete (nom saisi
+  // librement, ou champ pas encore rempli).
   int? _clientId;
   int? _projetId;
 
@@ -85,7 +87,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       numero: _committedNumero!,
       date: _committedDate!,
       dateAffichee: _dateCtrl.text.trim(),
-      clientId: 0,
+      clientId: _clientId,
       client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
       clientAddr: _clientAddrCtrl.text,
       objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
@@ -200,6 +202,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       _clientAddrCtrl.text = doc.clientAddr;
       _objetCtrl.text = doc.objet;
       _dateCtrl.text = doc.dateAffichee;
+      _clientId = doc.clientId;
       _projetId = doc.projetId;
       _lines.addAll(doc.lines.map((l) =>
           LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu)));

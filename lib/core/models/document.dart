@@ -5,7 +5,10 @@ class DocumentItem {
   final int id;
   final String numero;
   final String date;
-  final int clientId;
+  /// null = aucun client identifié (saisie libre du nom sans sélection dans
+  /// l'autocomplete). Même convention que `Engagement.clientId` et
+  /// `Projet.clientId` : « inconnu » se dit `null`, jamais un id inventé.
+  final int? clientId;
   final String client;
   final String clientAddr;
   final String objet;
