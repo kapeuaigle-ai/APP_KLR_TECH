@@ -47,6 +47,28 @@ void main() {
     expect(e.solde, isTrue);
   });
 
+  test('un résidu flottant sous le centime compte comme soldé', () {
+    // Trois versements dont le total vaut mathématiquement 1000, mais dont
+    // la somme flottante (regle: fold 0.0 + r1 + r2 + r3) retombe sur
+    // 999.99999999999988… au lieu de 1000.0 pile — un résidu de l'ordre de
+    // 1e-13, représentatif de ce que laisse un enchaînement de règlements
+    // en IEEE 754 double, y compris quand le dernier est écrêté au reste.
+    final e = _eng(montant: 1000, reglements: [
+      _reg(132.81, DateTime(2026, 5, 2), id: 1),
+      _reg(711.54, DateTime(2026, 5, 3), id: 2),
+      _reg(155.65, DateTime(2026, 5, 4), id: 3),
+    ]);
+    expect(e.reste, 0);
+    expect(e.solde, isTrue);
+    expect(e.enRetard(DateTime(2027, 1, 1)), isFalse);
+  });
+
+  test('un reste réel d\'un centime ou plus est conservé', () {
+    final e = _eng(montant: 1000, reglements: [_reg(999.98, DateTime(2026, 5, 2))]);
+    expect(e.reste, closeTo(0.02, 0.0001));
+    expect(e.solde, isFalse);
+  });
+
   test('enRetard compare à la date fournie, pas à aujourd\'hui', () {
     final e = _eng(echeance: DateTime(2026, 6, 30));
     expect(e.enRetard(DateTime(2026, 6, 29)), isFalse);

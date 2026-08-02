@@ -50,6 +50,10 @@ class Engagement {
   double montant;           // attendu
   DateTime echeance;
   String categorie;         // analytique, surtout pour les sortants
+  /// Les mouvements réels. Ne jamais y ajouter ni retirer directement : passer
+  /// par `AppState.ajouterReglement` / `supprimerReglement`, qui font seuls
+  /// respecter les invariants (montant positif, écrêtage au reste dû, refus
+  /// sur un engagement annulé ou soldé).
   final List<Reglement> reglements;
   bool annule;
 
@@ -67,9 +71,14 @@ class Engagement {
   double get regle => reglements.fold(0.0, (s, r) => s + r.montant);
 
   /// Solde restant dû. Jamais négatif, même en cas de sur-règlement.
+  ///
+  /// Un résidu inférieur au centime est ramené à zéro : `regle` somme un
+  /// nombre quelconque de règlements, et l'arithmétique flottante laisserait
+  /// sinon un reste de l'ordre de 1e-13 sur un engagement pourtant soldé —
+  /// qui resterait alors « en retard » indéfiniment.
   double get reste {
     final r = montant - regle;
-    return r < 0 ? 0 : r;
+    return r < 0.01 ? 0 : r;
   }
 
   bool get solde => reste == 0;
