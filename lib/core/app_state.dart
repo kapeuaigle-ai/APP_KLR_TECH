@@ -302,9 +302,12 @@ class AppState extends ChangeNotifier {
       e.estEntrant
           ? 'Encaissement — ${Fmt.money(effectif)}'
           : 'Décaissement — ${Fmt.money(effectif)}',
+      // La date du règlement, et non celle de la saisie : c'est elle qui
+      // décide du mois d'imputation en comptabilité de caisse. L'horodatage
+      // de l'activité, lui, est celui du jour où l'on saisit.
       e.solde
-          ? '${e.tiers} — soldé'
-          : '${e.tiers} — reste ${Fmt.money(e.reste)}',
+          ? '${e.tiers} — soldé le ${Fmt.jour(date)}'
+          : '${e.tiers} — ${Fmt.money(effectif)} le ${Fmt.jour(date)}, reste ${Fmt.money(e.reste)}',
       e.estEntrant ? AppColors.green : AppColors.orange,
     );
     _emit();

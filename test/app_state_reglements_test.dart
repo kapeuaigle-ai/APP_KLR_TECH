@@ -78,4 +78,23 @@ void main() {
     s.ajouterReglement(1, 400, DateTime(2026, 3, 3));
     expect(s.activities.length, avant + 1);
   });
+
+  test('la trace d\'activité porte la date du règlement, pas celle de la saisie', () {
+    final s = _vide()..addEngagement(_eng(montant: 1000));
+    s.ajouterReglement(1, 400, DateTime(2026, 3, 15));
+
+    final trace = s.activities.first;
+    expect(trace.desc, contains('15/03/2026'),
+        reason: 'la date d\'imputation doit figurer dans l\'historique');
+    expect(trace.desc, contains('600'), reason: 'et le reste dû');
+  });
+
+  test('un règlement soldant l\'engagement le dit, avec sa date', () {
+    final s = _vide()..addEngagement(_eng(montant: 1000));
+    s.ajouterReglement(1, 1000, DateTime(2026, 4, 2));
+
+    final trace = s.activities.first;
+    expect(trace.desc, contains('soldé'));
+    expect(trace.desc, contains('02/04/2026'));
+  });
 }

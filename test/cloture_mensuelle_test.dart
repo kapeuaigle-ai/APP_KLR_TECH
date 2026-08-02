@@ -110,7 +110,7 @@ void main() {
 
       expect(s.activities.length, avant + 1);
       expect(s.activities.first.type, 'paiement');
-      expect(s.activities.first.desc, contains('soldé'));
+      expect(s.activities.first.desc, contains('15/03/2026'));
     });
 
     test('annuler la validation ressort l\'engagement de la comptabilité', () {
