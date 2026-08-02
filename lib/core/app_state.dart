@@ -7,6 +7,7 @@ import 'comptabilite.dart';
 import 'utils.dart';
 import 'persistence.dart';
 import 'migration.dart';
+import 'avancement.dart';
 
 class AppState extends ChangeNotifier {
   NavScreen _screen = NavScreen.dashboard;
@@ -20,6 +21,7 @@ class AppState extends ChangeNotifier {
   late List<Note> notes;
   late List<Engagement> engagements;
   late List<ActivityItem> activities;
+  late List<Projet> projets;
   final Set<String> _dimePaidMonths = {};
   final Map<String, String> _dimePaidDates = {};
 
@@ -74,6 +76,7 @@ class AppState extends ChangeNotifier {
       ...SampleData.initialEngagementsSortants,
     ];
     activities = [];
+    projets = [];
     _dimePaidMonths.clear();
     _dimePaidDates.clear();
     _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
@@ -108,6 +111,7 @@ class AppState extends ChangeNotifier {
     notes = [];
     engagements = [];
     activities = [];
+    projets = [];
     _dimePaidMonths.clear();
     _dimePaidDates.clear();
     _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
@@ -134,6 +138,7 @@ class AppState extends ChangeNotifier {
     },
     'engagements': engagements.map((e) => e.toJson()).toList(),
     'activities': activities.map((a) => a.toJson()).toList(),
+    'projets': projets.map((p) => p.toJson()).toList(),
     'tasks': tasks.map((t) => t.toJson()).toList(),
     'notes': notes.map((n) => n.toJson()).toList(),
     'settings': settings.toJson(),
@@ -179,6 +184,7 @@ class AppState extends ChangeNotifier {
     };
     engagements = (j['engagements'] as List).map((e) => Engagement.fromJson(e)).toList();
     activities = (j['activities'] as List).map((e) => ActivityItem.fromJson(e)).toList();
+    projets = (j['projets'] as List? ?? []).map((e) => Projet.fromJson(e)).toList();
     tasks = (j['tasks'] as List).map((e) => Task.fromJson(e)).toList();
     notes = (j['notes'] as List).map((e) => Note.fromJson(e)).toList();
     settings = AppSettings.fromJson((j['settings'] as Map).cast<String, dynamic>());
@@ -376,6 +382,57 @@ class AppState extends ChangeNotifier {
     if (e == null) return;
     e.annule = false;
     _emit();
+  }
+
+  // ── Projets ────────────────────────────────────────────
+  void addProjet(Projet p) {
+    projets.insert(0, p);
+    _logActivity('projet', 'Projet créé — ${p.nom}',
+        p.client.isEmpty ? 'Projet interne' : p.client, AppColors.primary);
+    _emit();
+  }
+
+  void updateProjet(Projet p) {
+    final i = projets.indexWhere((x) => x.id == p.id);
+    if (i < 0) return;
+    projets[i] = p;
+    _emit();
+  }
+
+  /// Supprime un projet et délie tout ce qui le désignait : un document ou un
+  /// engagement pointant vers un projet disparu produirait un calcul faux.
+  void deleteProjet(int id) {
+    projets.removeWhere((p) => p.id == id);
+    for (final liste in documents.values) {
+      for (final d in liste) {
+        if (d.projetId == id) d.projetId = null;
+      }
+    }
+    for (final e in engagements) {
+      if (e.projetId == id) e.projetId = null;
+    }
+    _emit();
+  }
+
+  List<DocumentItem> proformasDuProjet(int projetId) =>
+      documents['proforma']!.where((d) => d.projetId == projetId).toList();
+
+  List<Engagement> engagementsDuProjet(int projetId) =>
+      engagements.where((e) => e.projetId == projetId).toList();
+
+  /// Mode d'avancement du projet. En phase 2, tous les projets sont en
+  /// `quantites` ; la phase 3 le lira depuis `AppSettings.typesProjet`.
+  ModeAvancement modeDuProjet(Projet p) => ModeAvancement.quantites;
+
+  Avancement avancementProjet(int projetId, {DateTime? now}) {
+    final p = projets.firstWhere((x) => x.id == projetId);
+    return Avancement.calculer(
+      projet: p,
+      mode: modeDuProjet(p),
+      proformas: proformasDuProjet(projetId),
+      engagements: engagementsDuProjet(projetId),
+      now: now ?? DateTime.now(),
+    );
   }
 
   // ── Clôture mensuelle ──────────────────────────────────
