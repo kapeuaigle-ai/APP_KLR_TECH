@@ -5,142 +5,224 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
+/// Vue chronologique des projets réels : deux barres par projet — physique
+/// (livré) et financier (encaissé) — sur un axe calculé depuis leurs vraies
+/// dates. Aucune donnée codée en dur : sans projet enregistré, l'écran le dit
+/// plutôt que d'afficher une maquette.
 class GanttScreen extends StatelessWidget {
   const GanttScreen({super.key});
 
-  static const _months = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin'];
-  static final _projects = [
-    _GanttProject(name: 'Dashboard Analytics v2', color: AppColors.primary, start: 0, duration: 2, progress: 100, assignees: ['AB', 'AK']),
-    _GanttProject(name: 'API OAuth2 Connecteurs', color: AppColors.blue, start: 1, duration: 3, progress: 67, assignees: ['AB', 'KL']),
-    _GanttProject(name: 'Charte graphique 2026', color: AppColors.orange, start: 0, duration: 3, progress: 100, assignees: ['AK']),
-    _GanttProject(name: 'Migration cloud AWS', color: AppColors.teal, start: 2, duration: 4, progress: 25, assignees: ['JT']),
-    _GanttProject(name: 'Module CRM clients', color: AppColors.purple, start: 3, duration: 3, progress: 0, assignees: ['AB', 'JT']),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final now = DateTime.now();
+    final projets = state.projets.where((p) => !p.annule).toList()
+      ..sort((a, b) => a.debut.compareTo(b.debut));
+
+    if (projets.isEmpty) {
+      return Padding(
+        padding: pagePadding(context),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SectionHeader(title: 'Gantt',
+              subtitle: 'Vue chronologique des projets.'),
+          const SizedBox(height: 24),
+          CardBox(
+            padding: const EdgeInsets.all(40),
+            child: Center(child: Text(
+              'Aucun projet enregistré.',
+              style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3),
+            )),
+          ),
+        ]),
+      );
+    }
+
+    // Axe : du premier début au dernier fin prévue, arrondi au mois.
+    final debut = DateTime(projets.first.debut.year, projets.first.debut.month);
+    var finMax = projets.first.finPrevue;
+    for (final p in projets) {
+      if (p.finPrevue.isAfter(finMax)) finMax = p.finPrevue;
+    }
+    final fin = DateTime(finMax.year, finMax.month + 1, 0);
+    final nbMois = (fin.year - debut.year) * 12 + fin.month - debut.month + 1;
+
     return SingleChildScrollView(
       padding: pagePadding(context),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 1200),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            SectionHeader(
-              title: 'Gantt',
-              subtitle: 'Vue chronologique des projets sur 6 mois.',
-              actions: [
-                // Le Kanban n'existe pas sur téléphone : proposer le bouton
-                // enverrait vers un écran dont la coquille ressort aussitôt.
-                if (!isPhone(context))
-                  SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
-                      onTap: () => context.read<AppState>().navigate(NavScreen.projets)),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            CardBox(
-              padding: const EdgeInsets.all(20),
-              child: HScrollTable(
-                minWidth: 700,
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  // Month headers
-                  Row(children: [
-                    const SizedBox(width: 200),
-                    ...List.generate(_months.length, (i) => Expanded(
-                      child: Text(_months[i], style: GoogleFonts.dmSans(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.text3), textAlign: TextAlign.center),
-                    )),
-                  ]),
-                  const SizedBox(height: 8),
-                  const Divider(color: AppColors.border),
-                  const SizedBox(height: 8),
-
-                  // Project rows
-                  ..._projects.map((p) => Padding(
-                    padding: const EdgeInsets.only(bottom: 14),
-                    child: _GanttRow(project: p, totalMonths: _months.length),
-                  )),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SectionHeader(
+            title: 'Gantt',
+            subtitle: 'Vue chronologique des projets. '
+                'Barre pleine = livré, barre claire = encaissé.',
+            actions: [
+              if (!isPhone(context))
+                SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
+                    onTap: () => context.read<AppState>().navigate(NavScreen.projets)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          CardBox(
+            padding: const EdgeInsets.all(20),
+            child: HScrollTable(
+              minWidth: 700,
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  const SizedBox(width: 220),
+                  ...List.generate(nbMois, (i) {
+                    final m = DateTime(debut.year, debut.month + i);
+                    return Expanded(child: Text(
+                      _moisCourt(m),
+                      style: GoogleFonts.dmSans(fontSize: 12,
+                          fontWeight: FontWeight.w700, color: AppColors.text3),
+                      textAlign: TextAlign.center));
+                  }),
                 ]),
-              ),
+                const SizedBox(height: 8),
+                const Divider(color: AppColors.border),
+                const SizedBox(height: 8),
+                ...projets.map((p) => Padding(
+                  padding: const EdgeInsets.only(bottom: 18),
+                  child: _GanttRow(
+                    projet: p,
+                    avancement: state.avancementProjet(p.id, now: now),
+                    axeDebut: debut, nbMois: nbMois),
+                )),
+              ]),
             ),
-          ],
-        ),
+          ),
+        ]),
       ),
     );
   }
+
+  static const _moisAbrev = ['', 'Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin',
+      'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+  static String _moisCourt(DateTime d) => '${_moisAbrev[d.month]} ${d.year % 100}';
 }
 
-class _GanttProject {
-  final String name;
-  final Color color;
-  final int start, duration, progress;
-  final List<String> assignees;
-  const _GanttProject({required this.name, required this.color, required this.start, required this.duration, required this.progress, required this.assignees});
+/// Position d'une date sur l'axe, en mois décimaux depuis `axeDebut`.
+double _positionMois(DateTime axeDebut, DateTime d) {
+  final moisEntiers = (d.year - axeDebut.year) * 12 + (d.month - axeDebut.month);
+  final joursDuMois = DateTime(d.year, d.month + 1, 0).day;
+  final fraction = (d.day - 1) / joursDuMois;
+  return moisEntiers + fraction;
 }
 
+/// Une ligne du Gantt : le nom du projet, puis sur l'axe des mois, la plage
+/// de dates du projet portant deux barres empilées — le physique (livré) en
+/// couleur pleine, le financier (encaissé) juste en dessous, en teinte
+/// claire. Le nom passe en rouge en cas de retard de livraison, une pastille
+/// orange signale un retard de paiement.
 class _GanttRow extends StatelessWidget {
-  final _GanttProject project;
-  final int totalMonths;
-  const _GanttRow({required this.project, required this.totalMonths});
+  final Projet projet;
+  final Avancement avancement;
+  final DateTime axeDebut;
+  final int nbMois;
+  const _GanttRow({
+    required this.projet, required this.avancement,
+    required this.axeDebut, required this.nbMois,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(children: [
-      SizedBox(width: 200, child: Row(children: [
-        Expanded(child: Text(project.name, style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.text1), overflow: TextOverflow.ellipsis)),
+    final pctPhysique = (avancement.physique * 100).round();
+    final pctFinancier = (avancement.financier * 100).round();
+
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SizedBox(width: 220, child: Row(children: [
+        Expanded(child: Text(projet.nom,
+            style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600,
+                color: avancement.enRetardLivraison ? AppColors.red : AppColors.text1),
+            overflow: TextOverflow.ellipsis)),
+        if (avancement.enRetardPaiement) ...[
+          const SizedBox(width: 6),
+          Tooltip(
+            message: 'Retard de paiement',
+            child: Container(
+              width: 8, height: 8,
+              decoration: const BoxDecoration(color: AppColors.orange, shape: BoxShape.circle),
+            ),
+          ),
+        ],
       ])),
       Expanded(child: LayoutBuilder(builder: (context, constraints) {
-        final unitW = constraints.maxWidth / totalMonths;
-        final barLeft = project.start * unitW;
-        final barWidth = project.duration * unitW - 4;
-        final progressWidth = barWidth * (project.progress / 100);
+        final unitW = constraints.maxWidth / nbMois;
+        final posDebut = _positionMois(axeDebut, projet.debut);
+        final posFin = _positionMois(axeDebut, projet.finPrevue);
+        final barLeft = posDebut * unitW;
+        final barWidth = max((posFin - posDebut) * unitW, 24.0);
 
-        return SizedBox(height: 32, child: Stack(children: [
-          // Background grid
-          ...List.generate(totalMonths, (i) => Positioned(
+        return SizedBox(height: 40, child: Stack(children: [
+          // Grille de fond
+          ...List.generate(nbMois, (i) => Positioned(
             left: i * unitW,
             top: 0, bottom: 0, width: 1,
             child: Container(color: AppColors.border),
           )),
 
-          // Bar background
+          // Barre physique (livré) — pleine couleur, en haut.
           Positioned(
-            left: barLeft + 2, top: 6,
-            width: barWidth, height: 20,
-            child: Container(
-              decoration: BoxDecoration(
-                color: project.color.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(6),
-              ),
+            left: barLeft + 2, top: 2,
+            width: barWidth, height: 15,
+            child: _Barre(
+              pct: pctPhysique,
+              couleurFond: AppColors.primary.withValues(alpha: 0.15),
+              couleurRemplissage: AppColors.primary,
+              label: pctPhysique > 0 ? '$pctPhysique %' : '',
             ),
           ),
 
-          // Progress fill
+          // Barre financière (encaissé) — teinte claire, en dessous.
           Positioned(
-            left: barLeft + 2, top: 6,
-            width: max(progressWidth, project.progress > 0 ? 12 : 0), height: 20,
-            child: Container(
-              decoration: BoxDecoration(
-                color: project.color,
-                borderRadius: BorderRadius.circular(6),
-              ),
+            left: barLeft + 2, top: 21,
+            width: barWidth, height: 15,
+            child: _Barre(
+              pct: pctFinancier,
+              couleurFond: AppColors.blue.withValues(alpha: 0.12),
+              couleurRemplissage: AppColors.blue.withValues(alpha: 0.55),
+              label: pctFinancier > 0 ? '$pctFinancier %' : '',
             ),
-          ),
-
-          // Progress text
-          Positioned(
-            left: barLeft + 2, top: 6,
-            width: barWidth, height: 20,
-            child: Center(child: Text(
-              project.progress > 0 ? '${project.progress}%' : '',
-              style: GoogleFonts.dmSans(fontSize: 9.5, fontWeight: FontWeight.w700, color: Colors.white),
-            )),
           ),
         ]));
       })),
     ]);
+  }
+}
+
+/// Une barre de progression unique : fond clair, remplissage proportionnel,
+/// pourcentage centré.
+class _Barre extends StatelessWidget {
+  final int pct;
+  final Color couleurFond;
+  final Color couleurRemplissage;
+  final String label;
+  const _Barre({
+    required this.pct, required this.couleurFond,
+    required this.couleurRemplissage, required this.label,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(builder: (context, constraints) {
+      final largeurRemplissage = max(
+          constraints.maxWidth * (pct / 100), pct > 0 ? 12.0 : 0.0);
+      return Stack(children: [
+        Container(
+          decoration: BoxDecoration(color: couleurFond, borderRadius: BorderRadius.circular(5)),
+        ),
+        Container(
+          width: largeurRemplissage,
+          decoration: BoxDecoration(color: couleurRemplissage, borderRadius: BorderRadius.circular(5)),
+        ),
+        SizedBox.expand(child: Center(child: Text(label,
+            style: GoogleFonts.dmSans(fontSize: 9, fontWeight: FontWeight.w700, color: Colors.white)))),
+      ]);
+    });
   }
 }

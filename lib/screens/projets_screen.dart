@@ -1,149 +1,58 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
+import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
-// ── Drag payload ──────────────────────────────────────────
-class _DragData {
-  final ProjectCard card;
-  final int fromCol;
-  const _DragData(this.card, this.fromCol);
-}
+/// Types de projet proposés à la création. En phase 2, `typeId` n'influence
+/// encore rien (le mode d'avancement est toujours `quantites`) : la liste
+/// deviendra paramétrable en phase 3 (`AppSettings.typesProjet`).
+const _typesProjet = [
+  ('fourniture', 'Fourniture de matériel'),
+  ('installation', 'Installation / déploiement'),
+  ('maintenance', 'Maintenance / contrat'),
+  ('interne', 'Projet interne'),
+];
 
-// ── Screen ────────────────────────────────────────────────
-class ProjetsScreen extends StatefulWidget {
+/// Kanban des projets, en lecture seule.
+///
+/// La colonne d'une carte se déduit de son avancement physique et financier
+/// (`Avancement.calculer(...).statut`) — jamais saisie à la main. Un projet
+/// qui stockerait sa colonne pourrait mentir ; un projet calculé ne le peut
+/// pas. Conséquence assumée : plus de glisser-déposer.
+class ProjetsScreen extends StatelessWidget {
   const ProjetsScreen({super.key});
 
-  @override
-  State<ProjetsScreen> createState() => _ProjetsScreenState();
-}
-
-class _ProjetsScreenState extends State<ProjetsScreen> {
-  // Mutable column list enabling drag-and-drop reordering
-  late List<_KanbanCol> _columns;
-
-  @override
-  void initState() {
-    super.initState();
-    _columns = [
-      _KanbanCol(title: 'À faire', color: AppColors.text3, cards: [
-        ProjectCard(tag: 'Design', title: 'Refonte interface mobile', desc: "Mise à jour de l'UI selon les nouvelles guidelines", date: '15 Mai', assignees: ['AK', 'MD'], subtasks: '2/5', attachments: 3, tags: ['Design', 'UX']),
-        ProjectCard(tag: 'Dev', title: 'Module CRM clients', desc: 'Développement du CRM interne', date: '20 Mai', assignees: ['AB', 'JT'], subtasks: '0/8', tags: ['Backend', 'API']),
-      ]),
-      _KanbanCol(title: 'En cours', color: AppColors.blue, cards: [
-        ProjectCard(tag: 'Dev', title: 'API OAuth2 Connecteurs', desc: 'Développement API Connecteurs pour plateformes tierces', date: '10 Mai', assignees: ['AB', 'KL'], subtasks: '4/6', attachments: 2, progress: 67, tags: ['API', 'Sécurité']),
-        ProjectCard(tag: 'Infra', title: 'Migration cloud AWS', desc: 'Migrer les serveurs vers AWS EC2', date: '30 Mai', assignees: ['JT'], subtasks: '1/4', progress: 25, tags: ['Cloud']),
-      ]),
-      _KanbanCol(title: 'En révision', color: AppColors.orange, cards: [
-        ProjectCard(tag: 'Design', title: 'Charte graphique 2026', desc: 'Validation des nouvelles couleurs et typographies', date: '5 Mai', assignees: ['AK', 'KL'], subtasks: '6/6', attachments: 8, progress: 100, tags: ['Branding']),
-      ]),
-      _KanbanCol(title: 'Terminé', color: AppColors.green, cards: [
-        ProjectCard(tag: 'Dev', title: 'Dashboard analytics v2', desc: 'Nouveau tableau de bord avec graphiques temps réel', date: '28 Avr', assignees: ['AB', 'AK', 'MD'], subtasks: '12/12', attachments: 5, progress: 100, tags: ['Frontend']),
-        ProjectCard(tag: 'Admin', title: 'Audit sécurité Q1', desc: 'Audit complet de la sécurité réseau', date: '20 Avr', assignees: ['KL'], subtasks: '8/8', progress: 100, tags: ['Sécurité']),
-      ]),
-    ];
-  }
-
-  void _moveCard(_DragData data, int toCol) {
-    setState(() {
-      _columns[data.fromCol].cards.remove(data.card);
-      _columns[toCol].cards.add(data.card);
-    });
-  }
-
-  // ── Dialogue "Nouveau projet" ───────────────────────────
-  void _showAddProjectDialog(int colIndex) {
-    final titleCtrl = TextEditingController();
-    final descCtrl = TextEditingController();
-    String tag = 'Dev';
-
-    InputDecoration deco(String hint) => InputDecoration(
-      hintText: hint,
-      hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
-      filled: true, fillColor: AppColors.bg,
-      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
-      focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      isDense: true,
-    );
-
-    showDialog(
-      context: context,
-      builder: (ctx) => StatefulBuilder(builder: (ctx, setDialogState) => AlertDialog(
-        backgroundColor: Colors.white,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-        title: Text('Nouveau projet — ${_columns[colIndex].title}',
-            style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
-        content: SizedBox(
-          width: dialogWidth(ctx, 420),
-          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('TITRE *', style: AppTheme.label),
-            const SizedBox(height: 6),
-            TextField(controller: titleCtrl, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1), decoration: deco('Nom du projet')),
-            const SizedBox(height: 12),
-            Text('DESCRIPTION', style: AppTheme.label),
-            const SizedBox(height: 6),
-            TextField(controller: descCtrl, maxLines: 2, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1), decoration: deco('Description courte')),
-            const SizedBox(height: 12),
-            Text('CATÉGORIE', style: AppTheme.label),
-            const SizedBox(height: 6),
-            Row(children: [
-              for (final t in ['Dev', 'Design', 'Infra', 'Admin'])
-                Padding(
-                  padding: const EdgeInsets.only(right: 8),
-                  child: GestureDetector(
-                    onTap: () => setDialogState(() => tag = t),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: tag == t ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: tag == t ? AppColors.primary : AppColors.border),
-                      ),
-                      child: Text(t, style: GoogleFonts.dmSans(
-                        fontSize: 12, fontWeight: FontWeight.w600,
-                        color: tag == t ? AppColors.primary : AppColors.text2)),
-                    ),
-                  ),
-                ),
-            ]),
-          ]),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
-          ),
-          PrimaryBtn(
-            label: 'Créer',
-            icon: Icons.add,
-            onTap: () {
-              final title = titleCtrl.text.trim();
-              if (title.isEmpty) return;
-              setState(() {
-                _columns[colIndex].cards.add(ProjectCard(
-                  tag: tag,
-                  title: title,
-                  desc: descCtrl.text.trim().isEmpty ? null : descCtrl.text.trim(),
-                  assignees: const ['KL'],
-                  subtasks: '0/0',
-                ));
-              });
-              Navigator.of(ctx).pop();
-            },
-          ),
-        ],
-      )),
-    );
-  }
+  /// Une colonne par statut, hors `annule` : un projet annulé disparaît
+  /// simplement du tableau plutôt que d'occuper une colonne dédiée.
+  static const _colonnes = [
+    StatutProjet.aDemarrer,
+    StatutProjet.enCours,
+    StatutProjet.livreNonPaye,
+    StatutProjet.solde,
+  ];
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final projets = state.projets.where((p) => !p.annule).toList();
+    final avancements = {
+      for (final p in projets) p.id: state.avancementProjet(p.id),
+    };
+
+    final parColonne = <StatutProjet, List<Projet>>{
+      for (final s in _colonnes) s: <Projet>[],
+    };
+    for (final p in projets) {
+      parColonne[avancements[p.id]!.statut]?.add(p);
+    }
+
     return Padding(
       padding: pagePadding(context),
       child: Column(
@@ -151,245 +60,514 @@ class _ProjetsScreenState extends State<ProjetsScreen> {
         children: [
           SectionHeader(
             title: 'Projets',
-            subtitle: 'Tableau Kanban de suivi de vos projets.',
+            subtitle: 'Tableau Kanban en lecture seule : la colonne se '
+                'déduit de l\'avancement livré / encaissé.',
             actions: [
               SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
                   onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
-              PrimaryBtn(label: 'Nouveau projet', icon: Icons.add, onTap: () => _showAddProjectDialog(0)),
+              PrimaryBtn(label: 'Nouveau projet', icon: Icons.add,
+                  onTap: () => _ouvrirFormulaireProjet(context, state)),
             ],
           ),
           const SizedBox(height: 24),
 
           Expanded(
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: _columns.asMap().entries.map((e) => Padding(
-                  padding: const EdgeInsets.only(right: 16),
-                  child: _KanbanColumnWidget(
-                    col: e.value,
-                    colIndex: e.key,
-                    onDrop: (data) => _moveCard(data, e.key),
-                    onAdd: () => _showAddProjectDialog(e.key),
-                  ),
-                )).toList(),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Data model ────────────────────────────────────────────
-class _KanbanCol {
-  final String title;
-  final Color color;
-  final List<ProjectCard> cards;
-  _KanbanCol({required this.title, required this.color, required this.cards});
-}
-
-// ── Column widget with DragTarget ─────────────────────────
-class _KanbanColumnWidget extends StatefulWidget {
-  final _KanbanCol col;
-  final int colIndex;
-  final ValueChanged<_DragData> onDrop;
-  final VoidCallback onAdd;
-  const _KanbanColumnWidget({required this.col, required this.colIndex, required this.onDrop, required this.onAdd});
-
-  @override
-  State<_KanbanColumnWidget> createState() => _KanbanColumnWidgetState();
-}
-
-class _KanbanColumnWidgetState extends State<_KanbanColumnWidget> {
-  bool _isOver = false;
-
-  @override
-  Widget build(BuildContext context) {
-    return DragTarget<_DragData>(
-      onWillAcceptWithDetails: (details) => details.data.fromCol != widget.colIndex,
-      onAcceptWithDetails: (details) {
-        setState(() => _isOver = false);
-        widget.onDrop(details.data);
-      },
-      onLeave: (_) => setState(() => _isOver = false),
-      onMove: (_) => setState(() => _isOver = true),
-      builder: (context, candidateData, rejectedData) {
-        final hovering = candidateData.isNotEmpty || _isOver;
-        return AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          width: 280,
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: hovering ? widget.col.color.withAlpha(15) : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: hovering ? widget.col.color.withAlpha(80) : Colors.transparent,
-              width: 2,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Column header
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                child: Row(children: [
-                  Container(width: 10, height: 10, decoration: BoxDecoration(color: widget.col.color, shape: BoxShape.circle)),
-                  const SizedBox(width: 8),
-                  Text(widget.col.title, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
-                    child: Text('${widget.col.cards.length}', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text2)),
-                  ),
-                  const Spacer(),
-                  Tooltip(
-                    message: 'Ajouter un projet dans « ${widget.col.title} »',
-                    child: InkWell(
-                      onTap: widget.onAdd,
-                      borderRadius: BorderRadius.circular(6),
-                      child: const Padding(
-                        padding: EdgeInsets.all(3),
-                        child: Icon(Icons.add, size: 16, color: AppColors.text2),
-                      ),
+            child: projets.isEmpty
+                ? Center(child: CardBox(
+                    padding: const EdgeInsets.all(40),
+                    child: Text(
+                      'Aucun projet enregistré.',
+                      style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3),
+                    ),
+                  ))
+                : SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: _colonnes.map((s) => Padding(
+                        padding: const EdgeInsets.only(right: 16),
+                        child: _KanbanColonne(
+                          statut: s,
+                          projets: parColonne[s]!,
+                          avancements: avancements,
+                        ),
+                      )).toList(),
                     ),
                   ),
-                ]),
-              ),
-              const SizedBox(height: 12),
-
-              // Cards — each wrapped in Draggable
-              ...widget.col.cards.map((card) => Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: _DraggableCard(card: card, colIndex: widget.colIndex),
-              )),
-
-              // Drop hint when empty and hovering
-              if (widget.col.cards.isEmpty && hovering)
-                Container(
-                  height: 80,
-                  decoration: BoxDecoration(
-                    color: widget.col.color.withAlpha(20),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: widget.col.color.withAlpha(60), style: BorderStyle.solid),
-                  ),
-                  child: Center(
-                    child: Text('Déposer ici', style: GoogleFonts.dmSans(fontSize: 13, color: widget.col.color, fontWeight: FontWeight.w500)),
-                  ),
-                ),
-            ],
           ),
-        );
-      },
+        ],
+      ),
     );
   }
 }
 
-// ── Draggable card ────────────────────────────────────────
-class _DraggableCard extends StatefulWidget {
-  final ProjectCard card;
-  final int colIndex;
-  const _DraggableCard({required this.card, required this.colIndex});
+// ─────────────────────────────────────────────────────────
+//  Colonne (déduite, pas de DragTarget)
+// ─────────────────────────────────────────────────────────
+class _KanbanColonne extends StatelessWidget {
+  final StatutProjet statut;
+  final List<Projet> projets;
+  final Map<int, Avancement> avancements;
+  const _KanbanColonne({required this.statut, required this.projets, required this.avancements});
+
+  static const _couleurs = {
+    StatutProjet.aDemarrer: AppColors.text3,
+    StatutProjet.enCours: AppColors.blue,
+    StatutProjet.livreNonPaye: AppColors.orange,
+    StatutProjet.solde: AppColors.green,
+  };
 
   @override
-  State<_DraggableCard> createState() => _DraggableCardState();
+  Widget build(BuildContext context) {
+    final couleur = _couleurs[statut] ?? AppColors.text3;
+    return Container(
+      width: 280,
+      padding: const EdgeInsets.all(8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+            child: Row(children: [
+              Container(width: 10, height: 10, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle)),
+              const SizedBox(width: 8),
+              Expanded(child: Text(statut.libelle,
+                  style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1),
+                  overflow: TextOverflow.ellipsis)),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(10)),
+                child: Text('${projets.length}',
+                    style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text2)),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          if (projets.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Text('Aucun projet',
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+            )
+          else
+            ...projets.map((p) => Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ProjetCard(projet: p, avancement: avancements[p.id]!),
+            )),
+        ],
+      ),
+    );
+  }
 }
 
-class _DraggableCardState extends State<_DraggableCard> {
-  bool _hovered = false;
+// ─────────────────────────────────────────────────────────
+//  Carte projet — lecture seule, pas de Draggable
+// ─────────────────────────────────────────────────────────
+class _ProjetCard extends StatelessWidget {
+  final Projet projet;
+  final Avancement avancement;
+  const _ProjetCard({required this.projet, required this.avancement});
 
-  static const _tagColors = {
-    'Dev': AppColors.blue, 'Design': AppColors.orange, 'Infra': AppColors.teal, 'Admin': AppColors.purple,
-  };
-  static const _tagBg = {
-    'Dev': AppColors.blueBg, 'Design': AppColors.orangeBg, 'Infra': Color(0xFFECFEFF), 'Admin': AppColors.purpleBg,
-  };
-
-  Widget _buildCard({bool isPreview = false}) {
-    final card = widget.card;
-    final tagColor = _tagColors[card.tag] ?? AppColors.text2;
-    final tagBg = _tagBg[card.tag] ?? AppColors.grayBg;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: isPreview ? Colors.white : (_hovered ? const Color(0xFFFAFAFB) : Colors.white),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isPreview ? AppColors.primary.withAlpha(120) : AppColors.border),
-        boxShadow: isPreview
-            ? [BoxShadow(color: Colors.black.withAlpha(25), blurRadius: 16, offset: const Offset(0, 6))]
-            : _hovered
-                ? [BoxShadow(color: Colors.black.withAlpha(15), blurRadius: 8, offset: const Offset(0, 2))]
-                : [],
-      ),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        if (card.tag != null) ...[
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(6)),
-            child: Text(card.tag!, style: GoogleFonts.dmSans(fontSize: 10.5, fontWeight: FontWeight.w700, color: tagColor)),
-          ),
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(10),
+      onTap: () => _ouvrirFicheProjet(context, projet),
+      child: Container(
+        width: 264,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(projet.nom, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1),
+              maxLines: 2, overflow: TextOverflow.ellipsis),
+          const SizedBox(height: 3),
+          Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
+              style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+          const SizedBox(height: 12),
+          _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
           const SizedBox(height: 8),
-        ],
-        Text(card.title, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-        if (card.desc != null) ...[
+          _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
+          const SizedBox(height: 12),
+          Row(children: [
+            Text('Attendu', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+            const Spacer(),
+            Text(Fmt.money(avancement.montantAttendu),
+                style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+          ]),
           const SizedBox(height: 4),
-          Text(card.desc!, style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3, height: 1.4), maxLines: 2, overflow: TextOverflow.ellipsis),
-        ],
-        if (card.progress != null) ...[
-          const SizedBox(height: 10),
-          ProgressBar(value: card.progress!, color: card.progress == 100 ? AppColors.green : AppColors.primary),
-        ],
-        const SizedBox(height: 10),
-        Row(children: [
-          ...card.assignees.take(3).toList().asMap().entries.map((e) => Transform.translate(
-            offset: Offset(-e.key * 6.0, 0),
-            child: Container(
-              width: 22, height: 22,
-              decoration: BoxDecoration(
-                color: [AppColors.primary, AppColors.blue, AppColors.purple, AppColors.emerald, AppColors.orange][e.key % 5],
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
-              ),
-              alignment: Alignment.center,
-              child: Text(e.value, style: GoogleFonts.dmSans(fontSize: 7.5, fontWeight: FontWeight.w700, color: Colors.white)),
-            ),
-          )),
-          const Spacer(),
-          if (card.subtasks != null) ...[
-            const Icon(Icons.check_box_outlined, size: 12, color: AppColors.text3),
-            const SizedBox(width: 3),
-            Text(card.subtasks!, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
-            const SizedBox(width: 8),
-          ],
-          if (card.date != null) ...[
-            const Icon(Icons.calendar_today_outlined, size: 11, color: AppColors.text3),
-            const SizedBox(width: 3),
-            Text(card.date!, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
-          ],
+          Row(children: [
+            Text('Reste dû', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+            const Spacer(),
+            Text(Fmt.money(avancement.montantRestant),
+                style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700,
+                    color: avancement.enRetardPaiement ? AppColors.red : AppColors.text1)),
+          ]),
         ]),
-      ]),
+      ),
     );
+  }
+}
+
+class _LigneAvancement extends StatelessWidget {
+  final String label;
+  final double fraction;
+  final Color couleur;
+  const _LigneAvancement({required this.label, required this.fraction, required this.couleur});
+
+  @override
+  Widget build(BuildContext context) {
+    final pct = (fraction * 100).round();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text(label, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+        const Spacer(),
+        Text('$pct %', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text2)),
+      ]),
+      const SizedBox(height: 4),
+      ProgressBar(value: pct, color: couleur),
+    ]);
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Boîte de saisie : décoration commune aux champs
+// ─────────────────────────────────────────────────────────
+InputDecoration _deco(BuildContext context, String hint) => InputDecoration(
+  hintText: hint,
+  hintStyle: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3),
+  filled: true, fillColor: AppColors.bg,
+  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.border)),
+  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
+  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+  isDense: true,
+);
+
+Widget _champDate(BuildContext context, String label, DateTime valeur, ValueChanged<DateTime> onPicked) {
+  return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+    Text(label, style: AppTheme.label),
+    const SizedBox(height: 6),
+    GestureDetector(
+      onTap: () async {
+        final d = await showDatePicker(
+            context: context, initialDate: valeur, firstDate: DateTime(2020), lastDate: DateTime(2100));
+        if (d != null) onPicked(d);
+      },
+      child: Container(
+        height: 40,
+        alignment: Alignment.centerLeft,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+        child: Row(children: [
+          const Icon(Icons.calendar_today_outlined, size: 15, color: AppColors.text3),
+          const SizedBox(width: 8),
+          Text(Fmt.jour(valeur), style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ]),
+      ),
+    ),
+  ]);
+}
+
+// ─────────────────────────────────────────────────────────
+//  Boîte « Nouveau projet » / édition des champs de base
+// ─────────────────────────────────────────────────────────
+void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? existing}) {
+  final nomCtrl = TextEditingController(text: existing?.nom ?? '');
+  int? clientId = existing?.clientId;
+  String client = existing?.client ?? '';
+  String typeId = existing?.typeId ?? _typesProjet.first.$1;
+  DateTime debut = existing?.debut ?? DateTime.now();
+  DateTime finPrevue = existing?.finPrevue ?? DateTime.now().add(const Duration(days: 30));
+  var erreur = false;
+  var erreurDates = false;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(existing == null ? 'Nouveau projet' : 'Modifier le projet',
+          style: GoogleFonts.dmSans(fontSize: 17, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: SizedBox(
+        width: dialogWidth(ctx, 440),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('NOM DU PROJET *', style: AppTheme.label),
+            const SizedBox(height: 6),
+            TextField(controller: nomCtrl, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                decoration: _deco(ctx, 'Ex : Fourniture matériel — ACME')),
+            const SizedBox(height: 12),
+            Text('CLIENT', style: AppTheme.label),
+            const SizedBox(height: 6),
+            DropdownButtonFormField<int?>(
+              initialValue: clientId,
+              decoration: _deco(ctx, 'Projet interne'),
+              items: [
+                const DropdownMenuItem<int?>(value: null, child: Text('Projet interne')),
+                ...state.clients.map((c) => DropdownMenuItem<int?>(value: c.id, child: Text(c.name))),
+              ],
+              onChanged: (v) => setLocal(() {
+                clientId = v;
+                final m = state.clients.where((c) => c.id == v);
+                client = m.isEmpty ? '' : m.first.name;
+              }),
+            ),
+            const SizedBox(height: 12),
+            Text('TYPE', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 8, children: _typesProjet.map((t) => GestureDetector(
+              onTap: () => setLocal(() => typeId = t.$1),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: typeId == t.$1 ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: typeId == t.$1 ? AppColors.primary : AppColors.border),
+                ),
+                child: Text(t.$2, style: GoogleFonts.dmSans(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: typeId == t.$1 ? AppColors.primary : AppColors.text2)),
+              ),
+            )).toList()),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(child: _champDate(ctx, 'DÉBUT', debut, (d) => setLocal(() => debut = d))),
+              const SizedBox(width: 12),
+              Expanded(child: _champDate(ctx, 'FIN PRÉVUE', finPrevue, (d) => setLocal(() => finPrevue = d))),
+            ]),
+            if (erreur) ...[
+              const SizedBox(height: 12),
+              Text('Renseignez un nom de projet.',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+            ],
+            if (erreurDates) ...[
+              const SizedBox(height: 12),
+              Text('La fin prévue ne peut pas être antérieure au début.',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+            ],
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        PrimaryBtn(
+          label: existing == null ? 'Créer' : 'Enregistrer',
+          icon: existing == null ? Icons.add : Icons.check,
+          onTap: () {
+            final nom = nomCtrl.text.trim();
+            if (nom.isEmpty) { setLocal(() => erreur = true); return; }
+            // Même règle que Projet.periodeValide (§ défaut 4) : une durée
+            // négative rendrait le Gantt et tous les retards incohérents.
+            if (finPrevue.isBefore(debut)) { setLocal(() => erreurDates = true); return; }
+            if (existing == null) {
+              state.addProjet(Projet(
+                id: DateTime.now().millisecondsSinceEpoch,
+                nom: nom, typeId: typeId, clientId: clientId, client: client,
+                debut: debut, finPrevue: finPrevue,
+              ));
+            } else {
+              state.updateProjet(existing
+                ..nom = nom
+                ..typeId = typeId
+                ..clientId = clientId
+                ..client = client
+                ..debut = debut
+                ..finPrevue = finPrevue);
+            }
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ],
+    )),
+  );
+}
+
+// ─────────────────────────────────────────────────────────
+//  Fiche projet — avancement détaillé, ouverte depuis la carte
+// ─────────────────────────────────────────────────────────
+void _ouvrirFicheProjet(BuildContext context, Projet projet) {
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => Dialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: dialogWidth(ctx, 520), maxHeight: 640),
+        child: Consumer<AppState>(builder: (ctx, state, _) {
+          // Le projet a pu être supprimé pendant que la fiche était ouverte.
+          final vivant = state.projets.any((p) => p.id == projet.id);
+          if (!vivant) return const SizedBox(width: 400, height: 100);
+          final avancement = state.avancementProjet(projet.id);
+
+          return Column(mainAxisSize: MainAxisSize.min, children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 18, 12, 12),
+              child: Row(children: [
+                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(projet.nom, style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+                  const SizedBox(height: 2),
+                  Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
+                      style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                ])),
+                IconButton(
+                  tooltip: 'Modifier',
+                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.text2),
+                  onPressed: () => _ouvrirFormulaireProjet(ctx, state, existing: projet),
+                ),
+                IconButton(
+                  tooltip: 'Fermer',
+                  icon: const Icon(Icons.close, size: 18, color: AppColors.text2),
+                  onPressed: () => Navigator.of(ctx).pop(),
+                ),
+              ]),
+            ),
+            const Divider(height: 1, color: AppColors.border),
+            Flexible(child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                  decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(20)),
+                  child: Text(avancement.statut.libelle,
+                      style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
+                ),
+                const SizedBox(height: 16),
+                _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
+                const SizedBox(height: 12),
+                _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
+                const SizedBox(height: 16),
+                _ligneMontant('Montant attendu', avancement.montantAttendu),
+                _ligneMontant('Encaissé', avancement.montantEncaisse),
+                _ligneMontant('Reste dû', avancement.montantRestant),
+
+                // ── Livraison ──────────────────────────────
+                // La proforma est la source de vérité du livré (§ 5.2 de la
+                // conception) : c'est elle qu'on modifie ici, jamais la
+                // facture ni le BL, déjà figés à la validation. Le BL imprimé
+                // continue d'afficher les quantités commandées (§ 12).
+                if (state.proformasDuProjet(projet.id).isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 12),
+                  Text('QUANTITÉS LIVRÉES', style: AppTheme.label),
+                  const SizedBox(height: 8),
+                  for (final p in state.proformasDuProjet(projet.id))
+                    for (var i = 0; i < p.lines.length; i++)
+                      _LigneLivraisonRow(
+                        key: ValueKey('${p.id}-$i'),
+                        proformaId: p.id, index: i, ligne: p.lines[i],
+                      ),
+                ],
+              ]),
+            )),
+          ]);
+        }),
+      ),
+    ),
+  );
+}
+
+Widget _ligneMontant(String label, double montant) => Padding(
+  padding: const EdgeInsets.only(bottom: 6),
+  child: Row(children: [
+    Text(label, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+    const Spacer(),
+    Text(Fmt.money(montant), style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+  ]),
+);
+
+// ─────────────────────────────────────────────────────────
+//  Une ligne de saisie de quantité livrée, dans la fiche projet.
+//  StatefulWidget avec son propre contrôleur : sans lui, chaque frappe
+//  ferait perdre le curseur au prochain rebuild (même défaut que les lignes
+//  de facturation dans document_create_screen.dart).
+// ─────────────────────────────────────────────────────────
+class _LigneLivraisonRow extends StatefulWidget {
+  final int proformaId;
+  final int index;
+  final LineItem ligne;
+  const _LigneLivraisonRow({
+    super.key, required this.proformaId, required this.index, required this.ligne,
+  });
+
+  @override
+  State<_LigneLivraisonRow> createState() => _LigneLivraisonRowState();
+}
+
+class _LigneLivraisonRowState extends State<_LigneLivraisonRow> {
+  late TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.ligne.qteLivree.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant _LigneLivraisonRow old) {
+    super.didUpdateWidget(old);
+    // Se resynchronise si la quantité a changé ailleurs (ex. une autre
+    // fenêtre, ou l'écrêtage appliqué par `setQuantiteLivree`).
+    if (old.ligne.qteLivree != widget.ligne.qteLivree) {
+      _ctrl.text = widget.ligne.qteLivree.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _valider() {
+    final v = int.tryParse(_ctrl.text) ?? 0;
+    context.read<AppState>().setQuantiteLivree(widget.proformaId, widget.index, v);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Draggable<_DragData>(
-      data: _DragData(widget.card, widget.colIndex),
-      onDragEnd: (_) => setState(() {}),
-      feedback: SizedBox(width: 260, child: Material(color: Colors.transparent, child: _buildCard(isPreview: true))),
-      childWhenDragging: Opacity(opacity: 0.35, child: _buildCard()),
-      child: MouseRegion(
-        cursor: SystemMouseCursors.grab,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: _buildCard(),
-      ),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Expanded(child: Text(
+            widget.ligne.designation.isEmpty ? widget.ligne.ref : widget.ligne.designation,
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text1),
+            overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 56,
+          child: TextField(
+            controller: _ctrl,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text1),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              filled: true, fillColor: AppColors.bg,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.primary)),
+            ),
+            onSubmitted: (_) => _valider(),
+            onEditingComplete: _valider,
+            onTapOutside: (_) => _valider(),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('/ ${widget.ligne.qte}', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+      ]),
     );
   }
 }

@@ -6,3 +6,4 @@ export 'models/document.dart';
 export 'models/engagement.dart';
 export 'models/divers.dart';
 export 'models/settings.dart';
+export 'models/projet.dart';

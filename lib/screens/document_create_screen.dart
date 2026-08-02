@@ -33,8 +33,24 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   final _objetCtrl     = TextEditingController();
   final _dateCtrl      = TextEditingController();
   final List<LineItem> _lines = [];
+  // Client sélectionné dans l'autocomplete : sert à filtrer la liste des
+  // projets proposés ET devient le `clientId` du document enregistré.
+  // `null` tant qu'aucun client n'a été choisi dans l'autocomplete (nom saisi
+  // librement, ou champ pas encore rempli).
+  int? _clientId;
+  int? _projetId;
+  // Statut conservé tel quel à l'édition (§ défaut 2) : une nouvelle
+  // proforma démarre à 'cours', une existante garde le sien, y compris
+  // 'validee' — sans quoi l'enregistrer la dévaliderait silencieusement
+  // alors que sa facture et son BL restent émis.
+  String _statut = 'cours';
 
   bool get _isEdit => widget.existing != null;
+
+  // Une proforma validée a déjà produit une facture, un BL et un engagement
+  // rattachés à SON projet (§ défaut 2) : son lien de projet est figé avec
+  // eux, la réassigner ici décrocherait silencieusement l'argent du physique.
+  bool get _projetVerrouille => _statut == 'validee';
 
   double get _ht      => _lines.fold(0, (s, l) => s + l.total);
   double get _tvaAmt  => _tvaEnabled ? _ht * 0.05 : 0;
@@ -81,12 +97,13 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       numero: _committedNumero!,
       date: _committedDate!,
       dateAffichee: _dateCtrl.text.trim(),
-      clientId: 0,
+      clientId: _clientId,
       client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
       clientAddr: _clientAddrCtrl.text,
       objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
       montant: _ttc,
-      statut: 'cours',
+      statut: _statut,
+      projetId: _projetId,
       lines: _lines
           .where((l) => l.designation.trim().isNotEmpty)
           .map((l) => LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu))
@@ -195,6 +212,9 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       _clientAddrCtrl.text = doc.clientAddr;
       _objetCtrl.text = doc.objet;
       _dateCtrl.text = doc.dateAffichee;
+      _clientId = doc.clientId;
+      _projetId = doc.projetId;
+      _statut = doc.statut;
       _lines.addAll(doc.lines.map((l) =>
           LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu)));
     }
@@ -267,8 +287,14 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     onClientSelected: (c) {
       _clientCtrl.text = c.name;
       if (c.address.isNotEmpty) _clientAddrCtrl.text = c.address;
+      _clientId = c.id;
       setState(() {});
     },
+    projets: state.projets,
+    clientId: _clientId,
+    projetId: _projetId,
+    projetVerrouille: _projetVerrouille,
+    onProjetChanged: (v) => setState(() => _projetId = v),
   );
 
   /// Ouvre l'aperçu A4 en plein écran, zoomable.
@@ -444,6 +470,11 @@ class _FormPanel extends StatelessWidget {
   final VoidCallback onLineChanged;
   final List<Client> clients;
   final ValueChanged<Client> onClientSelected;
+  final List<Projet> projets;
+  final int? clientId;
+  final int? projetId;
+  final bool projetVerrouille;
+  final ValueChanged<int?> onProjetChanged;
 
   const _FormPanel({
     required this.clientCtrl, required this.clientAddrCtrl,
@@ -453,6 +484,9 @@ class _FormPanel extends StatelessWidget {
     required this.ht, required this.tvaAmt, required this.ttc,
     required this.onLineChanged, required this.clients,
     required this.onClientSelected,
+    required this.projets, required this.clientId,
+    required this.projetId, required this.projetVerrouille,
+    required this.onProjetChanged,
   });
 
   @override
@@ -469,6 +503,40 @@ class _FormPanel extends StatelessWidget {
           clients: clients,
           onSelected: onClientSelected,
         ),
+        if (projets.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('PROJET', style: AppTheme.label),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<int?>(
+            initialValue: projetId,
+            decoration: _inputDeco('Aucun projet'),
+            // Verrouillé : garde le projet courant même s'il ne passe plus
+            // les filtres ci-dessous (client changé, projet entretemps
+            // annulé), sinon la valeur affichée ne correspondrait à aucune
+            // entrée de la liste.
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('Aucun projet')),
+              // Les projets du client sélectionné d'abord, puis les autres :
+              // une proforma se rattache presque toujours à un projet du
+              // même client.
+              ...projets
+                  .where((p) => p.id == projetId ||
+                      (!p.annule && (clientId == null || p.clientId == clientId)))
+                  .map((p) => DropdownMenuItem<int?>(value: p.id, child: Text(p.nom))),
+            ],
+            // Une proforma validée a déjà produit sa facture, son BL et son
+            // engagement rattachés à ce projet (§ défaut 2) : le lien est
+            // figé, on ne le réassigne pas ici.
+            onChanged: projetVerrouille ? null : onProjetChanged,
+          ),
+          if (projetVerrouille) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Proforma déjà validée : la facture et le BL sont émis, le projet ne peut plus changer.',
+              style: GoogleFonts.dmSans(fontSize: 10.5, color: AppColors.text3),
+            ),
+          ],
+        ],
         const SizedBox(height: 10),
         _LabelField(label: 'ADRESSE CLIENT', controller: clientAddrCtrl, hint: 'Adresse du client', maxLines: 2),
         const SizedBox(height: 10),

@@ -265,8 +265,26 @@ void main() {
 
     testWidgets('Gantt garde son défilement horizontal', (tester) async {
       // Décision produit : une frise chronologique se lit en défilant, elle
-      // ne se découpe pas en cartes.
-      await pumpApp(tester, size: phone, screen: NavScreen.gantt);
+      // ne se découpe pas en cartes. Le Gantt est désormais alimenté par les
+      // vrais projets (Phase 2, tâche 8) : sans aucun projet enregistré, il
+      // affiche un état vide sans HScrollTable — il faut donc en poser un
+      // pour vérifier que le tableau défile plutôt que de se transformer en
+      // cartes.
+      tester.view.physicalSize = phone;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+
+      final state = AppState()..login('admin', 'admin');
+      state.addProjet(Projet(
+        id: 1, nom: 'Projet de test', typeId: 'fourniture', clientId: null,
+        client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 3, 1)));
+      state.navigate(NavScreen.gantt);
+
+      await tester.pumpWidget(
+        ChangeNotifierProvider<AppState>.value(value: state, child: const KlrTechApp()),
+      );
+      await tester.pumpAndSettle();
+
       expect(find.byType(HScrollTable), findsOneWidget);
     });
   });

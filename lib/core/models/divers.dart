@@ -129,22 +129,3 @@ class ActivityItem {
     color: colorFromInt(j['color']),
   );
 }
-
-// ── Project Card ─────────────────────────────────────────
-class ProjectCard {
-  final String? tag;
-  final String title;
-  final String? desc;
-  final String? date;
-  final List<String> assignees;
-  final String? subtasks;
-  final int? attachments;
-  final int? progress;
-  final List<String> tags;
-
-  const ProjectCard({
-    this.tag, required this.title, this.desc, this.date,
-    required this.assignees, this.subtasks, this.attachments,
-    this.progress, this.tags = const [],
-  });
-}

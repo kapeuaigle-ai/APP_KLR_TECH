@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
 import '../core/comptabilite.dart';
 import '../core/utils.dart';
 import '../core/pdf_generator.dart';
@@ -339,54 +340,90 @@ class _ClientsTab extends StatelessWidget {
 }
 
 // ── Projets Tab ───────────────────────────────────────────
+/// Comme le Kanban et le Gantt (Phase 2) : rien n'est stocké, tout est
+/// dérivé via `AppState.avancementProjet`. Les initiales d'équipe des
+/// anciennes cartes factices ont disparu avec les assignés de `ProjectCard`
+/// (l'app est mono-utilisateur, elles n'ont jamais été autre chose que du
+/// décor).
 class _ProjetsTab extends StatelessWidget {
   const _ProjetsTab();
 
-  static final _projets = [
-    ('Dashboard Analytics v2', AppColors.primary, 100, 'Terminé', 'AB, AK, MD'),
-    ('API OAuth2 Connecteurs', AppColors.blue, 67, 'En cours', 'AB, KL'),
-    ('Charte graphique 2026', AppColors.orange, 100, 'Terminé', 'AK'),
-    ('Migration cloud AWS', AppColors.teal, 25, 'En cours', 'JT'),
-    ('Module CRM clients', AppColors.purple, 0, 'À faire', 'AB, JT'),
-  ];
+  static const _couleurs = {
+    StatutProjet.aDemarrer: (AppColors.text3, AppColors.grayBg),
+    StatutProjet.enCours: (AppColors.blue, AppColors.blueBg),
+    StatutProjet.livreNonPaye: (AppColors.orange, AppColors.orangeBg),
+    StatutProjet.solde: (AppColors.green, AppColors.greenBg),
+  };
+
+  static final Map<String, BadgeCfg> _badges = {
+    for (final s in StatutProjet.values)
+      s.name: BadgeCfg(
+          _couleurs[s]?.$1 ?? AppColors.text3, _couleurs[s]?.$2 ?? AppColors.grayBg, s.libelle),
+  };
 
   @override
   Widget build(BuildContext context) {
-    final done = _projets.where((p) => p.$4 == 'Terminé').length;
-    final inProgress = _projets.where((p) => p.$4 == 'En cours').length;
+    final state = context.watch<AppState>();
+    final now = DateTime.now();
+    final projets = state.projets.where((p) => !p.annule).toList();
+    final avancements = {
+      for (final p in projets) p.id: state.avancementProjet(p.id, now: now),
+    };
+
+    // Les plus récemment démarrés d'abord : c'est ce qui intéresse le plus
+    // un coup d'œil « où en sommes-nous ».
+    final top = [...projets]..sort((a, b) => b.debut.compareTo(a.debut));
+    final affiches = top.take(5).toList();
+
+    final termines = projets.where((p) => avancements[p.id]!.statut == StatutProjet.solde).length;
+    final enCours = projets.where((p) => avancements[p.id]!.statut == StatutProjet.enCours).length;
+    final tauxCompletion = projets.isEmpty ? 0 : (projets.fold<double>(
+            0, (s, p) => s + avancements[p.id]!.physique) / projets.length * 100).round();
 
     return Column(children: [
       StatGrid(cards: [
-        StatCard(label: 'TOTAL PROJETS', value: '${_projets.length}'),
-        StatCard(label: 'EN COURS', value: '$inProgress'),
-        StatCard(label: 'TERMINÉS', value: '$done',
+        StatCard(label: 'TOTAL PROJETS', value: '${projets.length}'),
+        StatCard(label: 'EN COURS', value: '$enCours'),
+        StatCard(label: 'TERMINÉS', value: '$termines',
           badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
             decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text('${(done / _projets.length * 100).round()}%', style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
-        StatCard(label: 'TAUX COMPLÉTION', value: '${(_projets.fold<int>(0, (s, p) => s + p.$3) / _projets.length).round()}', unit: '%'),
+            child: Text(projets.isEmpty ? '0%' : '${(termines / projets.length * 100).round()}%',
+                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+        StatCard(label: 'TAUX COMPLÉTION', value: '$tauxCompletion', unit: '%'),
       ]),
       const SizedBox(height: 20),
 
       CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('Avancement des projets', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 16),
-        ..._projets.map((p) => Padding(
-          padding: const EdgeInsets.only(bottom: 16),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Row(children: [
-              Container(width: 10, height: 10, decoration: BoxDecoration(color: p.$2, shape: BoxShape.circle)),
-              const SizedBox(width: 8),
-              Expanded(child: Text(p.$1, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.text1))),
-              StatusBadge(status: p.$4 == 'Terminé' ? 'termine' : p.$4 == 'En cours' ? 'cours' : 'attente'),
-              const SizedBox(width: 12),
-              Text('${p.$3}%', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: p.$2)),
-            ]),
-            const SizedBox(height: 6),
-            ProgressBar(value: p.$3, color: p.$2, height: 8),
-            const SizedBox(height: 3),
-            Text('Équipe : ${p.$5}', style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
-          ]),
-        )),
+        if (affiches.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: Text('Aucun projet enregistré.',
+                style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))),
+          )
+        else
+          ...affiches.map((p) {
+            final av = avancements[p.id]!;
+            final couleur = _couleurs[av.statut]?.$1 ?? AppColors.text3;
+            final pct = (av.physique * 100).round();
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                Row(children: [
+                  Container(width: 10, height: 10, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(p.nom, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.text1),
+                      maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  StatusBadge(status: av.statut.name, config: _badges),
+                  const SizedBox(width: 12),
+                  Text('$pct%', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: couleur)),
+                ]),
+                const SizedBox(height: 6),
+                ProgressBar(value: pct, color: couleur, height: 8),
+              ]),
+            );
+          }),
       ])),
     ]);
   }
