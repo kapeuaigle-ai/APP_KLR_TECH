@@ -165,7 +165,7 @@ void main() {
   });
 
   group('statut déduit', () {
-    StatutProjet _statut({
+    StatutProjet calculerStatut({
       required double phys, required double fin, bool annule = false,
     }) {
       final projet = _projet();
@@ -183,22 +183,22 @@ void main() {
     }
 
     test('annulé l\'emporte sur tout', () {
-      expect(_statut(phys: 1, fin: 1, annule: true), StatutProjet.annule);
+      expect(calculerStatut(phys: 1, fin: 1, annule: true), StatutProjet.annule);
     });
     test('0 et 0 : à démarrer', () {
-      expect(_statut(phys: 0, fin: 0), StatutProjet.aDemarrer);
+      expect(calculerStatut(phys: 0, fin: 0), StatutProjet.aDemarrer);
     });
     test('100 et 100 : soldé', () {
-      expect(_statut(phys: 1, fin: 1), StatutProjet.solde);
+      expect(calculerStatut(phys: 1, fin: 1), StatutProjet.solde);
     });
     test('100 livré, 50 encaissé : livré, reste à encaisser', () {
-      expect(_statut(phys: 1, fin: 0.5), StatutProjet.livreNonPaye);
+      expect(calculerStatut(phys: 1, fin: 0.5), StatutProjet.livreNonPaye);
     });
     test('50 livré : en cours', () {
-      expect(_statut(phys: 0.5, fin: 0.5), StatutProjet.enCours);
+      expect(calculerStatut(phys: 0.5, fin: 0.5), StatutProjet.enCours);
     });
     test('0 livré mais déjà encaissé : en cours, pas à démarrer', () {
-      expect(_statut(phys: 0, fin: 0.3), StatutProjet.enCours);
+      expect(calculerStatut(phys: 0, fin: 0.3), StatutProjet.enCours);
     });
   });
 }
