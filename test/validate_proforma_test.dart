@@ -54,4 +54,48 @@ void main() {
     expect(s.documents['facture']!.length, nbFactures); // pas de doublon
     expect(s.documents['bl']!.length, nbBl);
   });
+
+  test('valider une proforma crée l\'engagement entrant de sa facture', () {
+    final s = AppState()..viderDonnees();
+    s.saveOrUpdateProforma(DocumentItem(
+      id: 1, numero: 'KLR-P01-10012026', date: '10/01/2026',
+      clientId: 5, client: 'ACME', objet: 'PC', montant: 3000, statut: 'cours',
+      projetId: 42,
+      lines: [LineItem(ref: 'PC', designation: 'Ordinateur', qte: 10, pu: 300)],
+    ));
+    s.validateProforma(1);
+
+    expect(s.engagements.length, 1);
+    final e = s.engagements.first;
+    expect(e.sens, 'entrant');
+    expect(e.documentNumero, 'KLR-F01-10012026');
+    expect(e.clientId, 5);
+    expect(e.tiers, 'ACME');
+    expect(e.montant, 3000, reason: 'la somme des lignes, comme factureHt');
+    expect(e.projetId, 42);
+    expect(e.reglements, isEmpty, reason: 'rien n\'est encore encaissé');
+  });
+
+  test('valider deux fois ne crée pas deux engagements', () {
+    final s = AppState()..viderDonnees();
+    s.saveOrUpdateProforma(DocumentItem(
+      id: 1, numero: 'KLR-P01-10012026', date: '10/01/2026',
+      clientId: 5, client: 'ACME', objet: 'PC', montant: 3000, statut: 'cours',
+      lines: [LineItem(ref: 'PC', designation: 'Ordinateur', qte: 10, pu: 300)],
+    ));
+    s.validateProforma(1);
+    s.validateProforma(1);
+    expect(s.engagements.length, 1);
+  });
+
+  test('l\'échéance de l\'engagement est la date de la proforma', () {
+    final s = AppState()..viderDonnees();
+    s.saveOrUpdateProforma(DocumentItem(
+      id: 1, numero: 'KLR-P01-10012026', date: '10/01/2026',
+      clientId: 5, client: 'ACME', objet: 'PC', montant: 3000, statut: 'cours',
+      lines: [LineItem(ref: 'PC', designation: 'Ordinateur', qte: 10, pu: 300)],
+    ));
+    s.validateProforma(1);
+    expect(s.engagements.first.echeance, DateTime(2026, 1, 10));
+  });
 }

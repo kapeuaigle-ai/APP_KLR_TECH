@@ -570,6 +570,19 @@ class AppState extends ChangeNotifier {
         projetId: p.projetId,
         lines: p.lines.map((l) => l.copie()).toList(),
       ));
+      // La facture EST une créance sur le client : l'engagement naît du même
+      // geste, pour qu'aucune saisie manuelle ne puisse le dédoubler.
+      engagements.insert(0, Engagement(
+        id: now + 2,
+        sens: 'entrant',
+        projetId: p.projetId,
+        documentNumero: factureNum,
+        clientId: p.clientId,
+        tiers: p.client,
+        description: p.objet,
+        montant: p.lines.fold(0.0, (s, l) => s + l.total),
+        echeance: Comptabilite.parseJour(p.date) ?? DateTime.now(),
+      ));
       _logActivity('facture', 'Proforma ${p.numero} validée',
           'Facture et BL générés — ${p.client}', AppColors.primary);
     }
