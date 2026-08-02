@@ -90,7 +90,9 @@ void main() {
     await tester.pumpAndSettle();
 
     // Liste Créances : les fournisseurs des dettes n'y figurent pas.
-    expect(find.text('Acme Corp'), findsOneWidget);
+    // Advans (en cours) et non Acme Corp (déjà réglée) : la vue par défaut
+    // du filtre En cours / Réglées ne montre plus les créances soldées.
+    expect(find.text("Advans Côte d'Ivoire"), findsOneWidget);
     expect(find.text('Orange CI'), findsNothing);
 
     await tester.tap(find.text('Dettes (7)'));
@@ -98,7 +100,7 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Orange CI'), findsOneWidget);
-    expect(find.text('Acme Corp'), findsNothing);
+    expect(find.text("Advans Côte d'Ivoire"), findsNothing);
     expect(find.text('Nouvelle Dette'), findsOneWidget);
   });
 

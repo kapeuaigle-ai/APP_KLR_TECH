@@ -71,6 +71,11 @@ class _EngagementsTabState extends State<_EngagementsTab> {
   /// Liste affichée : 'entrant' (créance) ou 'sortant' (dette). Détermine
   /// aussi ce que crée le bouton — pas de sélecteur de type dans le formulaire.
   String _sens = 'entrant';
+  /// Second filtre, orthogonal au premier : un engagement soldé le jour même
+  /// (dépense au comptant) reste un Engagement, donc apparaît dans Dettes —
+  /// ce qui noierait la vraie dette en cours sous des lignes déjà closes.
+  /// Faux = « En cours » (défaut) : ni soldé, ni annulé.
+  bool _regle = false;
   DateTime _echeance = DateTime.now();
   DateTime _dateAcompte = DateTime.now();
   String _categorie = kCategoriesDepense.first;
@@ -318,7 +323,14 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     final totalDettes = dettes.where((e) => !e.annule).fold<double>(0, (s, e) => s + e.reste);
     final soldeNet = totalCreances - totalDettes;
 
-    final liste = _estCreance ? creances : dettes;
+    final listeBase = _estCreance ? creances : dettes;
+    // Filtre En cours / Réglées : une dette ou créance soldée (ou annulée)
+    // n'est plus un encours — elle n'a rien à faire dans la vue par défaut,
+    // qui doit répondre à « qu'est-ce qu'on doit / nous doit encore ? ».
+    final enCours = listeBase.where((e) => !e.solde && !e.annule).toList();
+    final reglees = listeBase.where((e) => e.solde || e.annule).toList();
+    final liste = _regle ? reglees : enCours;
+    final typeMot = _estCreance ? 'créance' : 'dette';
 
     return Column(children: [
       StatGrid(cards: [
@@ -360,6 +372,34 @@ class _EngagementsTabState extends State<_EngagementsTab> {
           onTap: () => _ouvrirFormulaire(state),
         ),
       ),
+      const SizedBox(height: 10),
+
+      // Second filtre, même idiome visuel que le premier : ce qui reste à
+      // encaisser/payer par défaut, l'historique déjà réglé sur demande.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppFilterChip(
+              label: 'En cours (${enCours.length})',
+              active: !_regle,
+              onTap: () => setState(() => _regle = false),
+            ),
+            const SizedBox(width: 4),
+            AppFilterChip(
+              label: 'Réglées (${reglees.length})',
+              active: _regle,
+              onTap: () => setState(() => _regle = true),
+            ),
+          ]),
+        ),
+      ),
       const SizedBox(height: 14),
 
       // Téléphone : une carte par engagement (le tableau ferait 1000 px).
@@ -367,9 +407,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
         if (liste.isEmpty)
           CardBox(
             padding: EdgeInsets.zero,
-            child: EmptyHint(_estCreance
-                ? 'Aucune créance enregistrée'
-                : 'Aucune dette enregistrée'),
+            child: EmptyHint(_regle
+                ? 'Aucune $typeMot réglée'
+                : 'Aucune $typeMot en cours'),
           )
         else
           ...liste.map((e) => ListCard(
@@ -426,9 +466,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             ),
             const Divider(height: 1, color: AppColors.border),
             if (liste.isEmpty)
-              EmptyHint(_estCreance
-                  ? 'Aucune créance enregistrée'
-                  : 'Aucune dette enregistrée')
+              EmptyHint(_regle
+                  ? 'Aucune $typeMot réglée'
+                  : 'Aucune $typeMot en cours')
             else
               ...liste.asMap().entries.map((entry) {
                 final e = entry.value;
