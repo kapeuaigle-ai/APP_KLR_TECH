@@ -51,9 +51,11 @@ class _SuiviScreenState extends State<SuiviScreen> {
 }
 
 // ── Engagements Tab (créances & dettes) ───────────────────
-// Deux listes séparées : ce qu'on nous doit, ce que l'on doit. Tant qu'un
-// engagement est en cours il reste hors comptabilité ; sa validation
-// (encaissement / paiement) le fait entrer au bilan du mois du règlement.
+// Deux listes séparées : ce qu'on nous doit, ce que l'on doit. Un engagement
+// est un montant ATTENDU ; chaque règlement (partiel ou total) est un
+// mouvement RÉEL qui entre en comptabilité au mois de sa propre date. Un
+// engagement soldé n'est plus un encours ; un engagement annulé n'en accepte
+// plus, mais garde les règlements déjà passés.
 class _EngagementsTab extends StatefulWidget {
   const _EngagementsTab();
   @override
@@ -66,15 +68,20 @@ class _EngagementsTabState extends State<_EngagementsTab> {
   final _descCtrl = TextEditingController();
   final _montantCtrl = TextEditingController();
   final _acompteCtrl = TextEditingController();
-  /// Liste affichée : 'creance' ou 'dette'. Détermine aussi ce que crée le
-  /// bouton — pas de sélecteur de type dans le formulaire.
-  String _sens = 'creance';
+  /// Liste affichée : 'entrant' (créance) ou 'sortant' (dette). Détermine
+  /// aussi ce que crée le bouton — pas de sélecteur de type dans le formulaire.
+  String _sens = 'entrant';
+  /// Second filtre, orthogonal au premier : un engagement soldé le jour même
+  /// (dépense au comptant) reste un Engagement, donc apparaît dans Dettes —
+  /// ce qui noierait la vraie dette en cours sous des lignes déjà closes.
+  /// Faux = « En cours » (défaut) : ni soldé, ni annulé.
+  bool _regle = false;
   DateTime _echeance = DateTime.now();
   DateTime _dateAcompte = DateTime.now();
-  String _categorie = Expense.categories.first;
+  String _categorie = kCategoriesDepense.first;
   bool _erreur = false;
 
-  bool get _estCreance => _sens == 'creance';
+  bool get _estCreance => _sens == 'entrant';
 
   @override
   void dispose() {
@@ -93,29 +100,30 @@ class _EngagementsTabState extends State<_EngagementsTab> {
         lastDate: DateTime(2100),
       );
 
-  /// Enregistre l'engagement saisi. Retourne false si le formulaire est
-  /// incomplet, pour que la boîte reste ouverte et signale ce qui manque.
+  /// Enregistre l'engagement saisi, puis l'éventuel acompte comme premier
+  /// règlement. Retourne false si le formulaire est incomplet, pour que la
+  /// boîte reste ouverte et signale ce qui manque.
   bool _add(AppState state) {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
     if (_tiersCtrl.text.trim().isEmpty || montant <= 0) return false;
-    final enRetard = _echeance.isBefore(DateUtils.dateOnly(DateTime.now()));
-    // Acompte facultatif : déjà versé au moment où l'engagement est saisi.
-    // Plafonné au montant, il entre en comptabilité au mois de son versement.
-    final saisi = double.tryParse(_acompteCtrl.text.replaceAll(' ', '')) ?? 0;
-    final acompte = saisi <= 0 ? 0.0 : (saisi > montant ? montant : saisi);
+    final ref = _numCtrl.text.trim();
+    final id = DateTime.now().microsecondsSinceEpoch;
     state.addEngagement(Engagement(
-      id: DateTime.now().millisecondsSinceEpoch,
+      id: id,
       sens: _sens,
-      num: _numCtrl.text.trim().isEmpty ? '—' : _numCtrl.text.trim(),
       tiers: _tiersCtrl.text.trim(),
       description: _descCtrl.text.trim(),
       montant: montant,
-      statut: enRetard ? 'retard' : 'cours',
-      echeance: Fmt.jour(_echeance),
+      echeance: _echeance,
       categorie: _categorie,
-      acompte: acompte,
-      dateAcompte: acompte > 0 ? Fmt.jour(_dateAcompte) : null,
+      documentNumero: ref.isEmpty ? null : ref,
     ));
+    // Acompte facultatif : déjà versé au moment où l'engagement est saisi.
+    // `ajouterReglement` l'écrête lui-même au montant si nécessaire.
+    final saisi = double.tryParse(_acompteCtrl.text.replaceAll(' ', '')) ?? 0;
+    if (saisi > 0) {
+      state.ajouterReglement(id, saisi, _dateAcompte);
+    }
     return true;
   }
 
@@ -129,7 +137,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     _acompteCtrl.clear();
     _echeance = DateTime.now();
     _dateAcompte = DateTime.now();
-    _categorie = Expense.categories.first;
+    _categorie = kCategoriesDepense.first;
     _erreur = false;
 
     await showDialog<void>(
@@ -195,9 +203,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                   )),
 
                   // ── Acompte déjà versé (facultatif) ────────────
-                  // Il entre en comptabilité à SA date ; seul le solde entrera
-                  // à la validation. La date n'est demandée qu'une fois un
-                  // montant saisi, pour ne pas alourdir le formulaire.
+                  // C'est le premier règlement de l'engagement, enregistré à sa
+                  // propre date dès sa création. Les règlements suivants se
+                  // gèrent depuis le menu de la liste, une fois l'engagement créé.
                   const SizedBox(height: 16),
                   const Divider(height: 1, color: AppColors.border),
                   const SizedBox(height: 14),
@@ -248,7 +256,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                     const SizedBox(height: 16),
                     Text('CATÉGORIE DE DÉPENSE', style: AppTheme.label),
                     const SizedBox(height: 6),
-                    Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
+                    Wrap(spacing: 8, runSpacing: 8, children: kCategoriesDepense.map((c) => GestureDetector(
                       onTap: () => setLocal(() => _categorie = c),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -303,17 +311,26 @@ class _EngagementsTabState extends State<_EngagementsTab> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
+    final now = DateTime.now();
     final engagements = state.engagements;
-    final creances = engagements.where((e) => e.estCreance).toList();
-    final dettes = engagements.where((e) => !e.estCreance).toList();
+    final creances = engagements.where((e) => e.estEntrant).toList();
+    final dettes = engagements.where((e) => !e.estEntrant).toList();
 
-    // Les totaux ne portent que sur le reste dû : un engagement réglé est
-    // déjà passé en comptabilité, il n'est plus un encours.
-    final totalCreances = creances.where((e) => !e.regle).fold<double>(0, (s, e) => s + e.montant);
-    final totalDettes = dettes.where((e) => !e.regle).fold<double>(0, (s, e) => s + e.montant);
+    // Les totaux ne portent que sur le reste dû des engagements actifs : un
+    // engagement soldé est déjà passé en comptabilité, un engagement annulé
+    // n'est plus un encours.
+    final totalCreances = creances.where((e) => !e.annule).fold<double>(0, (s, e) => s + e.reste);
+    final totalDettes = dettes.where((e) => !e.annule).fold<double>(0, (s, e) => s + e.reste);
     final soldeNet = totalCreances - totalDettes;
 
-    final liste = _estCreance ? creances : dettes;
+    final listeBase = _estCreance ? creances : dettes;
+    // Filtre En cours / Réglées : une dette ou créance soldée (ou annulée)
+    // n'est plus un encours — elle n'a rien à faire dans la vue par défaut,
+    // qui doit répondre à « qu'est-ce qu'on doit / nous doit encore ? ».
+    final enCours = listeBase.where((e) => !e.solde && !e.annule).toList();
+    final reglees = listeBase.where((e) => e.solde || e.annule).toList();
+    final liste = _regle ? reglees : enCours;
+    final typeMot = _estCreance ? 'créance' : 'dette';
 
     return Column(children: [
       StatGrid(cards: [
@@ -339,13 +356,13 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             AppFilterChip(
               label: 'Créances (${creances.length})',
               active: _estCreance,
-              onTap: () => setState(() => _sens = 'creance'),
+              onTap: () => setState(() => _sens = 'entrant'),
             ),
             const SizedBox(width: 4),
             AppFilterChip(
               label: 'Dettes (${dettes.length})',
               active: !_estCreance,
-              onTap: () => setState(() => _sens = 'dette'),
+              onTap: () => setState(() => _sens = 'sortant'),
             ),
           ]),
         ),
@@ -355,6 +372,34 @@ class _EngagementsTabState extends State<_EngagementsTab> {
           onTap: () => _ouvrirFormulaire(state),
         ),
       ),
+      const SizedBox(height: 10),
+
+      // Second filtre, même idiome visuel que le premier : ce qui reste à
+      // encaisser/payer par défaut, l'historique déjà réglé sur demande.
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.all(5),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            AppFilterChip(
+              label: 'En cours (${enCours.length})',
+              active: !_regle,
+              onTap: () => setState(() => _regle = false),
+            ),
+            const SizedBox(width: 4),
+            AppFilterChip(
+              label: 'Réglées (${reglees.length})',
+              active: _regle,
+              onTap: () => setState(() => _regle = true),
+            ),
+          ]),
+        ),
+      ),
       const SizedBox(height: 14),
 
       // Téléphone : une carte par engagement (le tableau ferait 1000 px).
@@ -362,41 +407,42 @@ class _EngagementsTabState extends State<_EngagementsTab> {
         if (liste.isEmpty)
           CardBox(
             padding: EdgeInsets.zero,
-            child: EmptyHint(_estCreance
-                ? 'Aucune créance enregistrée'
-                : 'Aucune dette enregistrée'),
+            child: EmptyHint(_regle
+                ? 'Aucune $typeMot réglée'
+                : 'Aucune $typeMot en cours'),
           )
         else
           ...liste.map((e) => ListCard(
-            // Bande de statut : en retard, réglé, ou en attente.
-            accent: switch (e.statut) {
+            // Bande de statut : en retard, réglé, annulé, ou en attente.
+            accent: switch (_statutDe(e, now)) {
               'retard' => AppColors.red,
               'paye' => AppColors.green,
+              'annulee' => AppColors.text3,
               _ => AppColors.orange,
             },
-            background: e.regle ? Colors.white : const Color(0xFFFAFAFB),
+            background: e.solde ? Colors.white : const Color(0xFFFAFAFB),
             title: Text(e.tiers, style: GoogleFonts.dmSans(
               fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1,
             ), maxLines: 1, overflow: TextOverflow.ellipsis),
             // Le type (créance / dette) est déjà donné par le sélecteur au
             // dessus : inutile de le répéter, la place manque.
             subtitle: Row(children: [
-              StatusBadge(status: e.statut),
+              StatusBadge(status: _statutDe(e, now)),
               const SizedBox(width: 8),
-              Expanded(child: Text(e.num, maxLines: 1, overflow: TextOverflow.ellipsis,
+              Expanded(child: Text(e.documentNumero ?? '—', maxLines: 1, overflow: TextOverflow.ellipsis,
                   style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary))),
             ]),
             trailing: _engagementMenu(context, state, e, large: true),
             fields: [
               ('MONTANT', CardValue(Fmt.money(e.montant), bold: true)),
-              if (e.aAcompte)
-                ('ACOMPTE', CardValue('${Fmt.money(e.acompte)} · reste ${Fmt.money(e.reste)}',
+              if (e.regle > 0 && !e.solde)
+                ('RÉGLÉ', CardValue('${Fmt.money(e.regle)} · reste ${Fmt.money(e.reste)}',
                     color: AppColors.blue)),
               if (e.description.isNotEmpty) ('OBJET', CardValue(e.description)),
-              ('ÉCHÉANCE', CardValue(e.echeance,
-                  color: e.statut == 'retard' ? AppColors.red : null)),
-              if (e.regle)
-                ('RÉGLÉ LE', CardValue(e.dateReglement ?? '—', color: AppColors.green)),
+              ('ÉCHÉANCE', CardValue(Fmt.jour(e.echeance),
+                  color: _statutDe(e, now) == 'retard' ? AppColors.red : null)),
+              if (e.solde)
+                ('RÉGLÉ LE', CardValue(_dateTexte(_dernierReglement(e)), color: AppColors.green)),
             ],
           ))
       else
@@ -420,16 +466,16 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             ),
             const Divider(height: 1, color: AppColors.border),
             if (liste.isEmpty)
-              EmptyHint(_estCreance
-                  ? 'Aucune créance enregistrée'
-                  : 'Aucune dette enregistrée')
+              EmptyHint(_regle
+                  ? 'Aucune $typeMot réglée'
+                  : 'Aucune $typeMot en cours')
             else
               ...liste.asMap().entries.map((entry) {
                 final e = entry.value;
                 final isLast = entry.key == liste.length - 1;
                 return Container(
                   decoration: BoxDecoration(
-                    color: e.regle ? Colors.white : const Color(0xFFFAFAFB),
+                    color: e.solde ? Colors.white : const Color(0xFFFAFAFB),
                     border: isLast ? null : const Border(bottom: BorderSide(color: AppColors.border)),
                   ),
                   child: Row(children: [
@@ -445,12 +491,12 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                             color: AppColors.grayBg,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text(e.estCreance ? 'Créance' : 'Dette',
+                          child: Text(e.estEntrant ? 'Créance' : 'Dette',
                               style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text1)),
                         ),
                       ),
                     )),
-                    _cell(e.num, flex: 3, color: AppColors.primary, bold: true),
+                    _cell(e.documentNumero ?? '—', flex: 3, color: AppColors.primary, bold: true),
                     // Tiers + objet de l'engagement sur deux lignes.
                     Expanded(flex: 4, child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -464,16 +510,16 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                         ],
                       ]),
                     )),
-                    // Montant, et sous lui le solde restant si un acompte a
-                    // déjà été versé.
+                    // Montant, et sous lui ce qui a déjà été réglé si un
+                    // règlement partiel est déjà passé.
                     Expanded(flex: 3, child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                       child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisSize: MainAxisSize.min, children: [
                         Text(Fmt.money(e.montant), maxLines: 1, overflow: TextOverflow.ellipsis,
                             style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                        if (e.aAcompte) ...[
+                        if (e.regle > 0 && !e.solde) ...[
                           const SizedBox(height: 2),
-                          Text('Acompte ${Fmt.money(e.acompte)} · reste ${Fmt.money(e.reste)}',
+                          Text('Réglé ${Fmt.money(e.regle)} · reste ${Fmt.money(e.reste)}',
                               maxLines: 1, overflow: TextOverflow.ellipsis,
                               style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.blue)),
                         ],
@@ -481,10 +527,10 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                     )),
                     Expanded(flex: 2, child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                      child: StatusBadge(status: e.statut),
+                      child: StatusBadge(status: _statutDe(e, now)),
                     )),
-                    _cell(e.echeance, flex: 3, color: e.statut == 'retard' ? AppColors.red : AppColors.text2),
-                    _cell(e.dateReglement ?? '—', flex: 3, color: e.regle ? AppColors.green : AppColors.text3),
+                    _cell(Fmt.jour(e.echeance), flex: 3, color: _statutDe(e, now) == 'retard' ? AppColors.red : AppColors.text2),
+                    _cell(_dateTexte(e.solde ? _dernierReglement(e) : null), flex: 3, color: e.solde ? AppColors.green : AppColors.text3),
                     SizedBox(width: 60, child: _engagementMenu(context, state, e)),
                   ]),
                 );
@@ -499,9 +545,9 @@ class _EngagementsTabState extends State<_EngagementsTab> {
 /// Section de la comptabilité : un titre, éventuellement un sous-titre, puis
 /// soit le tableau de bureau, soit la liste de cartes du téléphone.
 ///
-/// Les trois sections de l'onglet Comptabilité partageaient déjà la même
-/// structure ; ce widget évite de la réécrire trois fois avec le
-/// branchement responsive en plus.
+/// Les deux sections de l'onglet Comptabilité partageaient déjà la même
+/// structure ; ce widget évite de la réécrire avec le branchement responsive
+/// en plus.
 class _SectionCompta extends StatelessWidget {
   final String titre;
   final String? sousTitre;
@@ -558,10 +604,35 @@ class _SectionCompta extends StatelessWidget {
   }
 }
 
-/// Valider un engagement : demande la date de règlement puis l'enregistre.
-/// Valider signifie que l'argent a bougé — la créance est encaissée, la dette
-/// payée — et l'engagement entre en comptabilité au mois de son règlement.
-Future<void> _validerEngagement(
+// ── Actions sur un engagement ──────────────────────────────
+
+/// Statut affiché d'un engagement, dérivé (jamais stocké) : annulé, soldé, en
+/// retard, ou en cours. `now` est un paramètre — jamais `DateTime.now()`
+/// directement dans la logique — pour rester cohérent avec `Engagement.enRetard`.
+String _statutDe(Engagement e, DateTime now) {
+  if (e.annule) return 'annulee';
+  if (e.solde) return 'paye';
+  if (e.enRetard(now)) return 'retard';
+  return 'cours';
+}
+
+/// Date du règlement le plus récent, ou `null` si aucun n'existe encore.
+DateTime? _dernierReglement(Engagement e) {
+  if (e.reglements.isEmpty) return null;
+  return e.reglements.map((r) => r.date).reduce((a, b) => a.isAfter(b) ? a : b);
+}
+
+String _dateTexte(DateTime? d) => d == null ? '—' : Fmt.jour(d);
+
+const _moyenLabels = {
+  'especes': 'Espèces', 'virement': 'Virement', 'mobile': 'Mobile Money', 'cheque': 'Chèque',
+};
+String _moyenLabel(String m) => _moyenLabels[m] ?? m;
+
+/// Solde en un geste : encaisse ou paie le RESTE dû à la date choisie. Un
+/// engagement partiellement réglé n'est donc pas rejoué depuis zéro — seul ce
+/// qui manque encore entre en comptabilité.
+Future<void> _soldeEngagement(
     BuildContext context, AppState state, Engagement e) async {
   // Mêmes bornes que les autres sélecteurs de date de l'écran, et pas de
   // locale explicite : l'application n'enregistre aucun
@@ -573,20 +644,20 @@ Future<void> _validerEngagement(
     lastDate: DateTime(2100),
   );
   if (d == null || !context.mounted) return;
-  state.validerEngagement(e.id, Fmt.jour(d));
+  final montant = e.reste;
+  if (montant <= 0) return; // déjà soldé entre-temps : rien à faire
+  state.ajouterReglement(e.id, montant, d);
   if (!context.mounted) return;
-  // Avec un acompte, seul le solde entre à cette date : l'acompte a déjà été
-  // compté au mois de son versement.
-  final entrant = Fmt.money(e.montantAuReglement);
+  final entrant = Fmt.money(montant);
   final mois = Comptabilite.monthLabel(Comptabilite.monthKeyFromDate(d));
   ScaffoldMessenger.of(context).showSnackBar(SnackBar(
     content: Text(
-      e.estCreance
+      e.estEntrant
           ? 'Créance encaissée : $entrant entrent en revenu ($mois).'
           : 'Dette payée : $entrant entrent en dépense ($mois).',
       style: const TextStyle(fontSize: 13),
     ),
-    backgroundColor: e.estCreance ? AppColors.green : AppColors.orange,
+    backgroundColor: e.estEntrant ? AppColors.green : AppColors.orange,
     duration: const Duration(seconds: 4),
     behavior: SnackBarBehavior.floating,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
@@ -594,39 +665,37 @@ Future<void> _validerEngagement(
   ));
 }
 
-/// Saisie d'un acompte sur un engagement déjà enregistré : le client a versé
-/// une partie avant l'échéance. L'acompte entre en comptabilité au mois de son
-/// versement, le solde suivra à la validation.
-Future<void> _saisirAcompte(
+/// Boîte d'ajout d'UN règlement (montant + date + moyen), plafonné au reste
+/// dû. Utilisée par la gestion de la liste des règlements d'un engagement.
+/// Retourne `true` si un règlement a effectivement été ajouté.
+Future<bool> _ajouterReglementDialog(
     BuildContext context, AppState state, Engagement e) async {
-  final ctrl = TextEditingController(
-      text: e.acompte > 0 ? e.acompte.toStringAsFixed(0) : '');
+  final ctrl = TextEditingController();
   var date = DateTime.now();
-  final estCreance = e.estCreance;
+  var moyen = 'especes';
 
-  final valide = await showDialog<bool>(
+  final ok = await showDialog<bool>(
     context: context,
     builder: (ctx) => StatefulBuilder(
       builder: (ctx, setLocal) {
         final saisi = double.tryParse(ctrl.text.replaceAll(' ', '')) ?? 0;
-        final plafonne = saisi > e.montant ? e.montant : saisi;
-        final reste = e.montant - plafonne;
+        final plafonne = saisi <= 0 ? 0.0 : (saisi > e.reste ? e.reste : saisi);
         return AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Text(e.acompte > 0 ? 'Modifier l\'acompte' : 'Enregistrer un acompte',
-              style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+          title: Text('Ajouter un règlement', style: GoogleFonts.dmSans(
+              fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
           content: SizedBox(
-            width: 360,
+            width: 340,
             child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text('${e.tiers} · ${e.num}\nMontant total : ${Fmt.money(e.montant)}',
+              Text('${e.tiers}\nReste dû : ${Fmt.money(e.reste)}',
                   style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3, height: 1.5)),
               const SizedBox(height: 16),
-              Text(estCreance ? 'MONTANT REÇU (FCFA)' : 'MONTANT VERSÉ (FCFA)', style: AppTheme.label),
+              Text('MONTANT (FCFA)', style: AppTheme.label),
               const SizedBox(height: 6),
               _tf(ctrl, '0', numeric: true, onChanged: (_) => setLocal(() {})),
               const SizedBox(height: 14),
-              Text('DATE DE L\'ACOMPTE', style: AppTheme.label),
+              Text('DATE', style: AppTheme.label),
               const SizedBox(height: 6),
               GestureDetector(
                 onTap: () async {
@@ -648,33 +717,44 @@ Future<void> _saisirAcompte(
                   ]),
                 ),
               ),
-              if (plafonne > 0) ...[
-                const SizedBox(height: 14),
-                Text(
-                  reste == 0
-                      ? 'L\'acompte couvre la totalité : il ne restera rien à régler.'
-                      : 'Restera à régler : ${Fmt.money(reste)}',
-                  style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text2, height: 1.4),
+              const SizedBox(height: 14),
+              Text('MOYEN', style: AppTheme.label),
+              const SizedBox(height: 6),
+              Wrap(spacing: 8, runSpacing: 8, children: Reglement.moyens.map((m) => GestureDetector(
+                onTap: () => setLocal(() => moyen = m),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: moyen == m ? AppColors.primary : AppColors.bg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: moyen == m ? AppColors.primary : AppColors.border),
+                  ),
+                  child: Text(_moyenLabel(m), style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: moyen == m ? Colors.white : AppColors.text2)),
                 ),
+              )).toList()),
+              if (saisi > e.reste) ...[
+                const SizedBox(height: 12),
+                Text('Plafonné au reste dû : ${Fmt.money(e.reste)}.',
+                    style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text2)),
               ],
             ]),
           ),
           actions: [
-            if (e.acompte > 0)
-              TextButton(
-                onPressed: () { state.setAcompte(e.id, 0, Fmt.jour(date)); Navigator.of(ctx).pop(false); },
-                child: Text('Retirer l\'acompte', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
-              ),
             TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
               child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
             ),
             TextButton(
+              // Un montant nul ou négatif n'active pas le bouton : l'écran ne
+              // doit jamais proposer une action que `ajouterReglement`
+              // refuserait en silence.
               onPressed: plafonne <= 0 ? null : () {
-                state.setAcompte(e.id, plafonne, Fmt.jour(date));
+                state.ajouterReglement(e.id, plafonne, date, moyen: moyen);
                 Navigator.of(ctx).pop(true);
               },
-              child: Text('Enregistrer', style: GoogleFonts.dmSans(
+              child: Text('Ajouter', style: GoogleFonts.dmSans(
                   fontSize: 13, fontWeight: FontWeight.w700,
                   color: plafonne <= 0 ? AppColors.text3 : AppColors.primary)),
             ),
@@ -685,23 +765,97 @@ Future<void> _saisirAcompte(
   );
 
   ctrl.dispose();
-  if (valide != true || !context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(
-      estCreance ? 'Acompte encaissé et porté en comptabilité.'
-                 : 'Acompte versé et porté en comptabilité.',
-      style: const TextStyle(fontSize: 13),
+  return ok == true;
+}
+
+/// Liste des règlements d'un engagement : chaque ligne peut être supprimée,
+/// un bouton permet d'en ajouter un nouveau tant que l'engagement n'est ni
+/// soldé ni annulé.
+Future<void> _gererReglements(
+    BuildContext context, AppState state, Engagement e) async {
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, setLocal) {
+        // Relit l'engagement à chaque rebuild : ajouter/supprimer un
+        // règlement mute `state.engagements` sans reconstruire cette boîte
+        // depuis l'extérieur.
+        final courant = state.engagements.where((x) => x.id == e.id);
+        if (courant.isEmpty) return const SizedBox.shrink();
+        final c = courant.first;
+        final regs = List.of(c.reglements)..sort((a, b) => a.date.compareTo(b.date));
+
+        return AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text('Règlements', style: GoogleFonts.dmSans(
+              fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+          content: SizedBox(
+            width: 380,
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${c.tiers}\nMontant total : ${Fmt.money(c.montant)} · Reste dû : ${Fmt.money(c.reste)}',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3, height: 1.5)),
+              const SizedBox(height: 14),
+              if (regs.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  child: Text('Aucun règlement enregistré.',
+                      style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                )
+              else
+                ...regs.map((r) => Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Row(children: [
+                    Expanded(child: Text(
+                      '${Fmt.jour(r.date)} · ${Fmt.money(r.montant)} · ${_moyenLabel(r.moyen)}',
+                      style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                    )),
+                    IconButton(
+                      tooltip: 'Supprimer ce règlement',
+                      icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+                      onPressed: () {
+                        state.supprimerReglement(c.id, r.id);
+                        setLocal(() {});
+                      },
+                    ),
+                  ]),
+                )),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  // Un engagement soldé ou annulé n'accepte plus de
+                  // règlement : le bouton est désactivé, pas juste inopérant.
+                  onPressed: (c.solde || c.annule) ? null : () async {
+                    final ajoute = await _ajouterReglementDialog(context, state, c);
+                    if (ajoute) setLocal(() {});
+                  },
+                  icon: Icon(Icons.add, size: 16,
+                      color: (c.solde || c.annule) ? AppColors.text3 : AppColors.primary),
+                  label: Text('Ajouter un règlement', style: GoogleFonts.dmSans(
+                      fontSize: 13, fontWeight: FontWeight.w600,
+                      color: (c.solde || c.annule) ? AppColors.text3 : AppColors.primary)),
+                ),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: Text('Fermer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+            ),
+          ],
+        );
+      },
     ),
-    backgroundColor: estCreance ? AppColors.green : AppColors.orange,
-    behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-    margin: const EdgeInsets.all(16),
-  ));
+  );
 }
 
 /// Menu d'actions d'un engagement, partagé par la ligne de tableau (bureau)
-/// et la carte (téléphone) : encaisser ou payer, acompte, annuler la
-/// validation, supprimer. Seule la taille de la cible change.
+/// et la carte (téléphone) : solder, gérer les règlements, annuler/réactiver,
+/// supprimer. Seule la taille de la cible change.
 Widget _engagementMenu(
   BuildContext context,
   AppState state,
@@ -719,37 +873,47 @@ Widget _engagementMenu(
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
     color: Colors.white,
     onSelected: (action) {
-      if (action == 'valider') {
-        _validerEngagement(context, state, e);
-      } else if (action == 'acompte') {
-        _saisirAcompte(context, state, e);
-      } else if (action == 'annuler') {
-        state.annulerValidationEngagement(e.id);
-      } else if (action == 'supprimer') {
-        state.deleteEngagement(e.id);
+      switch (action) {
+        case 'valider':
+          _soldeEngagement(context, state, e);
+        case 'reglements':
+          _gererReglements(context, state, e);
+        case 'annuler':
+          state.annulerEngagement(e.id);
+        case 'reactiver':
+          state.reactiverEngagement(e.id);
+        case 'supprimer':
+          state.deleteEngagement(e.id);
       }
     },
     itemBuilder: (ctx) => [
-      if (!e.regle) ...[
+      if (!e.solde && !e.annule) ...[
         PopupMenuItem(value: 'valider', child: Row(children: [
           const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
           const SizedBox(width: 8),
-          Text(e.estCreance ? 'Encaissée' : 'Marquer payée',
+          Text(e.estEntrant ? 'Encaissée' : 'Marquer payée',
               style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
         ])),
-        // Versement partiel reçu avant l'échéance.
-        PopupMenuItem(value: 'acompte', child: Row(children: [
-          const Icon(Icons.savings_outlined, size: 15, color: AppColors.blue),
-          const SizedBox(width: 8),
-          Text(e.acompte > 0 ? 'Modifier l\'acompte' : 'Enregistrer un acompte',
-              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
-      ]
-      else
+      ],
+      // Accessible tant que l'engagement peut porter des règlements, et en
+      // consultation seule une fois soldé.
+      PopupMenuItem(value: 'reglements', child: Row(children: [
+        const Icon(Icons.savings_outlined, size: 15, color: AppColors.blue),
+        const SizedBox(width: 8),
+        Text(e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement',
+            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+      ])),
+      if (!e.annule)
         PopupMenuItem(value: 'annuler', child: Row(children: [
+          const Icon(Icons.block, size: 15, color: AppColors.text3),
+          const SizedBox(width: 8),
+          Text('Annuler l\'engagement', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ]))
+      else
+        PopupMenuItem(value: 'reactiver', child: Row(children: [
           const Icon(Icons.undo, size: 15, color: AppColors.text3),
           const SizedBox(width: 8),
-          Text('Annuler la validation', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+          Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
         ])),
       PopupMenuItem(value: 'supprimer', child: Row(children: [
         const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
@@ -771,7 +935,7 @@ class _ComptaTabState extends State<_ComptaTab> {
   final _labelCtrl = TextEditingController();
   final _montantCtrl = TextEditingController();
   DateTime _date = DateTime.now();
-  String _categorie = Expense.categories.first;
+  String _categorie = kCategoriesDepense.first;
   String? _factureNumero; // null = générale
   /// Mois consulté. La comptabilité ne montre qu'un mois à la fois : au
   /// passage au mois suivant, l'écran repart à zéro sur le nouveau mois.
@@ -794,19 +958,19 @@ class _ComptaTabState extends State<_ComptaTab> {
         lastDate: DateTime(2100),
       );
 
-  /// Enregistre la dépense saisie. Retourne false si le formulaire est
-  /// incomplet, pour que la boîte reste ouverte et signale ce qui manque.
-  bool _addExpense(AppState state) {
+  /// Enregistre la dépense saisie : un engagement sortant créé ET réglé le
+  /// jour même. Retourne false si le formulaire est incomplet, pour que la
+  /// boîte reste ouverte et signale ce qui manque.
+  bool _addDepense(AppState state) {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
-    if (_labelCtrl.text.trim().isEmpty || montant <= 0) return false;
-    state.addExpense(Expense(
-      id: DateTime.now().millisecondsSinceEpoch,
-      date: _date,
-      label: _labelCtrl.text.trim(),
-      amount: montant,
-      category: _categorie,
-      factureNumero: _factureNumero,
+    final libelle = _labelCtrl.text.trim();
+    if (libelle.isEmpty || montant <= 0) return false;
+    final id = DateTime.now().microsecondsSinceEpoch;
+    state.addEngagement(Engagement(
+      id: id, sens: 'sortant', tiers: libelle, montant: montant,
+      echeance: _date, categorie: _categorie, documentNumero: _factureNumero,
     ));
+    state.ajouterReglement(id, montant, _date);
     return true;
   }
 
@@ -816,7 +980,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     _labelCtrl.clear();
     _montantCtrl.clear();
     _date = DateTime.now();
-    _categorie = Expense.categories.first;
+    _categorie = kCategoriesDepense.first;
     _factureNumero = null;
     _erreurDepense = false;
 
@@ -879,7 +1043,7 @@ class _ComptaTabState extends State<_ComptaTab> {
                   const SizedBox(height: 16),
                   Text('CATÉGORIE', style: AppTheme.label),
                   const SizedBox(height: 6),
-                  Wrap(spacing: 8, runSpacing: 8, children: Expense.categories.map((c) => GestureDetector(
+                  Wrap(spacing: 8, runSpacing: 8, children: kCategoriesDepense.map((c) => GestureDetector(
                     onTap: () => setLocal(() => _categorie = c),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -910,7 +1074,7 @@ class _ComptaTabState extends State<_ComptaTab> {
                   ),
                   const SizedBox(width: 8),
                   PrimaryBtn(label: 'Enregistrer', icon: Icons.check, onTap: () {
-                    if (_addExpense(state)) {
+                    if (_addDepense(state)) {
                       Navigator.of(ctx).pop();
                     } else {
                       setLocal(() => _erreurDepense = true);
@@ -926,14 +1090,49 @@ class _ComptaTabState extends State<_ComptaTab> {
     if (mounted) setState(() {});
   }
 
+  /// L'engagement entrant rattaché à cette facture, s'il en existe un —
+  /// c'est lui qui porte les règlements d'encaissement.
+  Engagement? _engagementFacture(List<Engagement> engagements, String numero) {
+    for (final e in engagements) {
+      if (e.estEntrant && e.documentNumero == numero) return e;
+    }
+    return null;
+  }
+
+  /// Bascule l'encaissement d'une facture. Faute d'engagement déjà lié, on en
+  /// crée un (montant = HT de la facture) avant d'y porter le règlement — la
+  /// génération automatique à la validation de la proforma est une évolution
+  /// de phase 2, hors de ce lot.
+  Future<void> _toggleEncaissement(
+      AppState state, List<Engagement> engagements, DocumentItem f, Engagement? eng, bool v) async {
+    if (v) {
+      final d = await _pickDate(DateTime.now());
+      if (d == null || !mounted) return;
+      var cible = eng;
+      if (cible == null) {
+        final id = DateTime.now().microsecondsSinceEpoch;
+        state.addEngagement(Engagement(
+          id: id, sens: 'entrant', tiers: f.client, clientId: f.clientId,
+          montant: Comptabilite.factureHt(f),
+          echeance: Comptabilite.parseJour(f.date) ?? d,
+          documentNumero: f.numero,
+        ));
+        cible = state.engagements.firstWhere((e) => e.id == id);
+      }
+      state.ajouterReglement(cible.id, cible.reste, d);
+    } else if (eng != null) {
+      for (final r in List.of(eng.reglements)) {
+        state.supprimerReglement(eng.id, r.id);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final factures = state.documents['facture'] ?? [];
-    final expenses = state.expenses;
     final engagements = state.engagements;
-    final rows = Comptabilite.bilanMensuel(
-        factures, expenses, engagements, state.dimePaidMonths, state.dimePaidDates);
+    final rows = Comptabilite.bilanMensuel(engagements, state.dimePaidMonths, state.dimePaidDates);
 
     // Mois consultables : ceux qui ont connu du mouvement, plus le mois en
     // cours (vide au premier jour du mois — c'est la « peau neuve »).
@@ -942,16 +1141,30 @@ class _ComptaTabState extends State<_ComptaTab> {
     final estMoisCourant = mois == state.moisCourant;
     final bilan = Comptabilite.ligneMois(mois, rows);
 
-    // Les factures encaissées se rangent au mois de leur encaissement ; celles
-    // qui ne le sont pas encore restent sur le mois en cours, puisque c'est là
-    // qu'on les bascule.
-    final facturesMois = factures.where((f) => f.encaissee && f.dateEncaissement != null
-        ? Comptabilite.monthKeyFromDdMmYyyy(f.dateEncaissement!) == mois
-        : estMoisCourant).toList();
-    final generales = expenses.where((e) =>
-        e.factureNumero == null && Comptabilite.monthKeyFromDate(e.date) == mois).toList();
-    final engagementsMois = engagements.where((e) =>
-        e.regle && Comptabilite.monthKeyFromDdMmYyyy(e.dateReglement!) == mois).toList();
+    // Les factures dont l'engagement lié est soldé se rangent au mois de son
+    // dernier règlement ; celles qui ne le sont pas encore restent sur le
+    // mois en cours, puisque c'est là qu'on les bascule.
+    final facturesMois = factures.where((f) {
+      final eng = _engagementFacture(engagements, f.numero);
+      if (eng != null && eng.solde) {
+        final d = _dernierReglement(eng);
+        return d != null && Comptabilite.monthKeyFromDate(d) == mois;
+      }
+      return estMoisCourant;
+    }).toList();
+
+    // Tout engagement soldé ce mois qui n'est pas déjà compté dans une
+    // facture ci-dessus : dépenses ponctuelles, dettes et créances validées
+    // depuis l'onglet Engagements. `documentNumero` n'écarte que les
+    // engagements réellement rattachés à une facture EXISTANTE — une
+    // simple référence libre reste visible ici.
+    final numerosFactures = factures.map((f) => f.numero).toSet();
+    final reglementsMois = engagements.where((e) {
+      if (e.documentNumero != null && numerosFactures.contains(e.documentNumero)) return false;
+      if (!e.solde) return false;
+      final d = _dernierReglement(e);
+      return d != null && Comptabilite.monthKeyFromDate(d) == mois;
+    }).toList();
 
     return Column(children: [
       _selecteurMois(moisDispo, mois, estMoisCourant),
@@ -996,11 +1209,14 @@ class _ComptaTabState extends State<_ComptaTab> {
         // Téléphone : une carte par facture.
         cartes: facturesMois.map((f) {
           final ht = Comptabilite.factureHt(f);
-          final dep = Comptabilite.depensesFacture(f.numero, expenses);
+          final dep = Comptabilite.depensesFacture(f.numero, engagements);
           final benef = ht - dep;
+          final eng = _engagementFacture(engagements, f.numero);
+          final encaissee = eng?.solde ?? false;
+          final derniere = eng == null ? null : _dernierReglement(eng);
           return ListCard(
             accent: benef < 0 ? AppColors.red : AppColors.green,
-            background: f.encaissee ? Colors.white : const Color(0xFFFAFAFB),
+            background: encaissee ? Colors.white : const Color(0xFFFAFAFB),
             title: Text(f.numero, style: GoogleFonts.dmSans(
               fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.primary)),
             subtitle: Text(f.client, style: GoogleFonts.dmSans(
@@ -1014,21 +1230,14 @@ class _ComptaTabState extends State<_ComptaTab> {
               // l'action principale de cette liste.
               ('ENCAISSÉE', Row(children: [
                 Switch(
-                  value: f.encaissee,
+                  value: encaissee,
                   activeThumbColor: AppColors.green,
-                  onChanged: (v) async {
-                    if (v) {
-                      final d = await _pickDate(DateTime.now());
-                      if (d != null) state.setFactureEncaissee(f.id, true, date: _fmtDate(d));
-                    } else {
-                      state.setFactureEncaissee(f.id, false);
-                    }
-                  },
+                  onChanged: (v) => _toggleEncaissement(state, engagements, f, eng, v),
                 ),
                 Expanded(child: Text(
-                  f.encaissee ? (f.dateEncaissement ?? '') : 'en attente',
+                  encaissee ? _dateTexte(derniere) : 'en attente',
                   style: GoogleFonts.dmSans(fontSize: 11.5,
-                      color: f.encaissee ? AppColors.green : AppColors.text3),
+                      color: encaissee ? AppColors.green : AppColors.text3),
                   overflow: TextOverflow.ellipsis,
                 )),
               ])),
@@ -1048,93 +1257,35 @@ class _ComptaTabState extends State<_ComptaTab> {
           if (facturesMois.isEmpty)
             const EmptyHint('Aucune facture sur ce mois')
           else
-            ...facturesMois.map((f) => _factureRow(state, f, expenses)),
+            ...facturesMois.map((f) => _factureRow(state, engagements, f)),
         ])),
       ),
       const SizedBox(height: 20),
 
-      // Dépenses générales
-      _SectionCompta(
-        titre: 'Dépenses générales',
-        vide: generales.isEmpty,
-        messageVide: 'Aucune dépense générale',
-        cartes: generales.map((e) => ListCard(
-          title: Text(e.label, style: GoogleFonts.dmSans(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1)),
-          subtitle: Text(_fmtDate(e.date), style: GoogleFonts.dmSans(
-            fontSize: 12.5, color: AppColors.text3)),
-          trailing: IconButton(
-            tooltip: 'Supprimer',
-            icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.red),
-            // 40 px : cible tactile confortable.
-            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-            onPressed: () => state.deleteExpense(e.id),
-          ),
-          fields: [
-            ('CATÉGORIE', CardValue(e.category)),
-            ('MONTANT', CardValue(Fmt.money(e.amount), bold: true)),
-          ],
-        )).toList(),
-        tableau: HScrollTable(minWidth: 720, child: Column(children: [
-          Container(color: AppColors.bg, child: const Row(children: [
-            Expanded(flex: 2, child: ThCell('DATE')),
-            Expanded(flex: 4, child: ThCell('LIBELLÉ')),
-            Expanded(flex: 3, child: ThCell('CATÉGORIE')),
-            Expanded(flex: 3, child: ThCell('MONTANT')),
-            SizedBox(width: 48),
-          ])),
-          const Divider(height: 1, color: AppColors.border),
-          if (generales.isEmpty)
-            const EmptyHint('Aucune dépense générale')
-          else
-            ...generales.map((e) => _expenseRow(state, e)),
-        ])),
-      ),
-      const SizedBox(height: 20),
-
-      // Dettes & créances validées sur le mois — c'est ce qui explique
-      // l'écart entre les factures encaissées et le revenu du mois.
+      // Dettes & créances réglées — regroupe désormais aussi les dépenses
+      // ponctuelles : depuis l'unification, une dette validée et une dépense
+      // au comptant sont le même objet (un engagement sortant réglé).
       _SectionCompta(
         titre: 'Dettes & créances réglées',
-        sousTitre: 'Validées depuis l\'onglet Engagements : les créances alimentent le revenu, les dettes les dépenses.',
-        vide: engagementsMois.isEmpty,
+        sousTitre: 'Réglés ce mois-ci : créances encaissées, dettes payées, et dépenses ponctuelles non rattachées à une facture.',
+        vide: reglementsMois.isEmpty,
         messageVide: 'Aucun règlement sur ce mois',
-        cartes: engagementsMois.map((e) => ListCard(
-          accent: e.estCreance ? AppColors.green : AppColors.red,
-          title: Text(e.tiers, style: GoogleFonts.dmSans(
-            fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1),
-            maxLines: 1, overflow: TextOverflow.ellipsis),
-          subtitle: Text('${e.estCreance ? 'Créance' : 'Dette'} · ${e.num}',
-              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary)),
-          fields: [
-            ('MONTANT', CardValue('${e.estCreance ? '+' : '−'} ${Fmt.money(e.montant)}',
-                bold: true, color: e.estCreance ? AppColors.green : AppColors.red)),
-            ('RÉGLÉ LE', CardValue(e.dateReglement ?? '—')),
-          ],
-        )).toList(),
-        tableau: HScrollTable(minWidth: 720, child: Column(children: [
+        cartes: reglementsMois.map((e) => _reglementCard(state, e)).toList(),
+        tableau: HScrollTable(minWidth: 760, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 2, child: ThCell('TYPE')),
             Expanded(flex: 3, child: ThCell('RÉFÉRENCE')),
-            Expanded(flex: 4, child: ThCell('TIERS')),
+            Expanded(flex: 3, child: ThCell('TIERS')),
+            Expanded(flex: 2, child: ThCell('CATÉGORIE')),
             Expanded(flex: 3, child: ThCell('MONTANT')),
-            Expanded(flex: 3, child: ThCell('RÉGLÉ LE')),
+            Expanded(flex: 2, child: ThCell('RÉGLÉ LE')),
+            SizedBox(width: 48),
           ])),
           const Divider(height: 1, color: AppColors.border),
-          if (engagementsMois.isEmpty)
+          if (reglementsMois.isEmpty)
             const EmptyHint('Aucun règlement sur ce mois')
           else
-            ...engagementsMois.map((e) => Container(
-              decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
-              child: Row(children: [
-                _cell(e.estCreance ? 'Créance' : 'Dette', flex: 2, bold: true),
-                _cell(e.num, flex: 3, color: AppColors.primary),
-                _cell(e.tiers, flex: 4),
-                _cell('${e.estCreance ? '+' : '−'} ${Fmt.money(e.montant)}', flex: 3, bold: true,
-                    color: e.estCreance ? AppColors.green : AppColors.red),
-                _cell(e.dateReglement ?? '—', flex: 3, color: AppColors.text2),
-              ]),
-            )),
+            ...reglementsMois.map((e) => _reglementRow(state, e)),
         ])),
       ),
     ]);
@@ -1172,13 +1323,16 @@ class _ComptaTabState extends State<_ComptaTab> {
     ]),
   );
 
-  Widget _factureRow(AppState state, DocumentItem f, List<Expense> expenses) {
+  Widget _factureRow(AppState state, List<Engagement> engagements, DocumentItem f) {
     final ht = Comptabilite.factureHt(f);
-    final dep = Comptabilite.depensesFacture(f.numero, expenses);
+    final dep = Comptabilite.depensesFacture(f.numero, engagements);
     final benef = ht - dep;
+    final eng = _engagementFacture(engagements, f.numero);
+    final encaissee = eng?.solde ?? false;
+    final derniere = eng == null ? null : _dernierReglement(eng);
     return Container(
       decoration: BoxDecoration(
-        color: f.encaissee ? Colors.white : const Color(0xFFFAFAFB),
+        color: encaissee ? Colors.white : const Color(0xFFFAFAFB),
         border: const Border(bottom: BorderSide(color: AppColors.border)),
       ),
       child: Row(children: [
@@ -1191,20 +1345,13 @@ class _ComptaTabState extends State<_ComptaTab> {
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(children: [
             Switch(
-              value: f.encaissee,
+              value: encaissee,
               activeThumbColor: AppColors.green,
-              onChanged: (v) async {
-                if (v) {
-                  final d = await _pickDate(DateTime.now());
-                  if (d != null) state.setFactureEncaissee(f.id, true, date: _fmtDate(d));
-                } else {
-                  state.setFactureEncaissee(f.id, false);
-                }
-              },
+              onChanged: (v) => _toggleEncaissement(state, engagements, f, eng, v),
             ),
             Expanded(child: Text(
-              f.encaissee ? (f.dateEncaissement ?? '') : 'en attente',
-              style: GoogleFonts.dmSans(fontSize: 11.5, color: f.encaissee ? AppColors.green : AppColors.text3),
+              encaissee ? _dateTexte(derniere) : 'en attente',
+              style: GoogleFonts.dmSans(fontSize: 11.5, color: encaissee ? AppColors.green : AppColors.text3),
               overflow: TextOverflow.ellipsis,
             )),
           ]),
@@ -1213,16 +1360,49 @@ class _ComptaTabState extends State<_ComptaTab> {
     );
   }
 
-  Widget _expenseRow(AppState state, Expense e) => Container(
+  Widget _reglementCard(AppState state, Engagement e) => ListCard(
+    accent: e.estEntrant ? AppColors.green : AppColors.red,
+    title: Text(e.tiers.isEmpty ? '—' : e.tiers, style: GoogleFonts.dmSans(
+      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1),
+      maxLines: 1, overflow: TextOverflow.ellipsis),
+    subtitle: Text('${e.estEntrant ? 'Créance' : 'Dette'} · ${e.documentNumero ?? '—'}',
+        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary)),
+    trailing: IconButton(
+      tooltip: 'Supprimer',
+      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.red),
+      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+      onPressed: () => state.deleteEngagement(e.id),
+    ),
+    fields: [
+      ('CATÉGORIE', CardValue(e.categorie)),
+      ('MONTANT', CardValue('${e.estEntrant ? '+' : '−'} ${Fmt.money(e.montant)}',
+          bold: true, color: e.estEntrant ? AppColors.green : AppColors.red)),
+      ('RÉGLÉ LE', CardValue(_dateTexte(_dernierReglement(e)))),
+    ],
+  );
+
+  Widget _reglementRow(AppState state, Engagement e) => Container(
     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
     child: Row(children: [
-      _cell(_fmtDate(e.date), flex: 2),
-      _cell(e.label, flex: 4),
-      _cell(e.category, flex: 3, color: AppColors.text2),
-      _cell(Fmt.money(e.amount), flex: 3, bold: true),
+      Expanded(flex: 2, child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        child: Align(alignment: Alignment.centerLeft, child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+          decoration: BoxDecoration(color: AppColors.grayBg, borderRadius: BorderRadius.circular(20)),
+          child: Text(e.estEntrant ? 'Créance' : 'Dette',
+              style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.text1)),
+        )),
+      )),
+      _cell(e.documentNumero ?? '—', flex: 3, color: AppColors.primary),
+      _cell(e.tiers.isEmpty ? '—' : e.tiers, flex: 3),
+      _cell(e.categorie, flex: 2, color: AppColors.text2),
+      _cell('${e.estEntrant ? '+' : '−'} ${Fmt.money(e.montant)}', flex: 3, bold: true,
+          color: e.estEntrant ? AppColors.green : AppColors.red),
+      _cell(_dateTexte(_dernierReglement(e)), flex: 2, color: AppColors.text2),
       SizedBox(width: 48, child: IconButton(
+        tooltip: 'Supprimer',
         icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
-        onPressed: () => state.deleteExpense(e.id),
+        onPressed: () => state.deleteEngagement(e.id),
       )),
     ]),
   );
@@ -1293,9 +1473,8 @@ class _DimeTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final factures = state.documents['facture'] ?? [];
     final rows = Comptabilite.bilanMensuel(
-        factures, state.expenses, state.engagements, state.dimePaidMonths, state.dimePaidDates);
+        state.engagements, state.dimePaidMonths, state.dimePaidDates);
     final totalBenef = rows.fold<double>(0, (s, r) => s + (r.benefice > 0 ? r.benefice : 0));
     final totalDime = rows.fold<double>(0, (s, r) => s + r.dime);
     final totalPaye = rows.where((r) => r.dimePaid).fold<double>(0, (s, r) => s + r.dime);

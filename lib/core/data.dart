@@ -47,8 +47,8 @@ class SampleData {
     // Générées à la validation de leur proforma : numéro apparié (lettre F/B pour
     // le même compteur et la même date), mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements(), encaissee: true, dateEncaissement: '30/04/2026'),
-      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement(), encaissee: true, dateEncaissement: '15/01/2026'),
+      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
     ],
     'bl': [
       DocumentItem(id: 1, numero: 'KLR-B04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
@@ -75,12 +75,30 @@ class SampleData {
     const Department(nom: 'Direction', membres: 1, color: AppColors.primary, bg: AppColors.redBg, projets: 4, chef: 'Koffi Lambert'),
   ];
 
-  static List<Expense> get initialExpenses => [
-    Expense(id: 1, date: DateTime(2026, 1, 12), label: 'Licences de développement', amount: 250000, category: 'Achat matériel', factureNumero: 'KLR-F02-10012026'),
-    Expense(id: 2, date: DateTime(2026, 1, 20), label: 'Sous-traitance intégration', amount: 180000, category: 'Sous-traitance', factureNumero: 'KLR-F02-10012026'),
-    Expense(id: 3, date: DateTime(2026, 4, 26), label: 'Achat switches et bornes Wi-Fi', amount: 1650000, category: 'Achat matériel', factureNumero: 'KLR-F04-24042026'),
-    Expense(id: 4, date: DateTime(2026, 4, 10), label: 'Loyer atelier — avril', amount: 150000, category: 'Loyer & charges'),
-    Expense(id: 5, date: DateTime(2026, 1, 5), label: 'Transport livraisons', amount: 60000, category: 'Transport'),
+  static List<Engagement> get initialEngagementsSortants => [
+    Engagement(id: 201, sens: 'sortant', tiers: 'Fournisseur logiciels',
+        description: 'Licences de développement', montant: 250000,
+        echeance: DateTime(2026, 1, 12), categorie: 'Achat matériel',
+        documentNumero: 'KLR-F02-10012026',
+        reglements: [Reglement(id: 2011, date: DateTime(2026, 1, 12), montant: 250000)]),
+    Engagement(id: 202, sens: 'sortant', tiers: 'Intégrateur',
+        description: 'Sous-traitance intégration', montant: 180000,
+        echeance: DateTime(2026, 1, 20), categorie: 'Sous-traitance',
+        documentNumero: 'KLR-F02-10012026',
+        reglements: [Reglement(id: 2021, date: DateTime(2026, 1, 20), montant: 180000)]),
+    Engagement(id: 203, sens: 'sortant', tiers: 'Grossiste réseau',
+        description: 'Achat switches et bornes Wi-Fi', montant: 1650000,
+        echeance: DateTime(2026, 4, 26), categorie: 'Achat matériel',
+        documentNumero: 'KLR-F04-24042026',
+        reglements: [Reglement(id: 2031, date: DateTime(2026, 4, 26), montant: 1650000)]),
+    Engagement(id: 204, sens: 'sortant', tiers: 'Bailleur',
+        description: 'Loyer atelier — avril', montant: 150000,
+        echeance: DateTime(2026, 4, 10), categorie: 'Loyer & charges',
+        reglements: [Reglement(id: 2041, date: DateTime(2026, 4, 10), montant: 150000)]),
+    Engagement(id: 205, sens: 'sortant', tiers: 'Transporteur',
+        description: 'Transport livraisons', montant: 60000,
+        echeance: DateTime(2026, 1, 5), categorie: 'Transport',
+        reglements: [Reglement(id: 2051, date: DateTime(2026, 1, 5), montant: 60000)]),
   ];
 
   static final List<DimeEntry> dimeHistory = [
@@ -92,16 +110,33 @@ class SampleData {
     const DimeEntry(mois: 'Juin 2026', revenu: 18000000, dime: 1800000, statut: 'attente'),
   ];
 
-  // Engagements : ce qu'on nous doit (créances) et ce que l'on doit (dettes).
-  // Getter et non champ : chaque AppState part d'objets neufs, les statuts
-  // d'un test ou d'une session ne fuient pas dans la suivante.
+  // Engagements : ce qu'on nous doit (créances, sens 'entrant') et ce que l'on
+  // doit (dettes, sens 'sortant'). Getter et non champ : chaque AppState part
+  // d'objets neufs, les règlements d'un test ou d'une session ne fuient pas
+  // dans la suivante. L'ancienne référence libre ('num') rejoint la
+  // description entre parenthèses, comme le fait `migrerV1versV2`.
   static List<Engagement> get initialEngagements => [
-    Engagement(id: 1, sens: 'creance', num: 'KLR-F001-240426', tiers: "Advans Côte d'Ivoire", description: 'Équipements réseau', montant: 3517500, statut: 'cours', echeance: '24/05/2026'),
-    Engagement(id: 2, sens: 'creance', num: 'KLR-F003-180326', tiers: 'Acme Corp', description: 'Développement application', montant: 5200000, statut: 'paye', echeance: '18/04/2026', dateReglement: '18/04/2026'),
-    Engagement(id: 3, sens: 'creance', num: 'KLR-F002-050326', tiers: 'Global Tech', description: 'Audit sécurité réseau', montant: 1800000, statut: 'paye', echeance: '05/04/2026', dateReglement: '05/04/2026'),
-    Engagement(id: 4, sens: 'creance', num: 'KLR-F004-010426', tiers: 'Design Studio', description: 'Maintenance parc informatique', montant: 750000, statut: 'retard', echeance: '01/05/2026'),
-    Engagement(id: 5, sens: 'dette', num: 'FRN-2026-018', tiers: 'Orange CI', description: 'Abonnement fibre trimestriel', montant: 240000, statut: 'cours', echeance: '31/07/2026', categorie: 'Loyer & charges'),
-    Engagement(id: 6, sens: 'dette', num: 'FRN-2026-012', tiers: 'Sotra Logistique', description: 'Livraison matériel Daloa', montant: 480000, statut: 'paye', echeance: '30/06/2026', dateReglement: '28/06/2026', categorie: 'Sous-traitance'),
+    Engagement(id: 1, sens: 'entrant', tiers: "Advans Côte d'Ivoire",
+        description: 'Équipements réseau (KLR-F001-240426)', montant: 3517500,
+        echeance: DateTime(2026, 5, 24)),
+    Engagement(id: 2, sens: 'entrant', tiers: 'Acme Corp',
+        description: 'Développement application (KLR-F003-180326)', montant: 5200000,
+        echeance: DateTime(2026, 4, 18),
+        reglements: [Reglement(id: 1002, date: DateTime(2026, 4, 18), montant: 5200000)]),
+    Engagement(id: 3, sens: 'entrant', tiers: 'Global Tech',
+        description: 'Audit sécurité réseau (KLR-F002-050326)', montant: 1800000,
+        echeance: DateTime(2026, 4, 5),
+        reglements: [Reglement(id: 1003, date: DateTime(2026, 4, 5), montant: 1800000)]),
+    Engagement(id: 4, sens: 'entrant', tiers: 'Design Studio',
+        description: 'Maintenance parc informatique (KLR-F004-010426)', montant: 750000,
+        echeance: DateTime(2026, 5, 1)),
+    Engagement(id: 5, sens: 'sortant', tiers: 'Orange CI',
+        description: 'Abonnement fibre trimestriel (FRN-2026-018)', montant: 240000,
+        echeance: DateTime(2026, 7, 31), categorie: 'Loyer & charges'),
+    Engagement(id: 6, sens: 'sortant', tiers: 'Sotra Logistique',
+        description: 'Livraison matériel Daloa (FRN-2026-012)', montant: 480000,
+        echeance: DateTime(2026, 6, 30), categorie: 'Sous-traitance',
+        reglements: [Reglement(id: 1006, date: DateTime(2026, 6, 28), montant: 480000)]),
   ];
 
   static List<Task> get initialTasks => [

@@ -32,11 +32,18 @@ void main() {
   });
 
   test('ajouter une dépense journalise une activité', () {
+    // `Expense`/`addExpense` ont disparu (tâche 2) : une dépense est un
+    // engagement sortant créé ET réglé le jour même. C'est `ajouterReglement`
+    // qui journalise (type 'paiement', pas 'comptabilite') — `addEngagement`
+    // seul ne journalise rien. Le libellé saisi devient le `tiers` de
+    // l'engagement, et apparaît donc dans le détail de l'activité, pas son
+    // titre (générique : « Décaissement — … »).
     final s = AppState();
-    s.addExpense(Expense(id: 1, date: DateTime(2026, 7, 24), label: 'Carburant',
-        amount: 45000, category: 'Transport'));
-    expect(s.activities.first.type, 'comptabilite');
-    expect(s.activities.first.titre, contains('Carburant'));
+    s.addEngagement(Engagement(id: 1, sens: 'sortant', tiers: 'Carburant',
+        montant: 45000, echeance: DateTime(2026, 7, 24), categorie: 'Transport'));
+    s.ajouterReglement(1, 45000, DateTime(2026, 7, 24));
+    expect(s.activities.first.type, 'paiement');
+    expect(s.activities.first.desc, contains('Carburant'));
   });
 
   test('ajouter / supprimer un client journalise une activité', () {

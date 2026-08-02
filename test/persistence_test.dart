@@ -13,6 +13,8 @@ class MemoryStore implements Store {
   @override
   Future<void> write(String d) async { data = d; writes++; }
   @override
+  Future<void> writeBackup(String d) async {}
+  @override
   Future<void> clear() async { data = null; }
 }
 
@@ -33,10 +35,16 @@ void main() {
     a.addClient(Client(id: 900, initials: 'ZZ', color: const Color(0xFF123456),
         name: 'Client Persistant', contact: 'M. Test', email: 't@x.ci',
         phone: '0700', totalFacture: 42000, address: 'Abidjan'));
-    a.addExpense(Expense(id: 901, date: DateTime(2026, 7, 24), label: 'Carburant',
-        amount: 15000, category: 'Transport'));
-    a.addEngagement(Engagement(id: 902, sens: 'dette', num: 'D-1', tiers: 'Fournisseur',
-        description: 'Test', montant: 30000, statut: 'cours', echeance: '31/07/2026',
+    // `Expense` a disparu (tâche 2) : une dépense est un engagement sortant
+    // créé ET réglé le jour même — voir `AppState.ajouterReglement`.
+    a.addEngagement(Engagement(id: 901, sens: 'sortant', tiers: 'Carburant',
+        montant: 15000, echeance: DateTime(2026, 7, 24), categorie: 'Transport'));
+    a.ajouterReglement(901, 15000, DateTime(2026, 7, 24));
+    // `Engagement.num`/`statut`/`echeance` (String) ont disparu avec l'ancien
+    // modèle (tâche 2) : la référence libre rejoint `documentNumero`, `sens`
+    // devient 'entrant'/'sortant', `echeance` est un DateTime.
+    a.addEngagement(Engagement(id: 902, sens: 'sortant', documentNumero: 'D-1', tiers: 'Fournisseur',
+        description: 'Test', montant: 30000, echeance: DateTime(2026, 7, 31),
         categorie: 'Autres'));
     a.addDocument('proforma', DocumentItem(id: 903, numero: 'KLR-09-240726',
         date: '24/07/2026', clientId: 0, client: 'C', objet: 'O', montant: 1000,
@@ -49,9 +57,9 @@ void main() {
 
     expect(b.clients.any((c) => c.id == 900 && c.name == 'Client Persistant'), isTrue);
     expect(b.clients.firstWhere((c) => c.id == 900).color, const Color(0xFF123456));
-    expect(b.expenses.any((e) => e.id == 901 && e.amount == 15000), isTrue);
-    expect(b.expenses.firstWhere((e) => e.id == 901).date, DateTime(2026, 7, 24));
-    expect(b.engagements.any((e) => e.id == 902 && e.sens == 'dette'), isTrue);
+    expect(b.engagements.any((e) => e.id == 901 && e.regle == 15000), isTrue);
+    expect(b.engagements.firstWhere((e) => e.id == 901).reglements.single.date, DateTime(2026, 7, 24));
+    expect(b.engagements.any((e) => e.id == 902 && e.sens == 'sortant'), isTrue);
     final doc = b.documents['proforma']!.firstWhere((d) => d.id == 903);
     expect(doc.lines.single.pu, 500);
     // Les activités générées par les mutations sont aussi persistées.
@@ -62,9 +70,9 @@ void main() {
   test('les activités du fil sont persistées et rechargées', () async {
     final store = MemoryStore();
     final a = AppState(store: store);
-    a.addEngagement(Engagement(id: 1, sens: 'creance', num: 'C1', tiers: 'X',
-        montant: 1000, statut: 'cours', echeance: '31/12/2026'));
-    a.validerEngagement(1, '24/07/2026');
+    a.addEngagement(Engagement(id: 1, sens: 'entrant', documentNumero: 'C1', tiers: 'X',
+        montant: 1000, echeance: DateTime(2026, 12, 31)));
+    a.ajouterReglement(1, 1000, DateTime(2026, 7, 24));
     await a.flush();
 
     final b = AppState(store: store);
@@ -84,8 +92,9 @@ void main() {
     expect(a.documents['proforma'], isEmpty);
     expect(a.documents['facture'], isEmpty);
     expect(a.documents['bl'], isEmpty);
+    // `expenses` a disparu (tâche 2) : les dépenses sont des engagements,
+    // déjà couverts par `a.engagements` ci-dessus.
     expect(a.engagements, isEmpty);
-    expect(a.expenses, isEmpty);
     expect(a.activities, isEmpty);
     expect(a.tasks, isEmpty);
     expect(a.notes, isEmpty);

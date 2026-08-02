@@ -2,29 +2,43 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klr_tech_app/core/comptabilite.dart';
 import 'package:klr_tech_app/core/models.dart';
 
-DocumentItem facture(String numero, List<LineItem> lines,
-        {bool encaissee = false, String? dateEnc}) =>
+DocumentItem facture(String numero, List<LineItem> lines) =>
     DocumentItem(
       id: numero.hashCode, numero: numero, date: '01/01/2026', clientId: 0,
       client: 'C', objet: 'O', montant: 0, statut: 'cours',
-      lines: lines, encaissee: encaissee, dateEncaissement: dateEnc,
+      lines: lines,
     );
 
 LineItem l(int qte, double pu) => LineItem(ref: '01', designation: 'x', qte: qte, pu: pu);
 
-Expense dep(double amount, DateTime date, {String? numero}) => Expense(
-    id: date.microsecondsSinceEpoch, date: date, label: 'd',
-    amount: amount, category: 'Autre', factureNumero: numero);
+Reglement reg(double montant, DateTime date) =>
+    Reglement(id: date.microsecondsSinceEpoch, date: date, montant: montant);
+
+/// Une facture encaissée devient un engagement entrant, rattaché à son
+/// numéro de document, soldé par un unique règlement à la date d'encaissement.
+Engagement factureEncaissee(String numero, double montant, DateTime dateEnc) =>
+    Engagement(
+      id: numero.hashCode, sens: 'entrant', tiers: 'C', montant: montant,
+      echeance: dateEnc, documentNumero: numero,
+      reglements: [reg(montant, dateEnc)],
+    );
+
+/// Une dépense au comptant devient un engagement sortant, réglé le jour même,
+/// éventuellement rattaché à une facture fournisseur.
+Engagement dep(double montant, DateTime date, {String? numero}) => Engagement(
+    id: date.microsecondsSinceEpoch, sens: 'sortant', tiers: 'F',
+    montant: montant, echeance: date, categorie: 'Autres',
+    documentNumero: numero, reglements: [reg(montant, date)]);
 
 Engagement creance(double montant, {String? regleLe}) => Engagement(
-    id: montant.toInt(), sens: 'creance', num: 'C1', tiers: 'T',
-    montant: montant, statut: regleLe == null ? 'cours' : 'paye',
-    echeance: '01/01/2026', dateReglement: regleLe);
+    id: montant.toInt(), sens: 'entrant', tiers: 'T',
+    montant: montant, echeance: DateTime(2026, 1, 1),
+    reglements: regleLe == null ? [] : [reg(montant, Comptabilite.parseJour(regleLe)!)]);
 
 Engagement dette(double montant, {String? regleLe}) => Engagement(
-    id: -montant.toInt(), sens: 'dette', num: 'D1', tiers: 'F',
-    montant: montant, statut: regleLe == null ? 'cours' : 'paye',
-    echeance: '01/01/2026', dateReglement: regleLe);
+    id: -montant.toInt(), sens: 'sortant', tiers: 'F',
+    montant: montant, echeance: DateTime(2026, 1, 1),
+    reglements: regleLe == null ? [] : [reg(montant, Comptabilite.parseJour(regleLe)!)]);
 
 void main() {
   test('factureHt = somme des lignes (HT)', () {
@@ -33,29 +47,35 @@ void main() {
 
   test('beneficeFacture = HT - dépenses rattachées', () {
     final f = facture('F1', [l(1, 1000)]);
-    final ex = [dep(300, DateTime(2026, 1, 1), numero: 'F1'), dep(999, DateTime(2026, 1, 1), numero: 'F2')];
+    final ex = [
+      dep(300, DateTime(2026, 1, 1), numero: 'F1'),
+      dep(999, DateTime(2026, 1, 1), numero: 'F2'),
+    ];
     expect(Comptabilite.beneficeFacture(f, ex), 700);
   });
 
   test('totaux : le revenu ne compte que les factures encaissées', () {
-    final factures = [
-      facture('F1', [l(1, 1000)], encaissee: true, dateEnc: '10/01/2026'),
-      facture('F2', [l(1, 5000)]), // non encaissée -> exclue du revenu
+    final engagements = [
+      factureEncaissee('F1', 1000, DateTime(2026, 1, 10)),
+      // F2 non encaissée -> aucun règlement, donc exclue du revenu
+      Engagement(id: 2, sens: 'entrant', tiers: 'C', montant: 5000,
+          echeance: DateTime(2026, 1, 1), documentNumero: 'F2'),
+      dep(200, DateTime(2026, 1, 5)),
     ];
-    final ex = [dep(200, DateTime(2026, 1, 5))];
-    final t = Comptabilite.totaux(factures, ex, const []);
+    final t = Comptabilite.totaux(engagements);
     expect(t.revenuHt, 1000);
     expect(t.depenses, 200);
     expect(t.benefice, 800);
   });
 
   test('bilanMensuel : revenu au mois d\'encaissement, dépenses à leur mois', () {
-    final factures = [
-      facture('F1', [l(1, 1000)], encaissee: true, dateEnc: '10/01/2026'),
-      facture('F2', [l(1, 2000)], encaissee: true, dateEnc: '10/02/2026'),
+    final engagements = [
+      factureEncaissee('F1', 1000, DateTime(2026, 1, 10)),
+      factureEncaissee('F2', 2000, DateTime(2026, 2, 10)),
+      dep(300, DateTime(2026, 1, 20)),
+      dep(500, DateTime(2026, 2, 2)),
     ];
-    final ex = [dep(300, DateTime(2026, 1, 20)), dep(500, DateTime(2026, 2, 2))];
-    final rows = Comptabilite.bilanMensuel(factures, ex, const [], const {}, const {});
+    final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
     expect(rows.length, 2);
     expect(rows[0].monthKey, '2026-01');
     expect(rows[0].revenuHt, 1000);
@@ -67,9 +87,11 @@ void main() {
   });
 
   test('dîme = 0 sur un mois en perte', () {
-    final factures = [facture('F1', [l(1, 1000)], encaissee: true, dateEnc: '10/03/2026')];
-    final ex = [dep(3000, DateTime(2026, 3, 5))];
-    final rows = Comptabilite.bilanMensuel(factures, ex, const [], const {}, const {});
+    final engagements = [
+      factureEncaissee('F1', 1000, DateTime(2026, 3, 10)),
+      dep(3000, DateTime(2026, 3, 5)),
+    ];
+    final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
     expect(rows.single.benefice, -2000);
     expect(rows.single.dime, 0);
   });
@@ -81,9 +103,9 @@ void main() {
   });
 
   test('statut de versement de la dîme propagé', () {
-    final factures = [facture('F1', [l(1, 1000)], encaissee: true, dateEnc: '10/01/2026')];
+    final engagements = [factureEncaissee('F1', 1000, DateTime(2026, 1, 10))];
     final rows = Comptabilite.bilanMensuel(
-        factures, const [], const [], {'2026-01'}, {'2026-01': '03/02/2026'});
+        engagements, {'2026-01'}, {'2026-01': '03/02/2026'});
     expect(rows.single.dimePaid, isTrue);
     expect(rows.single.dimeDate, '03/02/2026');
   });
@@ -91,7 +113,7 @@ void main() {
   // ── Engagements (dettes & créances) en comptabilité ──────
   group('engagements', () {
     test('une créance validée entre en revenu, une créance en cours non', () {
-      final t = Comptabilite.totaux(const [], const [], [
+      final t = Comptabilite.totaux([
         creance(1000, regleLe: '10/01/2026'),
         creance(9999), // en cours -> hors comptabilité
       ]);
@@ -100,7 +122,7 @@ void main() {
     });
 
     test('une dette validée entre en dépense', () {
-      final t = Comptabilite.totaux(const [], const [], [
+      final t = Comptabilite.totaux([
         dette(400, regleLe: '10/01/2026'),
         dette(7777), // en cours -> hors comptabilité
       ]);
@@ -111,14 +133,14 @@ void main() {
     test('rattachement au mois du règlement, pas à celui de l\'échéance', () {
       // échéance en janvier (cf. helper), réglée en mars.
       final rows = Comptabilite.bilanMensuel(
-          const [], const [], [creance(2000, regleLe: '05/03/2026')], const {}, const {});
+          [creance(2000, regleLe: '05/03/2026')], const {}, const {});
       expect(rows.single.monthKey, '2026-03');
       expect(rows.single.revenuHt, 2000);
       expect(rows.single.dime, closeTo(200, 0.001));
     });
 
     test('créance et dette du même mois se compensent dans le bénéfice', () {
-      final rows = Comptabilite.bilanMensuel(const [], const [], [
+      final rows = Comptabilite.bilanMensuel([
         creance(5000, regleLe: '05/04/2026'),
         dette(2000, regleLe: '20/04/2026'),
       ], const {}, const {});
@@ -127,17 +149,18 @@ void main() {
       expect(rows.single.benefice, 3000);
     });
 
-    test('engagement réglé sans date de règlement : ignoré', () {
+    test('engagement sans règlement : ignoré', () {
       final e = creance(1000);
-      e.statut = 'paye'; // incohérent : pas de dateReglement
-      expect(Comptabilite.totaux(const [], const [], [e]).revenuHt, 0);
-      expect(Comptabilite.bilanMensuel(const [], const [], [e], const {}, const {}), isEmpty);
+      expect(Comptabilite.totaux([e]).revenuHt, 0);
+      expect(Comptabilite.bilanMensuel([e], const {}, const {}), isEmpty);
     });
 
     test('les créances s\'ajoutent aux factures encaissées du même mois', () {
-      final factures = [facture('F1', [l(1, 1500)], encaissee: true, dateEnc: '10/05/2026')];
-      final rows = Comptabilite.bilanMensuel(
-          factures, const [], [creance(500, regleLe: '25/05/2026')], const {}, const {});
+      final engagements = [
+        factureEncaissee('F1', 1500, DateTime(2026, 5, 10)),
+        creance(500, regleLe: '25/05/2026'),
+      ];
+      final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
       expect(rows.single.revenuHt, 2000);
     });
   });
@@ -172,8 +195,8 @@ void main() {
   });
 
   test('ligneMois retrouve le bilan d\'un mois donné', () {
-    final factures = [facture('F1', [l(1, 1000)], encaissee: true, dateEnc: '10/01/2026')];
-    final rows = Comptabilite.bilanMensuel(factures, const [], const [], const {}, const {});
+    final engagements = [factureEncaissee('F1', 1000, DateTime(2026, 1, 10))];
+    final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
     expect(Comptabilite.ligneMois('2026-01', rows)?.revenuHt, 1000);
     expect(Comptabilite.ligneMois('2026-02', rows), isNull);
   });

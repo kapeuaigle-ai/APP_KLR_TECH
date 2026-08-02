@@ -7,12 +7,12 @@ import 'package:klr_tech_app/core/models.dart';
 DateTime moisSuivant(DateTime d) => DateTime(d.year, d.month + 1, 1);
 
 Engagement creance(int id, double montant) => Engagement(
-    id: id, sens: 'creance', num: 'C$id', tiers: 'Client',
-    montant: montant, statut: 'cours', echeance: '01/01/2030');
+    id: id, sens: 'entrant', tiers: 'Client',
+    montant: montant, echeance: DateTime(2030, 1, 1));
 
 Engagement dette(int id, double montant) => Engagement(
-    id: id, sens: 'dette', num: 'D$id', tiers: 'Fournisseur',
-    montant: montant, statut: 'cours', echeance: '01/01/2030');
+    id: id, sens: 'sortant', tiers: 'Fournisseur',
+    montant: montant, echeance: DateTime(2030, 1, 1));
 
 void main() {
   group('clôture mensuelle', () {
@@ -27,9 +27,10 @@ void main() {
       final s = AppState();
       final now = DateTime.now();
       // Un mouvement sur le mois en cours, sinon il n'y a rien à archiver.
-      // addExpense journalise déjà une entrée : on compte à partir de là.
-      s.addExpense(Expense(
-          id: 1, date: now, label: 'Loyer', amount: 150000, category: 'Loyer & charges'));
+      // ajouterReglement journalise déjà une entrée : on compte à partir de là.
+      s.addEngagement(Engagement(id: 301, sens: 'sortant', tiers: 'Bailleur',
+          montant: 150000, echeance: now, categorie: 'Loyer & charges'));
+      s.ajouterReglement(301, 150000, now);
       final avant = s.activities.length;
 
       s.verifierCloture(maintenant: moisSuivant(now));
@@ -44,8 +45,9 @@ void main() {
     test('la clôture ne se rejoue pas deux fois pour le même mois', () {
       final s = AppState();
       final now = DateTime.now();
-      s.addExpense(Expense(
-          id: 1, date: now, label: 'Loyer', amount: 150000, category: 'Loyer & charges'));
+      s.addEngagement(Engagement(id: 302, sens: 'sortant', tiers: 'Bailleur',
+          montant: 150000, echeance: now, categorie: 'Loyer & charges'));
+      s.ajouterReglement(302, 150000, now);
 
       s.verifierCloture(maintenant: moisSuivant(now));
       final apresPremiere = s.activities.length;
@@ -75,28 +77,26 @@ void main() {
     test('valider une créance la fait entrer en revenu du mois du règlement', () {
       final s = AppState();
       s.engagements.clear();
-      s.expenses.clear();
       s.documents['facture']!.clear();
       s.addEngagement(creance(90, 300000));
+      final e = s.engagements.firstWhere((e) => e.id == 90);
 
-      s.validerEngagement(90, '15/03/2026');
+      s.ajouterReglement(90, e.reste, DateTime(2026, 3, 15));
 
-      final rows = Comptabilite.bilanMensuel(
-          s.documents['facture']!, s.expenses, s.engagements, const {}, const {});
+      final rows = Comptabilite.bilanMensuel(s.engagements, const {}, const {});
       expect(Comptabilite.ligneMois('2026-03', rows)?.revenuHt, 300000);
     });
 
     test('valider une dette la fait entrer en dépense', () {
       final s = AppState();
       s.engagements.clear();
-      s.expenses.clear();
       s.documents['facture']!.clear();
       s.addEngagement(dette(91, 80000));
+      final e = s.engagements.firstWhere((e) => e.id == 91);
 
-      s.validerEngagement(91, '15/03/2026');
+      s.ajouterReglement(91, e.reste, DateTime(2026, 3, 15));
 
-      final rows = Comptabilite.bilanMensuel(
-          s.documents['facture']!, s.expenses, s.engagements, const {}, const {});
+      final rows = Comptabilite.bilanMensuel(s.engagements, const {}, const {});
       expect(Comptabilite.ligneMois('2026-03', rows)?.depenses, 80000);
     });
 
@@ -104,7 +104,10 @@ void main() {
       final s = AppState();
       final avant = s.activities.length;
       s.addEngagement(creance(92, 500000));
-      s.validerEngagement(92, '15/03/2026');
+      final e = s.engagements.firstWhere((e) => e.id == 92);
+
+      s.ajouterReglement(92, e.reste, DateTime(2026, 3, 15));
+
       expect(s.activities.length, avant + 1);
       expect(s.activities.first.type, 'paiement');
       expect(s.activities.first.desc, contains('15/03/2026'));
@@ -113,17 +116,16 @@ void main() {
     test('annuler la validation ressort l\'engagement de la comptabilité', () {
       final s = AppState();
       s.engagements.clear();
-      s.expenses.clear();
       s.documents['facture']!.clear();
       s.addEngagement(creance(93, 200000));
-      s.validerEngagement(93, '15/03/2026');
+      final e = s.engagements.firstWhere((e) => e.id == 93);
+      s.ajouterReglement(93, e.reste, DateTime(2026, 3, 15));
 
-      s.annulerValidationEngagement(93);
+      final dernier = s.engagements.single.reglements.last.id;
+      s.supprimerReglement(93, dernier);
 
-      expect(s.engagements.single.regle, isFalse);
-      expect(
-          Comptabilite.totaux(s.documents['facture']!, s.expenses, s.engagements).revenuHt,
-          0);
+      expect(s.engagements.single.regle, 0);
+      expect(Comptabilite.totaux(s.engagements).revenuHt, 0);
     });
   });
 }

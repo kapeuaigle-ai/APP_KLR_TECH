@@ -79,11 +79,18 @@ class Comptabilite {
   static double factureHt(DocumentItem f) =>
       f.lines.fold(0.0, (s, l) => s + l.total);
 
-  static double depensesFacture(String numero, List<Expense> expenses) =>
-      expenses.where((e) => e.factureNumero == numero).fold(0.0, (s, e) => s + e.amount);
+  /// Décaissements rattachés à une facture — sert au bénéfice par facture.
+  ///
+  /// `regle` est déjà la somme réellement versée : un achat annulé après un
+  /// paiement partiel continue de peser sur le bénéfice à hauteur de ce qui a
+  /// circulé, par le même principe qu'en `_flux`.
+  static double depensesFacture(String numero, List<Engagement> engagements) =>
+      engagements
+          .where((e) => !e.estEntrant && e.documentNumero == numero)
+          .fold(0.0, (s, e) => s + e.regle);
 
-  static double beneficeFacture(DocumentItem f, List<Expense> expenses) =>
-      factureHt(f) - depensesFacture(f.numero, expenses);
+  static double beneficeFacture(DocumentItem f, List<Engagement> engagements) =>
+      factureHt(f) - depensesFacture(f.numero, engagements);
 
   static String monthKeyFromDdMmYyyy(String date) {
     final p = date.split('/'); // dd/MM/yyyy
@@ -98,24 +105,32 @@ class Comptabilite {
     return '${_moisFr[int.parse(p[1])]} ${p[0]}';
   }
 
-  static ComptaTotaux totaux(List<DocumentItem> factures, List<Expense> expenses,
-      List<Engagement> engagements) {
-    // Base caisse : ce qui a réellement circulé. Un engagement réglé compte
-    // pour son montant entier ; s'il n'est pas encore réglé, seul l'acompte
-    // déjà versé compte.
-    double encaisse(Engagement e) => e.regle ? e.montant : (e.aAcompte ? e.acompte : 0.0);
+  /// Tous les règlements d'une liste d'engagements, avec leur sens.
+  ///
+  /// Un engagement annulé n'est PAS écarté : ses règlements ont réellement eu
+  /// lieu, et en base caisse une somme encaissée l'est restée. L'annulation
+  /// retire l'engagement des montants ATTENDUS — voir `creancesEnCours` — pas
+  /// des mouvements passés. Sans quoi annuler un engagement partiellement payé
+  /// réécrirait des mois déjà clôturés, dont la dîme est peut-être versée.
+  static Iterable<({Engagement engagement, Reglement reglement})> _flux(
+      List<Engagement> engagements) sync* {
+    for (final e in engagements) {
+      for (final r in e.reglements) {
+        yield (engagement: e, reglement: r);
+      }
+    }
+  }
 
-    final revenu = factures
-            .where((f) => f.encaissee)
-            .fold(0.0, (s, f) => s + factureHt(f)) +
-        engagements
-            .where((e) => e.estCreance)
-            .fold(0.0, (s, e) => s + encaisse(e));
-    final dep = expenses.fold(0.0, (s, e) => s + e.amount) +
-        engagements
-            .where((e) => !e.estCreance)
-            .fold(0.0, (s, e) => s + encaisse(e));
-    final dime = bilanMensuel(factures, expenses, engagements, const {}, const {})
+  static ComptaTotaux totaux(List<Engagement> engagements) {
+    var revenu = 0.0, dep = 0.0;
+    for (final f in _flux(engagements)) {
+      if (f.engagement.estEntrant) {
+        revenu += f.reglement.montant;
+      } else {
+        dep += f.reglement.montant;
+      }
+    }
+    final dime = bilanMensuel(engagements, const {}, const {})
         .fold(0.0, (s, r) => s + r.dime);
     return ComptaTotaux(
       revenuHt: revenu, depenses: dep, benefice: revenu - dep, dime: dime,
@@ -123,44 +138,24 @@ class Comptabilite {
   }
 
   static List<MonthlyRow> bilanMensuel(
-    List<DocumentItem> factures,
-    List<Expense> expenses,
     List<Engagement> engagements,
     Set<String> dimePaidMonths,
     Map<String, String> dimePaidDates,
   ) {
     final rev = <String, double>{};
     final dep = <String, double>{};
-    for (final f in factures) {
-      if (f.encaissee && f.dateEncaissement != null) {
-        final k = monthKeyFromDdMmYyyy(f.dateEncaissement!);
-        rev[k] = (rev[k] ?? 0) + factureHt(f);
-      }
-    }
-    for (final e in expenses) {
-      final k = monthKeyFromDate(e.date);
-      dep[k] = (dep[k] ?? 0) + e.amount;
-    }
-    // Engagements : chaque mouvement d'argent est rattaché au mois où il a eu
-    // lieu. L'acompte compte donc au mois de son versement, et la validation
-    // n'apporte plus que le solde — sans quoi l'acompte serait compté deux fois.
-    void porter(String monthKey, bool creance, double montant) {
-      if (montant <= 0) return;
-      if (creance) {
-        rev[monthKey] = (rev[monthKey] ?? 0) + montant;
+
+    // Base caisse : chaque règlement est porté au mois de sa propre date.
+    for (final f in _flux(engagements)) {
+      if (f.reglement.montant <= 0) continue;
+      final k = monthKeyFromDate(f.reglement.date);
+      if (f.engagement.estEntrant) {
+        rev[k] = (rev[k] ?? 0) + f.reglement.montant;
       } else {
-        dep[monthKey] = (dep[monthKey] ?? 0) + montant;
+        dep[k] = (dep[k] ?? 0) + f.reglement.montant;
       }
     }
 
-    for (final e in engagements) {
-      if (e.aAcompte) {
-        porter(monthKeyFromDdMmYyyy(e.dateAcompte!), e.estCreance, e.acompte);
-      }
-      if (e.regle) {
-        porter(monthKeyFromDdMmYyyy(e.dateReglement!), e.estCreance, e.montantAuReglement);
-      }
-    }
     final keys = <String>{...rev.keys, ...dep.keys}.toList()..sort();
     return keys.map((k) {
       final r = rev[k] ?? 0, d = dep[k] ?? 0;
@@ -191,61 +186,36 @@ class Comptabilite {
     return !j.isBefore(a) && !j.isAfter(b);
   }
 
-  /// Construit le rapport d'une période. Ne retient que les mouvements réels :
-  /// factures encaissées, dépenses payées, acomptes reçus ou versés, et soldes
-  /// d'engagements réglés — chacun à sa propre date.
   static RapportPeriode rapport({
     required DateTime debut,
     required DateTime fin,
-    required List<DocumentItem> factures,
-    required List<Expense> expenses,
     required List<Engagement> engagements,
   }) {
     final mouvements = <MouvementRapport>[];
     final parCategorie = <String, double>{};
 
-    void ajouterDepense(String categorie, double montant) {
-      if (montant <= 0) return;
-      parCategorie[categorie] = (parCategorie[categorie] ?? 0) + montant;
-    }
-
-    for (final f in factures) {
-      final d = parseJour(f.dateEncaissement);
-      if (!f.encaissee || d == null || !dansPeriode(d, debut, fin)) continue;
+    for (final f in _flux(engagements)) {
+      final r = f.reglement, e = f.engagement;
+      if (r.montant <= 0 || !dansPeriode(r.date, debut, fin)) continue;
+      final entree = e.estEntrant;
+      // La description porte l'information utile quand elle existe — c'est le
+      // libellé que le manager a lui-même saisi, ou celui repris d'une dépense
+      // v1. Le numéro de pièce ne sert de libellé qu'à défaut : sans lui, trois
+      // achats rattachés à la même facture seraient indiscernables.
+      final libelle = e.description.isNotEmpty
+          ? e.description
+          : (e.documentNumero != null
+              ? '${entree ? 'Facture' : 'Achat'} ${e.documentNumero}'
+              : (entree ? 'Encaissement' : 'Décaissement'));
       mouvements.add(MouvementRapport(
-        date: d, libelle: 'Facture ${f.numero}', detail: f.client,
-        montant: factureHt(f), entree: true));
-    }
-
-    for (final e in expenses) {
-      if (!dansPeriode(e.date, debut, fin)) continue;
-      mouvements.add(MouvementRapport(
-        date: e.date, libelle: e.label, detail: e.category,
-        montant: e.amount, entree: false));
-      ajouterDepense(e.category, e.amount);
-    }
-
-    for (final e in engagements) {
-      final creance = e.estCreance;
-      // Acompte : compté à sa date de versement.
-      final da = parseJour(e.dateAcompte);
-      if (e.aAcompte && da != null && dansPeriode(da, debut, fin)) {
-        mouvements.add(MouvementRapport(
-          date: da, libelle: 'Acompte ${e.num}', detail: e.tiers,
-          montant: e.acompte, entree: creance));
-        if (!creance) ajouterDepense(e.categorie, e.acompte);
-      }
-      // Règlement : le solde seulement, l'acompte ayant déjà été porté.
-      final dr = parseJour(e.dateReglement);
-      if (e.regle && dr != null && dansPeriode(dr, debut, fin)) {
-        final montant = e.montantAuReglement;
-        if (montant > 0) {
-          mouvements.add(MouvementRapport(
-            date: dr,
-            libelle: creance ? 'Créance ${e.num}' : 'Dette ${e.num}',
-            detail: e.tiers, montant: montant, entree: creance));
-          if (!creance) ajouterDepense(e.categorie, montant);
-        }
+        date: r.date,
+        libelle: libelle,
+        detail: e.tiers,
+        montant: r.montant,
+        entree: entree,
+      ));
+      if (!entree) {
+        parCategorie[e.categorie] = (parCategorie[e.categorie] ?? 0) + r.montant;
       }
     }
 
@@ -257,7 +227,7 @@ class Comptabilite {
 
     // Détail mensuel : on réutilise le bilan global, restreint aux mois de la
     // période, pour rester cohérent avec l'onglet Comptabilité.
-    final tousMois = bilanMensuel(factures, expenses, engagements, const {}, const {});
+    final tousMois = bilanMensuel(engagements, const {}, const {});
     final mois = tousMois.where((r) {
       final p = r.monthKey.split('-');
       final debutMois = DateTime(int.parse(p[0]), int.parse(p[1]));
@@ -267,7 +237,7 @@ class Comptabilite {
     }).toList();
 
     final creancesEnCours = engagements
-        .where((e) => e.estCreance && !e.regle)
+        .where((e) => e.estEntrant && !e.annule && !e.solde)
         .fold(0.0, (s, e) => s + e.reste);
 
     return RapportPeriode(
