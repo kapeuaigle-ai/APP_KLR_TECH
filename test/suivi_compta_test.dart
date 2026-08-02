@@ -3,7 +3,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:klr_tech_app/core/app_state.dart';
 import 'package:klr_tech_app/core/models.dart';
-import 'package:klr_tech_app/core/utils.dart';
 import 'package:klr_tech_app/screens/suivi_screen.dart';
 import 'support/test_fonts.dart';
 
@@ -72,7 +71,7 @@ void main() {
     expect(find.text('SOLDE NET'), findsOneWidget);
     // Deux listes séparées, comptées, et un bouton qui suit la liste ouverte.
     expect(find.text('Créances (4)'), findsOneWidget);
-    expect(find.text('Dettes (2)'), findsOneWidget);
+    expect(find.text('Dettes (7)'), findsOneWidget);
     expect(find.text('Nouvelle Créance'), findsOneWidget);
     expect(find.text('TYPE'), findsOneWidget);
     expect(find.text('SENS'), findsNothing);
@@ -94,7 +93,7 @@ void main() {
     expect(find.text('Acme Corp'), findsOneWidget);
     expect(find.text('Orange CI'), findsNothing);
 
-    await tester.tap(find.text('Dettes (2)'));
+    await tester.tap(find.text('Dettes (7)'));
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
@@ -135,7 +134,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('Nouvelle Créance'), findsOneWidget); // bouton, boîte fermée
     expect(state.engagements.length, avant + 1);
-    expect(state.engagements.first.sens, 'creance');
+    // `sens` vaut désormais 'entrant'/'sortant' ('creance'/'dette' n'existent
+    // plus sur Engagement depuis la tâche 2) : seule cette valeur change.
+    expect(state.engagements.first.sens, 'entrant');
     expect(state.engagements.first.tiers, 'Client Dialogue');
     expect(state.engagements.first.description, 'Appareils');
     expect(state.engagements.first.montant, 125000);
@@ -147,7 +148,7 @@ void main() {
     addTearDown(tester.view.reset);
 
     final state = AppState();
-    final avant = state.expenses.length;
+    final avant = state.engagements.length;
 
     await tester.pumpWidget(ChangeNotifierProvider.value(
       value: state,
@@ -170,9 +171,16 @@ void main() {
 
     expect(tester.takeException(), isNull);
     expect(find.text('Imputée au mois de sa date.'), findsNothing); // boîte refermée
-    expect(state.expenses.length, avant + 1);
-    expect(state.expenses.last.label, 'Carburant');
-    expect(state.expenses.last.amount, 45000);
+    // `Expense` a disparu (tâche 2) : une dépense est désormais un engagement
+    // sortant créé ET réglé le jour même. `addEngagement` insère en tête
+    // (`.first`, pas `.last`), et le libellé saisi devient le `tiers` de
+    // l'engagement (`Expense` n'avait pas de champ tiers distinct).
+    expect(state.engagements.length, avant + 1);
+    expect(state.engagements.first.sens, 'sortant');
+    expect(state.engagements.first.tiers, 'Carburant');
+    expect(state.engagements.first.montant, 45000);
+    expect(state.engagements.first.regle, 45000);
+    expect(state.engagements.first.solde, isTrue);
   });
 
   testWidgets('le formulaire de dette demande le créancier et la catégorie', (tester) async {
@@ -188,7 +196,7 @@ void main() {
     ));
     await tester.tap(find.text('Engagements'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Dettes (2)'));
+    await tester.tap(find.text('Dettes (7)'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Nouvelle Dette'));
     await tester.pumpAndSettle();
@@ -203,7 +211,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(tester.takeException(), isNull);
-    expect(state.engagements.first.sens, 'dette');
+    expect(state.engagements.first.sens, 'sortant');
     expect(state.engagements.first.tiers, 'Fournisseur X');
   });
 
@@ -240,10 +248,11 @@ void main() {
 
     final state = AppState();
     state.addEngagement(Engagement(
-      id: 4242, sens: 'creance', num: 'CR-TEST-01', tiers: 'Client Test',
-      montant: 750000, statut: 'cours', echeance: '31/12/2030',
+      id: 4242, sens: 'entrant', tiers: 'Client Test',
+      montant: 750000, echeance: DateTime(2030, 12, 31),
+      documentNumero: 'CR-TEST-01',
     ));
-    state.validerEngagement(4242, Fmt.jour(DateTime.now()));
+    state.ajouterReglement(4242, 750000, DateTime.now());
 
     await tester.pumpWidget(ChangeNotifierProvider.value(
       value: state,

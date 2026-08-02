@@ -47,8 +47,8 @@ class SampleData {
     // Générées à la validation de leur proforma : numéro apparié (lettre F/B pour
     // le même compteur et la même date), mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements(), encaissee: true, dateEncaissement: '30/04/2026'),
-      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement(), encaissee: true, dateEncaissement: '15/01/2026'),
+      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
     ],
     'bl': [
       DocumentItem(id: 1, numero: 'KLR-B04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),

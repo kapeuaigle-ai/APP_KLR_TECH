@@ -2,12 +2,11 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:klr_tech_app/core/comptabilite.dart';
 import 'package:klr_tech_app/core/models.dart';
 
-DocumentItem facture(String numero, List<LineItem> lines,
-        {bool encaissee = false, String? dateEnc}) =>
+DocumentItem facture(String numero, List<LineItem> lines) =>
     DocumentItem(
       id: numero.hashCode, numero: numero, date: '01/01/2026', clientId: 0,
       client: 'C', objet: 'O', montant: 0, statut: 'cours',
-      lines: lines, encaissee: encaissee, dateEncaissement: dateEnc,
+      lines: lines,
     );
 
 LineItem l(int qte, double pu) => LineItem(ref: '01', designation: 'x', qte: qte, pu: pu);

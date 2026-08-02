@@ -28,8 +28,6 @@ class _RapportsScreenState extends State<RapportsScreen> {
   RapportPeriode _rapport(AppState state) => Comptabilite.rapport(
         debut: _periode.debut,
         fin: _periode.fin,
-        factures: state.documents['facture'] ?? [],
-        expenses: state.expenses,
         engagements: state.engagements,
       );
 

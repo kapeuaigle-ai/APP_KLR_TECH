@@ -15,16 +15,12 @@ class DocumentItem {
   String dateAffichee;
   // Lignes du document — permettent de régénérer le PDF depuis la liste.
   final List<LineItem> lines;
-  // Encaissement (comptabilité de caisse). Distinct du statut de workflow.
-  bool encaissee;
-  String? dateEncaissement; // 'dd/MM/yyyy' quand encaissee == true
 
   DocumentItem({
     required this.id, required this.numero, required this.date,
     required this.clientId, required this.client, required this.objet,
     required this.montant, required this.statut,
     this.clientAddr = '', this.lines = const [],
-    this.encaissee = false, this.dateEncaissement,
     this.dateAffichee = '',
   });
 
@@ -33,7 +29,6 @@ class DocumentItem {
     'client': client, 'clientAddr': clientAddr, 'objet': objet,
     'montant': montant, 'statut': statut,
     'lines': lines.map((l) => l.toJson()).toList(),
-    'encaissee': encaissee, 'dateEncaissement': dateEncaissement,
     'dateAffichee': dateAffichee,
   };
 
@@ -42,7 +37,6 @@ class DocumentItem {
     client: j['client'], clientAddr: j['clientAddr'] ?? '', objet: j['objet'],
     montant: (j['montant'] as num).toDouble(), statut: j['statut'],
     lines: (j['lines'] as List? ?? []).map((l) => LineItem.fromJson(l)).toList(),
-    encaissee: j['encaissee'] ?? false, dateEncaissement: j['dateEncaissement'],
     dateAffichee: j['dateAffichee'] ?? '',
   );
 }

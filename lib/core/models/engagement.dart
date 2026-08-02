@@ -1,6 +1,6 @@
 import 'commun.dart';
 
-/// Catégories analytiques d'un décaissement. Remplace `Expense.categories`.
+/// Catégories analytiques d'un décaissement.
 const kCategoriesDepense = [
   'Achat matériel', 'Transport', 'Sous-traitance',
   'Loyer & charges', 'Salaires', 'Autres',
