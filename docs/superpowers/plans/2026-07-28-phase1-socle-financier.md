@@ -1231,14 +1231,32 @@ Expected: PASS, 9 tests.
 
 - [ ] **Step 5: Adapter les tests existants — construction seulement**
 
-Dans `test/comptabilite_test.dart`, `test/acompte_test.dart`, `test/rapport_periode_test.dart` et `test/cloture_mensuelle_test.dart` : remplacer la construction des données (`Expense(...)`, `Engagement(acompte: ...)`, `facture.encaissee = true`) par des engagements porteurs de règlements.
+Dans `test/comptabilite_test.dart`, `test/acompte_test.dart` et
+`test/rapport_periode_test.dart` : remplacer la construction des données
+(`Expense(...)`, `Engagement(acompte: ...)`, `facture.encaissee = true`) par des
+engagements porteurs de règlements.
 
 **Règle absolue : ne toucher à aucune assertion.** Si un `expect` doit changer de valeur attendue, c'est une régression de la réécriture, pas un test obsolète — arrêter et corriger `comptabilite.dart`.
 
-- [ ] **Step 6: Lancer toute la suite de comptabilité**
+**`test/cloture_mensuelle_test.dart` n'est PAS adaptable ici** — il appartient à
+la tâche 6. Chacun de ses tests construit un `AppState` et appelle `addExpense`,
+`validerEngagement` ou `annulerValidationEngagement`, méthodes que la tâche 6
+n'a pas encore remplacées. Aucune modification « construction seulement » ne
+répare du code appelant des méthodes inexistantes, et `AppState` lui-même ne
+compile pas à ce stade.
 
-Run: `flutter test test/comptabilite_test.dart test/acompte_test.dart test/rapport_periode_test.dart test/cloture_mensuelle_test.dart test/compta_reglements_test.dart`
-Expected: PASS, aucune assertion modifiée.
+Deux groupes de `test/acompte_test.dart` disparaissent, sans perte de
+couverture : le groupe `modèle` testait `aAcompte` et `montantAuReglement`,
+champs supprimés dont l'équivalent est couvert par
+`test/engagement_reglement_test.dart` ; le groupe `AppState.setAcompte` teste
+une méthode que la tâche 6 remplace par `ajouterReglement`, et dont
+`test/app_state_reglements_test.dart` reprend les cas.
+
+- [ ] **Step 6: Lancer la suite de comptabilité**
+
+Run: `flutter test test/comptabilite_test.dart test/acompte_test.dart test/rapport_periode_test.dart test/compta_reglements_test.dart`
+Expected: PASS, aucune assertion modifiée. `cloture_mensuelle_test.dart` reste
+rouge jusqu'à la tâche 6.
 
 - [ ] **Step 7: Commit**
 
@@ -1255,6 +1273,16 @@ git commit -m "refactor: Comptabilite ne lit plus que les reglements"
 - Modify: `lib/core/app_state.dart:21` (champ `expenses`), `:45-77` (`_seed`), `:97-110` (`_clearData`), `:124-165` (sérialisation), `:256-325` (engagements), `:335-360` (`verifierCloture`), `:523-543` (dépenses et encaissement)
 - Modify: `lib/core/data.dart:78-84` (`initialExpenses`)
 - Test: `test/app_state_reglements_test.dart` (créer)
+- Test: `test/cloture_mensuelle_test.dart` (adapter — hérité de la tâche 5)
+
+**Héritage de la tâche 5.** `cloture_mensuelle_test.dart` n'a pas pu être adapté
+plus tôt : chacun de ses tests appelle `addExpense`, `validerEngagement` ou
+`annulerValidationEngagement`, que cette tâche-ci remplace. Une fois l'API de
+règlements en place, l'adapter — construction seulement, **sans toucher à une
+seule assertion**, même règle qu'à la tâche 5. `addExpense(e)` devient un
+engagement sortant plus un `ajouterReglement` du même montant à la même date ;
+`validerEngagement(id, date)` devient `ajouterReglement(id, e.reste, date)` ;
+`annulerValidationEngagement(id)` devient la suppression du dernier règlement.
 
 - [ ] **Step 1: Écrire le test qui échoue**
 
