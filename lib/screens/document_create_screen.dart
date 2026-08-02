@@ -33,6 +33,10 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   final _objetCtrl     = TextEditingController();
   final _dateCtrl      = TextEditingController();
   final List<LineItem> _lines = [];
+  // Client sélectionné dans l'autocomplete, pour filtrer la liste des
+  // projets proposés. Distinct de `clientId` du document, non encore branché.
+  int? _clientId;
+  int? _projetId;
 
   bool get _isEdit => widget.existing != null;
 
@@ -87,6 +91,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
       montant: _ttc,
       statut: 'cours',
+      projetId: _projetId,
       lines: _lines
           .where((l) => l.designation.trim().isNotEmpty)
           .map((l) => LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu))
@@ -195,6 +200,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       _clientAddrCtrl.text = doc.clientAddr;
       _objetCtrl.text = doc.objet;
       _dateCtrl.text = doc.dateAffichee;
+      _projetId = doc.projetId;
       _lines.addAll(doc.lines.map((l) =>
           LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu)));
     }
@@ -267,8 +273,13 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     onClientSelected: (c) {
       _clientCtrl.text = c.name;
       if (c.address.isNotEmpty) _clientAddrCtrl.text = c.address;
+      _clientId = c.id;
       setState(() {});
     },
+    projets: state.projets,
+    clientId: _clientId,
+    projetId: _projetId,
+    onProjetChanged: (v) => setState(() => _projetId = v),
   );
 
   /// Ouvre l'aperçu A4 en plein écran, zoomable.
@@ -444,6 +455,10 @@ class _FormPanel extends StatelessWidget {
   final VoidCallback onLineChanged;
   final List<Client> clients;
   final ValueChanged<Client> onClientSelected;
+  final List<Projet> projets;
+  final int? clientId;
+  final int? projetId;
+  final ValueChanged<int?> onProjetChanged;
 
   const _FormPanel({
     required this.clientCtrl, required this.clientAddrCtrl,
@@ -453,6 +468,8 @@ class _FormPanel extends StatelessWidget {
     required this.ht, required this.tvaAmt, required this.ttc,
     required this.onLineChanged, required this.clients,
     required this.onClientSelected,
+    required this.projets, required this.clientId,
+    required this.projetId, required this.onProjetChanged,
   });
 
   @override
@@ -469,6 +486,26 @@ class _FormPanel extends StatelessWidget {
           clients: clients,
           onSelected: onClientSelected,
         ),
+        if (projets.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text('PROJET', style: AppTheme.label),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<int?>(
+            initialValue: projetId,
+            decoration: _inputDeco('Aucun projet'),
+            items: [
+              const DropdownMenuItem<int?>(value: null, child: Text('Aucun projet')),
+              // Les projets du client sélectionné d'abord, puis les autres :
+              // une proforma se rattache presque toujours à un projet du
+              // même client.
+              ...projets
+                  .where((p) => !p.annule)
+                  .where((p) => clientId == null || p.clientId == clientId)
+                  .map((p) => DropdownMenuItem<int?>(value: p.id, child: Text(p.nom))),
+            ],
+            onChanged: onProjetChanged,
+          ),
+        ],
         const SizedBox(height: 10),
         _LabelField(label: 'ADRESSE CLIENT', controller: clientAddrCtrl, hint: 'Adresse du client', maxLines: 2),
         const SizedBox(height: 10),
