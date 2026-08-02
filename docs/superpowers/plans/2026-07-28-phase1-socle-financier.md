@@ -1389,7 +1389,13 @@ Supprimer `validerEngagement`, `setAcompte`, `annulerValidationEngagement`, `add
     notifyListeners();
   }
 
-  int _prochainId() => DateTime.now().microsecondsSinceEpoch;
+  /// Compteur monotone, amorcé une fois. Appeler `DateTime.now()` à chaque
+  /// identifiant produit des collisions réelles : la granularité d'horloge de
+  /// Windows fait que deux règlements enregistrés coup sur coup obtiennent la
+  /// même valeur, et `supprimerReglement` en efface alors deux. Même motif que
+  /// `_nextActivityId` ci-dessus et que `_Ids` dans `migration.dart`.
+  int _nextReglementId = DateTime.now().microsecondsSinceEpoch;
+  int _prochainId() => _nextReglementId++;
 
   Engagement? _engagement(int id) {
     final m = engagements.where((e) => e.id == id);
@@ -1415,9 +1421,14 @@ Supprimer `validerEngagement`, `setAcompte`, `annulerValidationEngagement`, `add
       e.estEntrant
           ? 'Encaissement — ${Fmt.money(effectif)}'
           : 'Décaissement — ${Fmt.money(effectif)}',
+      // La date du règlement, et non celle de la saisie : c'est elle qui décide
+      // du mois d'imputation en comptabilité de caisse. L'horodatage porté par
+      // l'activité est celui du jour où l'on saisit, et ne répond donc pas à la
+      // question « quel mois cette somme a-t-elle touché ? ».
       e.solde
-          ? '${e.tiers} — soldé'
-          : '${e.tiers} — reste ${Fmt.money(e.reste)}',
+          ? '${e.tiers} — soldé le ${Fmt.jour(date)}'
+          : '${e.tiers} — ${Fmt.money(effectif)} le ${Fmt.jour(date)}, '
+            'reste ${Fmt.money(e.reste)}',
       e.estEntrant ? AppColors.green : AppColors.orange,
     );
     _emit();
