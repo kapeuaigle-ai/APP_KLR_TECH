@@ -122,4 +122,16 @@ void main() {
     expect(copie.montant, 450);
     expect(copie.moyen, 'virement');
   });
+
+  test('un engagement sans clé reglements se relit avec une liste vide', () {
+    final copie = Engagement.fromJson(<String, dynamic>{
+      'id': 5, 'sens': 'entrant', 'tiers': 'ACME', 'montant': 1000,
+      'echeance': DateTime(2026, 6, 30).toIso8601String(),
+    });
+    expect(copie.reglements, isEmpty);
+    expect(copie.reste, 1000);
+    expect(copie.description, '');
+    expect(copie.categorie, 'Autres');
+    expect(copie.annule, isFalse);
+  });
 }

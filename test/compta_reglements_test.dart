@@ -120,4 +120,63 @@ void main() {
     );
     expect(r.mouvements.map((m) => m.date.month).toList(), [2, 4, 6]);
   });
+
+  test('le libellé du rapport privilégie la description sur le numéro de pièce', () {
+    final achat = Engagement(
+      id: 1, sens: 'sortant', tiers: 'Grossiste', montant: 250,
+      echeance: DateTime(2026, 3, 10), description: 'Licences de développement',
+      documentNumero: 'KLR-F02-10012026',
+      reglements: [_r(250, DateTime(2026, 3, 10))]);
+
+    final rap = Comptabilite.rapport(
+      debut: DateTime(2026, 3, 1), fin: DateTime(2026, 3, 31),
+      engagements: [achat]);
+
+    expect(rap.mouvements.single.libelle, 'Licences de développement');
+  });
+
+  test('deux achats sur la même facture restent distinguables', () {
+    final a = Engagement(
+      id: 1, sens: 'sortant', tiers: 'Grossiste', montant: 250,
+      echeance: DateTime(2026, 3, 10), description: 'Licences',
+      documentNumero: 'KLR-F02-10012026',
+      reglements: [_r(250, DateTime(2026, 3, 10))]);
+    final b = Engagement(
+      id: 2, sens: 'sortant', tiers: 'Intégrateur', montant: 180,
+      echeance: DateTime(2026, 3, 11), description: 'Sous-traitance',
+      documentNumero: 'KLR-F02-10012026',
+      reglements: [_r(180, DateTime(2026, 3, 11))]);
+
+    final rap = Comptabilite.rapport(
+      debut: DateTime(2026, 3, 1), fin: DateTime(2026, 3, 31),
+      engagements: [a, b]);
+
+    expect(rap.mouvements.map((m) => m.libelle).toSet(), {'Licences', 'Sous-traitance'});
+  });
+
+  test('sans description, le numéro de pièce sert de libellé', () {
+    final f = Engagement(
+      id: 1, sens: 'entrant', tiers: 'ACME', montant: 800,
+      echeance: DateTime(2026, 2, 15), documentNumero: 'KLR-F01-10012026',
+      reglements: [_r(800, DateTime(2026, 2, 15))]);
+
+    final rap = Comptabilite.rapport(
+      debut: DateTime(2026, 2, 1), fin: DateTime(2026, 2, 28),
+      engagements: [f]);
+
+    expect(rap.mouvements.single.libelle, 'Facture KLR-F01-10012026');
+  });
+
+  test('sans description ni numéro, un libellé générique selon le sens', () {
+    final rap = Comptabilite.rapport(
+      debut: DateTime(2026, 2, 1), fin: DateTime(2026, 2, 28),
+      engagements: [
+        Engagement(id: 1, sens: 'entrant', tiers: 'X', montant: 100,
+            echeance: DateTime(2026, 2, 5), reglements: [_r(100, DateTime(2026, 2, 5))]),
+        Engagement(id: 2, sens: 'sortant', tiers: 'Y', montant: 50,
+            echeance: DateTime(2026, 2, 6), reglements: [_r(50, DateTime(2026, 2, 6))]),
+      ]);
+
+    expect(rap.mouvements.map((m) => m.libelle).toSet(), {'Encaissement', 'Décaissement'});
+  });
 }

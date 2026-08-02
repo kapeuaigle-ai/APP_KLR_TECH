@@ -189,11 +189,18 @@ class Comptabilite {
       final r = f.reglement, e = f.engagement;
       if (r.montant <= 0 || !dansPeriode(r.date, debut, fin)) continue;
       final entree = e.estEntrant;
+      // La description porte l'information utile quand elle existe — c'est le
+      // libellé que le manager a lui-même saisi, ou celui repris d'une dépense
+      // v1. Le numéro de pièce ne sert de libellé qu'à défaut : sans lui, trois
+      // achats rattachés à la même facture seraient indiscernables.
+      final libelle = e.description.isNotEmpty
+          ? e.description
+          : (e.documentNumero != null
+              ? '${entree ? 'Facture' : 'Achat'} ${e.documentNumero}'
+              : (entree ? 'Encaissement' : 'Décaissement'));
       mouvements.add(MouvementRapport(
         date: r.date,
-        libelle: e.documentNumero != null
-            ? '${entree ? 'Facture' : 'Achat'} ${e.documentNumero}'
-            : (e.description.isEmpty ? (entree ? 'Encaissement' : 'Décaissement') : e.description),
+        libelle: libelle,
         detail: e.tiers,
         montant: r.montant,
         entree: entree,
