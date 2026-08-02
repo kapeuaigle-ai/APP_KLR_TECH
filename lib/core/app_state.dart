@@ -556,7 +556,10 @@ class AppState extends ChangeNotifier {
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: p.montant, statut: 'cours',
-        lines: p.lines,
+        projetId: p.projetId,
+        // Copie profonde : chaque document possède ses lignes. Le partage
+        // d'instances ne survivrait pas à un rechargement depuis le disque.
+        lines: p.lines.map((l) => l.copie()).toList(),
       ));
       // Le BL ne porte aucun montant.
       documents['bl']!.add(DocumentItem(
@@ -564,7 +567,8 @@ class AppState extends ChangeNotifier {
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: 0, statut: 'cours',
-        lines: p.lines,
+        projetId: p.projetId,
+        lines: p.lines.map((l) => l.copie()).toList(),
       ));
       _logActivity('facture', 'Proforma ${p.numero} validée',
           'Facture et BL générés — ${p.client}', AppColors.primary);
