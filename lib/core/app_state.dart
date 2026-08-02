@@ -424,6 +424,22 @@ class AppState extends ChangeNotifier {
   /// `quantites` ; la phase 3 le lira depuis `AppSettings.typesProjet`.
   ModeAvancement modeDuProjet(Projet p) => ModeAvancement.quantites;
 
+  /// Enregistre la quantité livrée d'une ligne de proforma.
+  ///
+  /// La proforma est la SOURCE DE VÉRITÉ du livré : la facture et le BL,
+  /// figés à la validation, ne bougent pas. Le BL imprimé continue d'afficher
+  /// les quantités commandées (§ 12 de la conception).
+  void setQuantiteLivree(int proformaId, int indexLigne, int quantite) {
+    final m = documents['proforma']!.where((d) => d.id == proformaId);
+    if (m.isEmpty) return;
+    final lignes = m.first.lines;
+    if (indexLigne < 0 || indexLigne >= lignes.length) return;
+
+    final l = lignes[indexLigne];
+    l.qteLivree = quantite < 0 ? 0 : (quantite > l.qte ? l.qte : quantite);
+    _emit();
+  }
+
   Avancement avancementProjet(int projetId, {DateTime? now}) {
     final p = projets.firstWhere((x) => x.id == projetId);
     return Avancement.calculer(

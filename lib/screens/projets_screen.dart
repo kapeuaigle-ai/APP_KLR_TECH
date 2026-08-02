@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../core/theme.dart';
@@ -439,6 +440,25 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                 _ligneMontant('Montant attendu', avancement.montantAttendu),
                 _ligneMontant('Encaissé', avancement.montantEncaisse),
                 _ligneMontant('Reste dû', avancement.montantAttendu - avancement.montantEncaisse),
+
+                // ── Livraison ──────────────────────────────
+                // La proforma est la source de vérité du livré (§ 5.2 de la
+                // conception) : c'est elle qu'on modifie ici, jamais la
+                // facture ni le BL, déjà figés à la validation. Le BL imprimé
+                // continue d'afficher les quantités commandées (§ 12).
+                if (state.proformasDuProjet(projet.id).isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  const Divider(color: AppColors.border),
+                  const SizedBox(height: 12),
+                  Text('QUANTITÉS LIVRÉES', style: AppTheme.label),
+                  const SizedBox(height: 8),
+                  for (final p in state.proformasDuProjet(projet.id))
+                    for (var i = 0; i < p.lines.length; i++)
+                      _LigneLivraisonRow(
+                        key: ValueKey('${p.id}-$i'),
+                        proformaId: p.id, index: i, ligne: p.lines[i],
+                      ),
+                ],
               ]),
             )),
           ]);
@@ -456,3 +476,89 @@ Widget _ligneMontant(String label, double montant) => Padding(
     Text(Fmt.money(montant), style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
   ]),
 );
+
+// ─────────────────────────────────────────────────────────
+//  Une ligne de saisie de quantité livrée, dans la fiche projet.
+//  StatefulWidget avec son propre contrôleur : sans lui, chaque frappe
+//  ferait perdre le curseur au prochain rebuild (même défaut que les lignes
+//  de facturation dans document_create_screen.dart).
+// ─────────────────────────────────────────────────────────
+class _LigneLivraisonRow extends StatefulWidget {
+  final int proformaId;
+  final int index;
+  final LineItem ligne;
+  const _LigneLivraisonRow({
+    super.key, required this.proformaId, required this.index, required this.ligne,
+  });
+
+  @override
+  State<_LigneLivraisonRow> createState() => _LigneLivraisonRowState();
+}
+
+class _LigneLivraisonRowState extends State<_LigneLivraisonRow> {
+  late TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.ligne.qteLivree.toString());
+  }
+
+  @override
+  void didUpdateWidget(covariant _LigneLivraisonRow old) {
+    super.didUpdateWidget(old);
+    // Se resynchronise si la quantité a changé ailleurs (ex. une autre
+    // fenêtre, ou l'écrêtage appliqué par `setQuantiteLivree`).
+    if (old.ligne.qteLivree != widget.ligne.qteLivree) {
+      _ctrl.text = widget.ligne.qteLivree.toString();
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  void _valider() {
+    final v = int.tryParse(_ctrl.text) ?? 0;
+    context.read<AppState>().setQuantiteLivree(widget.proformaId, widget.index, v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(children: [
+        Expanded(child: Text(
+            widget.ligne.designation.isEmpty ? widget.ligne.ref : widget.ligne.designation,
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text1),
+            overflow: TextOverflow.ellipsis)),
+        const SizedBox(width: 8),
+        SizedBox(
+          width: 56,
+          child: TextField(
+            controller: _ctrl,
+            textAlign: TextAlign.center,
+            keyboardType: TextInputType.number,
+            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text1),
+            decoration: InputDecoration(
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+              filled: true, fillColor: AppColors.bg,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.border)),
+              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(6), borderSide: const BorderSide(color: AppColors.primary)),
+            ),
+            onSubmitted: (_) => _valider(),
+            onEditingComplete: _valider,
+            onTapOutside: (_) => _valider(),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text('/ ${widget.ligne.qte}', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+      ]),
+    );
+  }
+}
