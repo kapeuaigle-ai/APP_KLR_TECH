@@ -39,8 +39,18 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   // librement, ou champ pas encore rempli).
   int? _clientId;
   int? _projetId;
+  // Statut conservé tel quel à l'édition (§ défaut 2) : une nouvelle
+  // proforma démarre à 'cours', une existante garde le sien, y compris
+  // 'validee' — sans quoi l'enregistrer la dévaliderait silencieusement
+  // alors que sa facture et son BL restent émis.
+  String _statut = 'cours';
 
   bool get _isEdit => widget.existing != null;
+
+  // Une proforma validée a déjà produit une facture, un BL et un engagement
+  // rattachés à SON projet (§ défaut 2) : son lien de projet est figé avec
+  // eux, la réassigner ici décrocherait silencieusement l'argent du physique.
+  bool get _projetVerrouille => _statut == 'validee';
 
   double get _ht      => _lines.fold(0, (s, l) => s + l.total);
   double get _tvaAmt  => _tvaEnabled ? _ht * 0.05 : 0;
@@ -92,7 +102,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       clientAddr: _clientAddrCtrl.text,
       objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
       montant: _ttc,
-      statut: 'cours',
+      statut: _statut,
       projetId: _projetId,
       lines: _lines
           .where((l) => l.designation.trim().isNotEmpty)
@@ -204,6 +214,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       _dateCtrl.text = doc.dateAffichee;
       _clientId = doc.clientId;
       _projetId = doc.projetId;
+      _statut = doc.statut;
       _lines.addAll(doc.lines.map((l) =>
           LineItem(ref: l.ref, designation: l.designation, qte: l.qte, pu: l.pu)));
     }
@@ -282,6 +293,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     projets: state.projets,
     clientId: _clientId,
     projetId: _projetId,
+    projetVerrouille: _projetVerrouille,
     onProjetChanged: (v) => setState(() => _projetId = v),
   );
 
@@ -461,6 +473,7 @@ class _FormPanel extends StatelessWidget {
   final List<Projet> projets;
   final int? clientId;
   final int? projetId;
+  final bool projetVerrouille;
   final ValueChanged<int?> onProjetChanged;
 
   const _FormPanel({
@@ -472,7 +485,8 @@ class _FormPanel extends StatelessWidget {
     required this.onLineChanged, required this.clients,
     required this.onClientSelected,
     required this.projets, required this.clientId,
-    required this.projetId, required this.onProjetChanged,
+    required this.projetId, required this.projetVerrouille,
+    required this.onProjetChanged,
   });
 
   @override
@@ -496,18 +510,32 @@ class _FormPanel extends StatelessWidget {
           DropdownButtonFormField<int?>(
             initialValue: projetId,
             decoration: _inputDeco('Aucun projet'),
+            // Verrouillé : garde le projet courant même s'il ne passe plus
+            // les filtres ci-dessous (client changé, projet entretemps
+            // annulé), sinon la valeur affichée ne correspondrait à aucune
+            // entrée de la liste.
             items: [
               const DropdownMenuItem<int?>(value: null, child: Text('Aucun projet')),
               // Les projets du client sélectionné d'abord, puis les autres :
               // une proforma se rattache presque toujours à un projet du
               // même client.
               ...projets
-                  .where((p) => !p.annule)
-                  .where((p) => clientId == null || p.clientId == clientId)
+                  .where((p) => p.id == projetId ||
+                      (!p.annule && (clientId == null || p.clientId == clientId)))
                   .map((p) => DropdownMenuItem<int?>(value: p.id, child: Text(p.nom))),
             ],
-            onChanged: onProjetChanged,
+            // Une proforma validée a déjà produit sa facture, son BL et son
+            // engagement rattachés à ce projet (§ défaut 2) : le lien est
+            // figé, on ne le réassigne pas ici.
+            onChanged: projetVerrouille ? null : onProjetChanged,
           ),
+          if (projetVerrouille) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Proforma déjà validée : la facture et le BL sont émis, le projet ne peut plus changer.',
+              style: GoogleFonts.dmSans(fontSize: 10.5, color: AppColors.text3),
+            ),
+          ],
         ],
         const SizedBox(height: 10),
         _LabelField(label: 'ADRESSE CLIENT', controller: clientAddrCtrl, hint: 'Adresse du client', maxLines: 2),
