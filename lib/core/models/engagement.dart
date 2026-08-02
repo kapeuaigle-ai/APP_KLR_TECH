@@ -1,101 +1,107 @@
 import 'commun.dart';
 
-// ── Engagement : dette ou créance ────────────────────────
-/// Ce que l'entreprise doit (dette) ou ce qu'on lui doit (créance).
-///
-/// Tant qu'il est en cours, un engagement reste hors comptabilité : seule
-/// sa validation (= encaissement d'une créance, paiement d'une dette) le
-/// fait entrer au bilan, dans le mois de son règlement — la comptabilité
-/// de l'app étant tenue en base caisse.
-class Engagement {
-  final int id;
-  final String sens;   // 'creance' (on nous doit) | 'dette' (nous devons)
-  final String num;    // référence libre (n° de facture, de contrat…)
-  final String tiers;  // débiteur pour une créance, créancier pour une dette
-  final String description; // objet de l'engagement, affiché sous le tiers
-  final double montant;
-  String statut;       // 'cours' | 'retard' | 'paye'
-  final String echeance;     // 'dd/MM/yyyy'
-  String? dateReglement;     // 'dd/MM/yyyy' — rempli à la validation
-  final String categorie;    // catégorie de dépense (dettes)
-  /// Acompte déjà encaissé (créance) ou déjà versé (dette).
-  double acompte;
-  /// Date de l'acompte, 'dd/MM/yyyy'. C'est à ce mois-là que l'acompte entre
-  /// en comptabilité, la tenue étant en base caisse.
-  String? dateAcompte;
+/// Catégories analytiques d'un décaissement. Remplace `Expense.categories`.
+const kCategoriesDepense = [
+  'Achat matériel', 'Transport', 'Sous-traitance',
+  'Loyer & charges', 'Salaires', 'Autres',
+];
 
-  Engagement({
-    required this.id, required this.sens, required this.num,
-    required this.tiers, required this.montant, required this.statut,
-    required this.echeance, this.description = '',
-    this.dateReglement, this.categorie = 'Autres',
-    this.acompte = 0, this.dateAcompte,
+/// Un mouvement d'argent réel, daté. Partiel ou total.
+///
+/// C'est le SEUL objet qui fait bouger la comptabilité : un règlement d'un
+/// engagement entrant est un encaissement, celui d'un sortant un décaissement.
+class Reglement {
+  final int id;
+  DateTime date;
+  double montant;
+  String moyen; // 'especes' | 'virement' | 'mobile' | 'cheque'
+
+  Reglement({
+    required this.id, required this.date, required this.montant,
+    this.moyen = 'especes',
   });
 
-  bool get estCreance => sens == 'creance';
-
-  /// Validé ET daté : les deux conditions pour compter en comptabilité.
-  bool get regle => statut == 'paye' && dateReglement != null;
-
-  /// Acompte réellement pris en compte : il lui faut un montant ET une date,
-  /// sans quoi on ne saurait pas à quel mois le rattacher.
-  bool get aAcompte => acompte > 0 && dateAcompte != null;
-
-  /// Solde restant dû après déduction de l'acompte.
-  double get reste {
-    final r = montant - acompte;
-    return r < 0 ? 0 : r;
-  }
-
-  /// Part qui entre en comptabilité à la validation : le solde seulement,
-  /// l'acompte ayant déjà été compté au mois où il a été versé.
-  double get montantAuReglement => aAcompte ? reste : montant;
+  static const moyens = ['especes', 'virement', 'mobile', 'cheque'];
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'sens': sens, 'num': num, 'tiers': tiers,
-    'description': description, 'montant': montant, 'statut': statut,
-    'echeance': echeance, 'dateReglement': dateReglement, 'categorie': categorie,
-    'acompte': acompte, 'dateAcompte': dateAcompte,
+    'id': id, 'date': date.toIso8601String(),
+    'montant': montant, 'moyen': moyen,
   };
 
-  factory Engagement.fromJson(Map<String, dynamic> j) => Engagement(
-    id: j['id'], sens: j['sens'], num: j['num'], tiers: j['tiers'],
-    description: j['description'] ?? '', montant: toDouble(j['montant']),
-    statut: j['statut'], echeance: j['echeance'], dateReglement: j['dateReglement'],
-    categorie: j['categorie'] ?? 'Autres',
-    // Rétro-compatible : engagements enregistrés avant les acomptes.
-    acompte: j['acompte'] == null ? 0 : toDouble(j['acompte']),
-    dateAcompte: j['dateAcompte'],
+  factory Reglement.fromJson(Map<String, dynamic> j) => Reglement(
+    id: j['id'], date: DateTime.parse(j['date']),
+    montant: toDouble(j['montant']), moyen: j['moyen'] ?? 'especes',
   );
 }
 
-// ── Dépense (comptabilité) ───────────────────────────────
-class Expense {
+/// Une promesse de flux : un montant attendu, dans un sens, à une échéance.
+///
+/// Remplace à lui seul les quatre mécanismes d'avant : la créance, la dette,
+/// la facture encaissée et la dépense au comptant. Tout ce qui était `statut`,
+/// `acompte` ou `dateReglement` se déduit désormais de [reglements].
+class Engagement {
   final int id;
-  DateTime date;
-  String label;
-  double amount;
-  String category;
-  String? factureNumero; // null = dépense générale
+  final String sens;        // 'entrant' | 'sortant'
+  int? projetId;            // null = hors projet
+  String? documentNumero;   // facture d'origine, ou pièce fournisseur
+  int? clientId;            // renseigné si entrant
+  String tiers;             // fournisseur si sortant, nom du client si entrant
+  String description;
+  double montant;           // attendu
+  DateTime echeance;
+  String categorie;         // analytique, surtout pour les sortants
+  final List<Reglement> reglements;
+  bool annule;
 
-  Expense({
-    required this.id, required this.date, required this.label,
-    required this.amount, required this.category, this.factureNumero,
-  });
+  Engagement({
+    required this.id, required this.sens, required this.tiers,
+    required this.montant, required this.echeance,
+    this.projetId, this.documentNumero, this.clientId,
+    this.description = '', this.categorie = 'Autres',
+    List<Reglement>? reglements, this.annule = false,
+  }) : reglements = reglements ?? [];
+
+  bool get estEntrant => sens == 'entrant';
+
+  /// Somme réellement mouvementée.
+  double get regle => reglements.fold(0.0, (s, r) => s + r.montant);
+
+  /// Solde restant dû. Jamais négatif, même en cas de sur-règlement.
+  double get reste {
+    final r = montant - regle;
+    return r < 0 ? 0 : r;
+  }
+
+  bool get solde => reste == 0;
+
+  /// En retard à la date `now`. Le jour de l'échéance n'est pas un retard.
+  /// `now` est un paramètre, jamais `DateTime.now()` : c'est ce qui rend la
+  /// règle testable, comme `AppState.verifierCloture`.
+  bool enRetard(DateTime now) {
+    if (solde || annule) return false;
+    final jour = DateTime(now.year, now.month, now.day);
+    final ech = DateTime(echeance.year, echeance.month, echeance.day);
+    return jour.isAfter(ech);
+  }
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'date': date.toIso8601String(), 'label': label,
-    'amount': amount, 'category': category, 'factureNumero': factureNumero,
+    'id': id, 'sens': sens, 'projetId': projetId,
+    'documentNumero': documentNumero, 'clientId': clientId,
+    'tiers': tiers, 'description': description, 'montant': montant,
+    'echeance': echeance.toIso8601String(), 'categorie': categorie,
+    'reglements': reglements.map((r) => r.toJson()).toList(),
+    'annule': annule,
   };
 
-  factory Expense.fromJson(Map<String, dynamic> j) => Expense(
-    id: j['id'], date: DateTime.parse(j['date']), label: j['label'],
-    amount: (j['amount'] as num).toDouble(), category: j['category'],
-    factureNumero: j['factureNumero'],
+  factory Engagement.fromJson(Map<String, dynamic> j) => Engagement(
+    id: j['id'], sens: j['sens'], projetId: j['projetId'],
+    documentNumero: j['documentNumero'], clientId: j['clientId'],
+    tiers: j['tiers'], description: j['description'] ?? '',
+    montant: toDouble(j['montant']),
+    echeance: DateTime.parse(j['echeance']),
+    categorie: j['categorie'] ?? 'Autres',
+    reglements: (j['reglements'] as List? ?? [])
+        .map((r) => Reglement.fromJson(r)).toList(),
+    annule: j['annule'] ?? false,
   );
-
-  static const categories = [
-    'Achat matériel', 'Transport', 'Sous-traitance',
-    'Loyer & charges', 'Salaires', 'Autres',
-  ];
 }
