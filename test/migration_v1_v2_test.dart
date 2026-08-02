@@ -224,4 +224,39 @@ void main() {
     expect(_parTiers(v2, 'GAMMA')!['reglements'], hasLength(1));
     expect(_parTiers(v2, 'Fournisseur X')!['reglements'], hasLength(2));
   });
+
+  test('un montant corrompu ne fait pas échouer la migration', () {
+    final v1 = _v1();
+    (v1['engagements'] as List).add(<String, dynamic>{
+      'id': 15, 'sens': 'creance', 'num': 'W', 'tiers': 'OMEGA',
+      'description': '', 'montant': null, 'statut': 'cours',
+      'echeance': '30/06/2026', 'dateReglement': null, 'categorie': 'Autres',
+      'acompte': 'illisible', 'dateAcompte': '03/03/2026',
+    });
+    (v1['documents'] as Map)['facture'] = List<Map<String, dynamic>>.from(
+        (v1['documents'] as Map)['facture'] as List)
+      ..add(<String, dynamic>{
+        'id': 3, 'numero': 'KLR-F03-12012026', 'date': '12/01/2026',
+        'clientId': 7, 'client': 'THETA', 'clientAddr': '', 'objet': 'X',
+        'montant': 100.0, 'statut': 'cours',
+        'lines': [
+          <String, dynamic>{'ref': 'A', 'designation': 'A', 'qte': null, 'pu': 50.0},
+        ],
+        'encaissee': false, 'dateEncaissement': null, 'dateAffichee': '',
+      });
+
+    final v2 = migrerV1versV2(v1);
+
+    final omega = _parTiers(v2, 'OMEGA')!;
+    expect(omega['montant'], 0.0, reason: 'un montant illisible vaut 0, sans crash');
+    expect((omega['reglements'] as List), isEmpty,
+        reason: 'un acompte illisible ne produit pas de règlement');
+
+    final theta = _engs(v2).firstWhere((e) => e['documentNumero'] == 'KLR-F03-12012026');
+    expect(theta['montant'], 0.0, reason: 'une quantité illisible vaut 0');
+
+    // Les enregistrements sains restent intacts.
+    expect(_parTiers(v2, 'GAMMA')!['reglements'], hasLength(1));
+    expect(_parTiers(v2, 'Fournisseur X')!['reglements'], hasLength(2));
+  });
 }

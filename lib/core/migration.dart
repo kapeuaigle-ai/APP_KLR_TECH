@@ -15,10 +15,17 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
   final engagements = <Map<String, dynamic>>[];
 
   // ── 1. Les engagements v1 (créances et dettes) ──────────
+  // On conserve la correspondance v1 ⇄ v2 explicitement, par paires : un
+  // appariement par index se romprait en silence si quelqu'un ajoutait plus
+  // tard un filtre à cette boucle, et `_apparier` fusionnerait alors une
+  // facture dans le mauvais engagement.
   final v1Engagements = (j['engagements'] as List? ?? [])
       .cast<Map<String, dynamic>>();
+  final paires = <({Map<String, dynamic> v1, Map<String, dynamic> v2})>[];
   for (final e in v1Engagements) {
-    engagements.add(_depuisEngagementV1(e, generateur));
+    final converti = _depuisEngagementV1(e, generateur);
+    engagements.add(converti);
+    paires.add((v1: e, v2: converti));
   }
 
   // ── 2. Les dépenses : sortants réglés le jour même ──────
@@ -30,10 +37,10 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
   final documents = (j['documents'] as Map? ?? {}).cast<String, dynamic>();
   final factures = (documents['facture'] as List? ?? [])
       .cast<Map<String, dynamic>>();
-  final creancesAppariees = <int>{};
+  final creancesAppariees = <Map<String, dynamic>>{};
 
   for (final f in factures) {
-    final apparie = _apparier(f, v1Engagements, engagements, creancesAppariees);
+    final apparie = _apparier(f, paires, creancesAppariees);
     if (apparie != null) {
       // Fusion : la créance saisie à la main EST cette facture.
       apparie['documentNumero'] = f['numero'];
@@ -145,11 +152,7 @@ Map<String, dynamic> _depuisDepenseV1(Map<String, dynamic> d, _Ids ids) {
 }
 
 Map<String, dynamic> _depuisFactureV1(Map<String, dynamic> f, _Ids ids) {
-  // Le montant retenu est la SOMME DES LIGNES, et non `f['montant']` : c'est
-  // ce que `Comptabilite.factureHt` utilisait en v1. Prendre l'autre ferait
-  // diverger le bilan après migration.
-  final montant = (f['lines'] as List? ?? []).fold<double>(
-      0.0, (s, l) => s + (l['qte'] as num) * _double(l['pu']));
+  final montant = _montantFacture(f);
   final encaissee = f['encaissee'] == true;
   final dateEnc = _jour(f['dateEncaissement']);
 
@@ -175,48 +178,54 @@ Map<String, dynamic> _depuisFactureV1(Map<String, dynamic> f, _Ids ids) {
 /// qui désigne déjà cette facture, pour ne pas créer de doublon.
 Map<String, dynamic>? _apparier(
   Map<String, dynamic> facture,
-  List<Map<String, dynamic>> v1Engagements,
-  List<Map<String, dynamic>> v2Engagements,
-  Set<int> dejaAppariees,
+  List<({Map<String, dynamic> v1, Map<String, dynamic> v2})> paires,
+  Set<Map<String, dynamic>> dejaAppariees,
 ) {
   final numero = _normaliser(facture['numero'] ?? '');
   if (numero.isEmpty) return null;
 
   // 1. La référence libre contient le numéro de facture : cas certain.
-  for (var i = 0; i < v1Engagements.length; i++) {
-    final e = v1Engagements[i];
-    if (e['sens'] != 'creance' || dejaAppariees.contains(i)) continue;
-    if (_normaliser(e['num'] ?? '').contains(numero)) {
-      dejaAppariees.add(i);
-      return v2Engagements[i];
+  for (final p in paires) {
+    if (p.v1['sens'] != 'creance' || dejaAppariees.contains(p.v2)) continue;
+    if (_normaliser(p.v1['num'] ?? '').contains(numero)) {
+      dejaAppariees.add(p.v2);
+      return p.v2;
     }
   }
 
   // 2. Même client ET même montant : cas ambigu, fusionné et journalisé.
   //    Jamais sur le seul montant — deux factures de 500 000 F à des clients
   //    différents ne doivent pas fusionner.
-  final montant = (facture['lines'] as List? ?? []).fold<double>(
-      0.0, (s, l) => s + (l['qte'] as num) * _double(l['pu']));
+  final montant = _montantFacture(facture);
   final client = _normaliser(facture['client'] ?? '');
   if (client.isEmpty) return null;
 
-  for (var i = 0; i < v1Engagements.length; i++) {
-    final e = v1Engagements[i];
-    if (e['sens'] != 'creance' || dejaAppariees.contains(i)) continue;
-    if (_normaliser(e['tiers'] ?? '') == client && _double(e['montant']) == montant) {
-      dejaAppariees.add(i);
-      final fusionne = v2Engagements[i];
-      fusionne['fusionAmbigue'] = true; // lu par AppState pour journaliser
-      return fusionne;
+  for (final p in paires) {
+    if (p.v1['sens'] != 'creance' || dejaAppariees.contains(p.v2)) continue;
+    if (_normaliser(p.v1['tiers'] ?? '') == client &&
+        _double(p.v1['montant']) == montant) {
+      dejaAppariees.add(p.v2);
+      p.v2['fusionAmbigue'] = true; // lu par AppState pour journaliser
+      return p.v2;
     }
   }
   return null;
 }
 
+/// Montant d'une facture : la SOMME DE SES LIGNES, et non son champ
+/// `montant`. C'est ce que `Comptabilite.factureHt` calculait en v1 ; prendre
+/// l'autre ferait diverger le bilan après migration.
+double _montantFacture(Map<String, dynamic> f) => (f['lines'] as List? ?? [])
+    .whereType<Map>()
+    .fold<double>(0.0, (s, l) => s + _double(l['qte']) * _double(l['pu']));
+
 // ── Outils ────────────────────────────────────────────────
 
 class _Ids {
-  int _n = DateTime.now().millisecondsSinceEpoch;
+  // Microsecondes, et non millisecondes : le reste de l'application mint ses
+  // identifiants en millisecondes, et le compteur prend ici de l'avance d'une
+  // unité par enregistrement converti.
+  int _n = DateTime.now().microsecondsSinceEpoch;
   int suivant() => _n++;
 }
 
@@ -225,7 +234,10 @@ Map<String, dynamic> _reglement(int id, DateTime date, double montant) => {
   'montant': montant, 'moyen': 'especes',
 };
 
-double _double(dynamic v) => (v as num).toDouble();
+/// JSON → double, tolérant. Une valeur absente ou d'un type inattendu vaut 0.
+/// Même règle que pour les dates : un champ corrompu doit dégrader
+/// l'enregistrement concerné, jamais empêcher l'ouverture de la sauvegarde.
+double _double(dynamic v) => v is num ? v.toDouble() : 0.0;
 
 /// 'dd/MM/yyyy' → DateTime, ou null si inexploitable.
 DateTime? _jour(dynamic s) {
