@@ -45,4 +45,20 @@ void main() {
     expect(c.projetId, 42);
     expect(c.lines.first.qteLivree, 6);
   });
+
+  test('un document d\'une sauvegarde antérieure à la phase 2 se charge sans '
+      'projetId ni qteLivree dans le JSON', () {
+    // JSON tel qu'écrit par le code d'avant cette phase : ni la clé
+    // 'projetId' sur le document, ni 'qteLivree' sur ses lignes n'existent.
+    final c = DocumentItem.fromJson({
+      'id': 1, 'numero': 'KLR-P01-10012026', 'date': '10/01/2026',
+      'clientId': 5, 'client': 'ACME', 'clientAddr': '', 'objet': 'PC',
+      'montant': 3000.0, 'statut': 'cours',
+      'lines': [
+        {'ref': 'PC', 'designation': 'Ordinateur', 'qte': 10, 'pu': 300.0},
+      ],
+    });
+    expect(c.projetId, isNull);
+    expect(c.lines.first.qteLivree, 0);
+  });
 }
