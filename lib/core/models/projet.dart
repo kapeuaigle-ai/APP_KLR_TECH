@@ -50,6 +50,11 @@ class Projet {
     List<Jalon>? jalons, this.avancementManuel = 0, this.annule = false,
   }) : jalons = jalons ?? [];
 
+  /// Faux si `finPrevue` est antérieure à `debut` : une durée négative rend
+  /// tout ce qui se construit sur la période (Gantt, retards) incohérent.
+  /// Un projet d'un seul jour (`finPrevue == debut`) reste valide.
+  bool get periodeValide => !finPrevue.isBefore(debut);
+
   Map<String, dynamic> toJson() => {
     'id': id, 'nom': nom, 'typeId': typeId,
     'clientId': clientId, 'client': client,

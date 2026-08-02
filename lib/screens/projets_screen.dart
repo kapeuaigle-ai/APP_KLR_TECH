@@ -285,6 +285,7 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
   DateTime debut = existing?.debut ?? DateTime.now();
   DateTime finPrevue = existing?.finPrevue ?? DateTime.now().add(const Duration(days: 30));
   var erreur = false;
+  var erreurDates = false;
 
   showDialog<void>(
     context: context,
@@ -345,6 +346,11 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
               Text('Renseignez un nom de projet.',
                   style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
             ],
+            if (erreurDates) ...[
+              const SizedBox(height: 12),
+              Text('La fin prévue ne peut pas être antérieure au début.',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+            ],
           ]),
         ),
       ),
@@ -359,6 +365,9 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
           onTap: () {
             final nom = nomCtrl.text.trim();
             if (nom.isEmpty) { setLocal(() => erreur = true); return; }
+            // Même règle que Projet.periodeValide (§ défaut 4) : une durée
+            // négative rendrait le Gantt et tous les retards incohérents.
+            if (finPrevue.isBefore(debut)) { setLocal(() => erreurDates = true); return; }
             if (existing == null) {
               state.addProjet(Projet(
                 id: DateTime.now().millisecondsSinceEpoch,

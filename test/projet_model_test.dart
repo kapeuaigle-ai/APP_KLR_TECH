@@ -58,4 +58,29 @@ void main() {
     expect(ModeAvancement.values.map((m) => m.name).toSet(),
         {'quantites', 'jalons', 'duree', 'manuel'});
   });
+
+  // Défaut 4 : rien n'empêchait finPrevue < debut ; la durée du projet
+  // devenait négative et tout ce qui se construit dessus (Gantt, retards)
+  // n'avait plus de sens.
+  group('periodeValide', () {
+    Projet projet({required DateTime debut, required DateTime finPrevue}) => Projet(
+          id: 1, nom: 'Fourniture matériel', typeId: 'fourniture',
+          clientId: 5, client: 'ACME', debut: debut, finPrevue: finPrevue,
+        );
+
+    test('finPrevue après debut : valide', () {
+      final p = projet(debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30));
+      expect(p.periodeValide, isTrue);
+    });
+
+    test('finPrevue le même jour que debut : valide (projet d\'un jour)', () {
+      final p = projet(debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 3, 1));
+      expect(p.periodeValide, isTrue);
+    });
+
+    test('finPrevue avant debut : invalide', () {
+      final p = projet(debut: DateTime(2026, 6, 30), finPrevue: DateTime(2026, 3, 1));
+      expect(p.periodeValide, isFalse);
+    });
+  });
 }
