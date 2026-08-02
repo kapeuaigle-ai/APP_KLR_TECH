@@ -21,6 +21,7 @@ class Avancement {
   final double montantAttendu;
   final double montantEncaisse;
   final double montantDepense;
+  final double montantRestant;
   final StatutProjet statut;
   final bool enRetardLivraison;
   final bool enRetardPaiement;
@@ -28,7 +29,8 @@ class Avancement {
   const Avancement({
     required this.physique, required this.financier,
     required this.montantAttendu, required this.montantEncaisse,
-    required this.montantDepense, required this.statut,
+    required this.montantDepense, required this.montantRestant,
+    required this.statut,
     required this.enRetardLivraison, required this.enRetardPaiement,
   });
 
@@ -57,8 +59,14 @@ class Avancement {
     final encaisse = entrants.fold(0.0, (s, e) => s + e.regle);
     final depense = sortants.fold(0.0, (s, e) => s + e.regle);
 
+    // `restant` part de `e.reste`, déjà écrêté sous le centime par
+    // `Engagement.reste` — jamais d'un ratio recalculé sur les sommes brutes
+    // de `encaisse`, qui réintroduirait le résidu flottant IEEE-754 que la
+    // Phase 1 a déjà corrigé une fois (voir le commentaire sur `reste`).
+    final restant = entrants.fold(0.0, (s, e) => s + e.reste);
     final physique = physiqueForce ?? _physique(projet, mode, proformas, now);
-    final financier = attendu == 0 ? 0.0 : encaisse / attendu;
+    final financier =
+        attendu == 0 ? 0.0 : ((attendu - restant) / attendu).clamp(0.0, 1.0);
 
     final finDepassee = now.isAfter(DateTime(
         projet.finPrevue.year, projet.finPrevue.month, projet.finPrevue.day));
@@ -69,6 +77,7 @@ class Avancement {
       montantAttendu: attendu,
       montantEncaisse: encaisse,
       montantDepense: depense,
+      montantRestant: restant,
       statut: _statut(projet, physique, financier),
       enRetardLivraison: !projet.annule && finDepassee && physique < 1,
       enRetardPaiement: entrants.any((e) => e.enRetard(now)),

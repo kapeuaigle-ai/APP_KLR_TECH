@@ -204,7 +204,7 @@ class _ProjetCard extends StatelessWidget {
           Row(children: [
             Text('Reste dû', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
             const Spacer(),
-            Text(Fmt.money(avancement.montantAttendu - avancement.montantEncaisse),
+            Text(Fmt.money(avancement.montantRestant),
                 style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700,
                     color: avancement.enRetardPaiement ? AppColors.red : AppColors.text1)),
           ]),
@@ -439,7 +439,7 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                 const SizedBox(height: 16),
                 _ligneMontant('Montant attendu', avancement.montantAttendu),
                 _ligneMontant('Encaissé', avancement.montantEncaisse),
-                _ligneMontant('Reste dû', avancement.montantAttendu - avancement.montantEncaisse),
+                _ligneMontant('Reste dû', avancement.montantRestant),
 
                 // ── Livraison ──────────────────────────────
                 // La proforma est la source de vérité du livré (§ 5.2 de la

@@ -128,6 +128,45 @@ void main() {
       expect(a.montantAttendu, 1000);
       expect(a.financier, closeTo(0.5, 0.0001));
     });
+
+    // Régression : Phase 1 a déjà corrigé ce résidu flottant sur
+    // `Engagement.reste` (voir son commentaire). `Avancement.financier` ne
+    // doit pas réintroduire le même bug en recalculant un ratio brut à
+    // partir de sommes non écrêtées.
+    test('un résidu flottant sous le centime ne bloque pas le statut soldé', () {
+      // 132.81 + 711.54 + 155.65 = 999.9999999999999 en IEEE-754, soit un
+      // résidu de 1.1368683772161603e-13 sur un total de 1000 — un engagement
+      // pourtant intégralement réglé.
+      final e1 = _entrant(1, 1000, [
+        _r(132.81, DateTime(2026, 4, 1)),
+        _r(711.54, DateTime(2026, 4, 2)),
+        _r(155.65, DateTime(2026, 4, 3)),
+      ]);
+      expect(e1.reste, 0); // la protection de Phase 1 tient toujours
+      expect(e1.solde, isTrue);
+
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [e1],
+        now: DateTime(2026, 4, 1),
+        physiqueForce: 1,
+      );
+      expect(a.financier, 1);
+      expect(a.statut, StatutProjet.solde);
+      expect(a.montantRestant, 0);
+    });
+
+    test('un solde réellement dû de 0.02 est bien reporté, pas avalé', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [_entrant(1, 1000, [_r(999.98, DateTime(2026, 4, 1))])],
+        now: DateTime(2026, 4, 1),
+        physiqueForce: 1,
+      );
+      expect(a.montantRestant, closeTo(0.02, 0.0001));
+      expect(a.financier, lessThan(1));
+      expect(a.statut, StatutProjet.livreNonPaye);
+    });
   });
 
   group('marge et retard', () {
