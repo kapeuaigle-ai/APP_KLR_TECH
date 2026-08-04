@@ -84,8 +84,7 @@ class Avancement {
     );
   }
 
-  /// Avancement physique selon le mode. En phase 2, seul `quantites` est
-  /// implémenté ; les trois autres arrivent en phase 3 et rendent 0 d'ici là.
+  /// Avancement physique selon le mode.
   static double _physique(Projet projet, ModeAvancement mode,
       List<DocumentItem> proformas, DateTime now) {
     switch (mode) {
@@ -98,10 +97,32 @@ class Avancement {
           }
         }
         return total == 0 ? 0.0 : (livre / total).clamp(0.0, 1.0);
+
       case ModeAvancement.jalons:
+        // Pondéré par `poids`, pas par simple décompte : un jalon lourd fait
+        // avancer plus qu'un jalon léger.
+        var total = 0.0, fait = 0.0;
+        for (final j in projet.jalons) {
+          total += j.poids;
+          if (j.fait) fait += j.poids;
+        }
+        return total == 0 ? 0.0 : (fait / total).clamp(0.0, 1.0);
+
       case ModeAvancement.duree:
+        // Fraction du temps écoulé entre `debut` et `finPrevue`, écrêtée à
+        // [0, 1]. `debut == finPrevue` (durée nulle) ne doit pas diviser
+        // par zéro : avant strictement le terme, 0 ; sinon, 1.
+        final debut = DateTime(projet.debut.year, projet.debut.month, projet.debut.day);
+        final fin = DateTime(
+            projet.finPrevue.year, projet.finPrevue.month, projet.finPrevue.day);
+        final jour = DateTime(now.year, now.month, now.day);
+        final duree = fin.difference(debut).inDays;
+        if (duree <= 0) return jour.isBefore(fin) ? 0.0 : 1.0;
+        final ecoule = jour.difference(debut).inDays;
+        return (ecoule / duree).clamp(0.0, 1.0);
+
       case ModeAvancement.manuel:
-        return 0.0; // phase 3
+        return projet.avancementManuel.clamp(0.0, 1.0);
     }
   }
 
