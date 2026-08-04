@@ -48,7 +48,16 @@ class Avancement {
     required this.enRetardLivraison, required this.enRetardPaiement,
   });
 
-  double get marge => montantEncaisse - montantDepense;
+  /// Marge réalisée : encaissé moins décaissé, en base caisse.
+  ///
+  /// Un résidu inférieur au centime est ramené à zéro. Les deux termes somment
+  /// un nombre quelconque de règlements, et l'arithmétique flottante laisserait
+  /// sinon un projet à l'équilibre exact du mauvais côté du zéro — affiché en
+  /// rouge alors qu'il n'a rien perdu. Même précaution que `Engagement.reste`.
+  double get marge {
+    final m = montantEncaisse - montantDepense;
+    return m.abs() < 0.01 ? 0 : m;
+  }
 
   /// Calcule tout l'état d'un projet à la date `now`.
   ///
