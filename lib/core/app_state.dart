@@ -395,6 +395,16 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Rattache (ou détache, si `projetId` est nul) un engagement existant à un
+  /// projet. C'est le seul moyen de lier un engagement créé avant que son
+  /// projet n'existe — la création elle-même propose déjà le choix.
+  void rattacherProjetEngagement(int id, int? projetId) {
+    final e = _engagement(id);
+    if (e == null) return;
+    e.projetId = projetId;
+    _emit();
+  }
+
   // ── Projets ────────────────────────────────────────────
   void addProjet(Projet p) {
     projets.insert(0, p);
@@ -407,6 +417,23 @@ class AppState extends ChangeNotifier {
     final i = projets.indexWhere((x) => x.id == p.id);
     if (i < 0) return;
     projets[i] = p;
+    _emit();
+  }
+
+  /// Annule un projet : il reste avec tout son historique, mais sort du
+  /// Kanban et du Gantt (§ 6.4/7 de la conception) — même logique que
+  /// `annulerEngagement`, appliquée à un projet plutôt qu'à un engagement.
+  void annulerProjet(int id) {
+    final p = _projet(id);
+    if (p == null) return;
+    p.annule = true;
+    _emit();
+  }
+
+  void reactiverProjet(int id) {
+    final p = _projet(id);
+    if (p == null) return;
+    p.annule = false;
     _emit();
   }
 

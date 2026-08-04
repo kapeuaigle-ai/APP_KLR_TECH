@@ -461,6 +461,41 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.text2),
                   onPressed: () => _ouvrirFormulaireProjet(ctx, state, existing: projet),
                 ),
+                PopupMenuButton<String>(
+                  tooltip: 'Actions',
+                  icon: const Icon(Icons.more_vert, size: 18, color: AppColors.text2),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  color: Colors.white,
+                  onSelected: (action) {
+                    switch (action) {
+                      case 'annuler':
+                        state.annulerProjet(projet.id);
+                      case 'reactiver':
+                        state.reactiverProjet(projet.id);
+                      case 'supprimer':
+                        _confirmerSuppressionProjet(ctx, state, projet);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (!projet.annule)
+                      PopupMenuItem(value: 'annuler', child: Row(children: [
+                        const Icon(Icons.block, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ]))
+                    else
+                      PopupMenuItem(value: 'reactiver', child: Row(children: [
+                        const Icon(Icons.undo, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                    PopupMenuItem(value: 'supprimer', child: Row(children: [
+                      const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
+                      const SizedBox(width: 8),
+                      Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
+                    ])),
+                  ],
+                ),
                 IconButton(
                   tooltip: 'Fermer',
                   icon: const Icon(Icons.close, size: 18, color: AppColors.text2),
@@ -510,6 +545,61 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
           ]);
         }),
       ),
+    ),
+  );
+}
+
+/// Supprimer un projet ne supprime ni ses documents ni ses engagements —
+/// `AppState.deleteProjet` les délie seulement (`projetId` remis à `null`).
+/// La confirmation le dit concrètement, avec les comptes : un manager qui
+/// supprime un projet portant une facture ne doit pas croire qu'elle
+/// disparaît avec lui. Même cérémonie que `_confirmDeleteClient` dans
+/// clients_screen.dart et `_confirmerSuppressionType` dans
+/// parametres_screen.dart.
+void _confirmerSuppressionProjet(BuildContext context, AppState state, Projet projet) {
+  final docs = state.documents.values
+      .expand((liste) => liste)
+      .where((d) => d.projetId == projet.id)
+      .length;
+  final engs = state.engagementsDuProjet(projet.id).length;
+
+  final String message;
+  if (docs == 0 && engs == 0) {
+    message = 'Ce projet n\'a aucun document ni engagement rattaché. '
+        '« ${projet.nom} » sera supprimé.';
+  } else {
+    final parts = <String>[
+      if (docs > 0) '$docs ${docs > 1 ? 'documents' : 'document'}',
+      if (engs > 0) '$engs ${engs > 1 ? 'engagements' : 'engagement'}',
+    ];
+    final pluriel = (docs + engs) > 1;
+    message = '${parts.join(' et ')} ${pluriel ? 'sont rattachés' : 'est rattaché'} '
+        'à « ${projet.nom} ». ${pluriel ? 'Ils' : 'Il'} ne '
+        '${pluriel ? 'seront' : 'sera'} pas supprimés — seulement détachés de ce projet.';
+  }
+
+  showDialog<void>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer ce projet ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(message, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            state.deleteProjet(projet.id);
+            Navigator.of(dctx).pop(); // ferme la confirmation
+            Navigator.of(context).pop(); // ferme aussi la fiche : le projet n'existe plus
+          },
+          child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
     ),
   );
 }
