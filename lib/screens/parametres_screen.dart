@@ -539,7 +539,7 @@ class _TypesProjetCard extends StatelessWidget {
             type: t,
             dernier: dernierType,
             onEdit: () => _ouvrirFormulaireType(context, state, existing: t),
-            onDelete: () => state.supprimerTypeProjet(t.id),
+            onDelete: () => _confirmerSuppressionType(context, state, t),
           ),
         ),
       if (dernierType)
@@ -592,6 +592,48 @@ class _TypeProjetRow extends StatelessWidget {
       ]),
     );
   }
+}
+
+/// Supprimer un type rebascule silencieusement ses projets sur le premier
+/// type restant (`AppState.supprimerTypeProjet`) — ce qui change aussi leur
+/// mode d'avancement, donc leur pourcentage affiché et leur colonne Kanban.
+/// Même ceremonie que `_confirmDeleteClient` dans clients_screen.dart, mais
+/// en nommant concrètement ce qui va changer.
+void _confirmerSuppressionType(BuildContext context, AppState state, TypeProjet type) {
+  final affectes = state.projets.where((p) => p.typeId == type.id).length;
+  final repli = state.settings.typesProjet.firstWhere((t) => t.id != type.id);
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer ce type ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        affectes == 0
+            ? '« ${type.libelle} » n\'est utilisé par aucun projet. Il sera supprimé.'
+            : '« ${type.libelle} » est utilisé par $affectes '
+              '${affectes > 1 ? 'projets' : 'projet'}. ${affectes > 1 ? 'Ils basculeront' : 'Il basculera'} '
+              'sur « ${repli.libelle} », et ${affectes > 1 ? 'leur' : 'son'} avancement sera '
+              'désormais mesuré par « ${repli.mode.libelle} » au lieu de « ${type.mode.libelle} ».',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            state.supprimerTypeProjet(type.id);
+            Navigator.of(ctx).pop();
+          },
+          child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
 }
 
 const _couleursTypeProjet = [
