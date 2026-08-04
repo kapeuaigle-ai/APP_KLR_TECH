@@ -2,14 +2,14 @@ import 'models.dart';
 
 /// Statut d'un projet. Déduit, jamais saisi — sauf l'annulation, seul état
 /// qu'aucune donnée ne permet de deviner.
-enum StatutProjet { annule, aDemarrer, solde, livreNonPaye, enCours }
+enum StatutProjet { annule, aDemarrer, termine, termineNonPaye, enCours }
 
 extension StatutProjetLibelle on StatutProjet {
   String get libelle => switch (this) {
     StatutProjet.annule => 'Annulé',
     StatutProjet.aDemarrer => 'À démarrer',
-    StatutProjet.solde => 'Soldé',
-    StatutProjet.livreNonPaye => 'Livré — reste à encaisser',
+    StatutProjet.termine => 'Terminé',
+    StatutProjet.termineNonPaye => 'Terminé — reste à encaisser',
     StatutProjet.enCours => 'En cours',
   };
 }
@@ -101,7 +101,7 @@ class Avancement {
       montantEncaisse: encaisse,
       montantDepense: depense,
       montantRestant: restant,
-      statut: _statut(projet, physique, financier),
+      statut: _statut(projet, physique, financier, attendu),
       enRetardLivraison: !projet.annule && finDepassee && physique < 1,
       enRetardPaiement: entrants.any((e) => e.enRetard(now)),
     );
@@ -172,11 +172,19 @@ class Avancement {
 
   /// Les règles sont évaluées dans l'ordre : la première qui correspond
   /// l'emporte (§ 6.3 de la conception).
-  static StatutProjet _statut(Projet projet, double physique, double financier) {
+  ///
+  /// `attendu == 0` signifie qu'aucun engagement entrant n'est rattaché — un
+  /// projet interne, ou une proforma pas encore validée. Rien n'est alors dû,
+  /// et le projet doit pouvoir se terminer : sans ce cas, `financier` reste
+  /// nul à jamais et le projet resterait bloqué à « reste à encaisser » en
+  /// annonçant un encaissement qui n'a jamais été attendu.
+  static StatutProjet _statut(
+      Projet projet, double physique, double financier, double attendu) {
     if (projet.annule) return StatutProjet.annule;
     if (physique == 0 && financier == 0) return StatutProjet.aDemarrer;
-    if (physique >= 1 && financier >= 1) return StatutProjet.solde;
-    if (physique >= 1) return StatutProjet.livreNonPaye;
+    final rienARecevoir = attendu == 0 || financier >= 1;
+    if (physique >= 1 && rienARecevoir) return StatutProjet.termine;
+    if (physique >= 1) return StatutProjet.termineNonPaye;
     return StatutProjet.enCours;
   }
 }

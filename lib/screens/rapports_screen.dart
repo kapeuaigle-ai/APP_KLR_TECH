@@ -351,8 +351,8 @@ class _ProjetsTab extends StatelessWidget {
   static const _couleurs = {
     StatutProjet.aDemarrer: (AppColors.text3, AppColors.grayBg),
     StatutProjet.enCours: (AppColors.blue, AppColors.blueBg),
-    StatutProjet.livreNonPaye: (AppColors.orange, AppColors.orangeBg),
-    StatutProjet.solde: (AppColors.green, AppColors.greenBg),
+    StatutProjet.termineNonPaye: (AppColors.orange, AppColors.orangeBg),
+    StatutProjet.termine: (AppColors.green, AppColors.greenBg),
   };
 
   static final Map<String, BadgeCfg> _badges = {
@@ -375,7 +375,7 @@ class _ProjetsTab extends StatelessWidget {
     final top = [...projets]..sort((a, b) => b.debut.compareTo(a.debut));
     final affiches = top.take(5).toList();
 
-    final termines = projets.where((p) => avancements[p.id]!.statut == StatutProjet.solde).length;
+    final termines = projets.where((p) => avancements[p.id]!.statut == StatutProjet.termine).length;
     final enCours = projets.where((p) => avancements[p.id]!.statut == StatutProjet.enCours).length;
     final tauxCompletion = projets.isEmpty ? 0 : (projets.fold<double>(
             0, (s, p) => s + avancements[p.id]!.physique) / projets.length * 100).round();

@@ -47,19 +47,32 @@ void main() {
     expect(find.text('Fourniture ACME'), findsOneWidget);
   });
 
-  testWidgets('tout livré, rien encaissé : colonne « Livré — reste à encaisser »', (tester) async {
+  testWidgets('tout livré, rien encaissé : colonne « Terminé — reste à encaisser »', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 10));
     expect(find.textContaining('reste à encaisser'), findsWidgets);
   });
 
-  testWidgets('tout livré et tout encaissé : colonne « Soldé »', (tester) async {
+  testWidgets('tout livré et tout encaissé : colonne « Terminé »', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 10, encaisse: 3000));
-    expect(find.text('Soldé'), findsWidgets);
+    expect(find.text('Terminé'), findsWidgets);
   });
 
   testWidgets('les cartes ne sont plus déplaçables', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 5));
     expect(find.byType(Draggable), findsNothing,
         reason: 'la colonne est deduite : la deplacer a la main n\'aurait aucun sens');
+  });
+
+  // Le mot « Livré » ne parlait que de fourniture ; la barre physique est
+  // commune aux quatre modes d'avancement (quantités, jalons, durée,
+  // manuel), d'où le renommage en « Réalisé ». « Encaissé » reste inchangé :
+  // l'argent est de l'argent, quel que soit le type de projet.
+  testWidgets('la fiche projet affiche les libellés « Réalisé » et « Encaissé »', (tester) async {
+    await _pump(tester, _avecProjet(qteLivree: 5, encaisse: 900));
+    await tester.tap(find.text('Fourniture ACME'));
+    await tester.pumpAndSettle();
+    expect(find.text('Réalisé'), findsWidgets);
+    expect(find.text('Encaissé'), findsWidgets);
+    expect(find.text('Livré'), findsNothing);
   });
 }

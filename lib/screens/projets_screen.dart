@@ -24,8 +24,8 @@ class ProjetsScreen extends StatelessWidget {
   static const _colonnes = [
     StatutProjet.aDemarrer,
     StatutProjet.enCours,
-    StatutProjet.livreNonPaye,
-    StatutProjet.solde,
+    StatutProjet.termineNonPaye,
+    StatutProjet.termine,
   ];
 
   @override
@@ -51,7 +51,7 @@ class ProjetsScreen extends StatelessWidget {
           SectionHeader(
             title: 'Projets',
             subtitle: 'Tableau Kanban en lecture seule : la colonne se '
-                'déduit de l\'avancement livré / encaissé.',
+                'déduit de l\'avancement réalisé / encaissé.',
             actions: [
               SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
                   onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
@@ -103,8 +103,8 @@ class _KanbanColonne extends StatelessWidget {
   static const _couleurs = {
     StatutProjet.aDemarrer: AppColors.text3,
     StatutProjet.enCours: AppColors.blue,
-    StatutProjet.livreNonPaye: AppColors.orange,
-    StatutProjet.solde: AppColors.green,
+    StatutProjet.termineNonPaye: AppColors.orange,
+    StatutProjet.termine: AppColors.green,
   };
 
   @override
@@ -180,7 +180,7 @@ class _ProjetCard extends StatelessWidget {
           Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
               style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
           const SizedBox(height: 12),
-          _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
+          _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
           const SizedBox(height: 8),
           _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
           const SizedBox(height: 12),
@@ -525,7 +525,7 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   ),
                 ],
                 const SizedBox(height: 16),
-                _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
+                _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
                 const SizedBox(height: 12),
                 _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
                 const SizedBox(height: 16),
