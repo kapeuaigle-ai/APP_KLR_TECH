@@ -79,6 +79,10 @@ class _EngagementsTabState extends State<_EngagementsTab> {
   DateTime _echeance = DateTime.now();
   DateTime _dateAcompte = DateTime.now();
   String _categorie = kCategoriesDepense.first;
+  /// Projet auquel rattacher l'engagement créé, `null` = aucun (le cas
+  /// courant). C'est ce qui permet à une dette de compter dans le
+  /// `montantDepense` — donc la marge — de son projet.
+  int? _projetId;
   bool _erreur = false;
 
   bool get _estCreance => _sens == 'entrant';
@@ -117,6 +121,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       echeance: _echeance,
       categorie: _categorie,
       documentNumero: ref.isEmpty ? null : ref,
+      projetId: _projetId,
     ));
     // Acompte facultatif : déjà versé au moment où l'engagement est saisi.
     // `ajouterReglement` l'écrête lui-même au montant si nécessaire.
@@ -138,6 +143,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     _echeance = DateTime.now();
     _dateAcompte = DateTime.now();
     _categorie = kCategoriesDepense.first;
+    _projetId = null;
     _erreur = false;
 
     await showDialog<void>(
@@ -201,6 +207,16 @@ class _EngagementsTabState extends State<_EngagementsTab> {
                       ]),
                     ),
                   )),
+
+                  // Masqué s'il n'existe aucun projet : inutile d'encombrer
+                  // la boîte pour un manager qui n'en a pas encore créé.
+                  if (state.projets.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    _field('PROJET', _projetDropdown(
+                        _projetsPourSelecteur(state.projets, selectionne: _projetId),
+                        _projetId,
+                        (v) => setLocal(() => _projetId = v))),
+                  ],
 
                   // ── Acompte déjà versé (facultatif) ────────────
                   // C'est le premier règlement de l'engagement, enregistré à sa
@@ -853,6 +869,46 @@ Future<void> _gererReglements(
   );
 }
 
+/// Rattache (ou change) le projet d'un engagement déjà créé — le cas d'un
+/// engagement saisi avant que son projet n'existe. `clientId`, quand connu
+/// (une créance née d'une facture le porte), fait remonter en tête les
+/// projets de la même contrepartie, comme à la création.
+Future<void> _rattacherProjetDialog(
+    BuildContext context, AppState state, Engagement e) async {
+  int? projetId = e.projetId;
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Rattacher à un projet', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: SizedBox(
+        width: 340,
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(e.tiers, style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+          const SizedBox(height: 12),
+          _projetDropdown(
+            _projetsPourSelecteur(state.projets, clientId: e.clientId, selectionne: projetId),
+            projetId,
+            (v) => setLocal(() => projetId = v),
+          ),
+        ]),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        PrimaryBtn(label: 'Enregistrer', icon: Icons.check, onTap: () {
+          state.rattacherProjetEngagement(e.id, projetId);
+          Navigator.of(ctx).pop();
+        }),
+      ],
+    )),
+  );
+}
+
 /// Menu d'actions d'un engagement, partagé par la ligne de tableau (bureau)
 /// et la carte (téléphone) : solder, gérer les règlements, annuler/réactiver,
 /// supprimer. Seule la taille de la cible change.
@@ -878,6 +934,8 @@ Widget _engagementMenu(
           _soldeEngagement(context, state, e);
         case 'reglements':
           _gererReglements(context, state, e);
+        case 'projet':
+          _rattacherProjetDialog(context, state, e);
         case 'annuler':
           state.annulerEngagement(e.id);
         case 'reactiver':
@@ -903,6 +961,16 @@ Widget _engagementMenu(
         Text(e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement',
             style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
       ])),
+      // N'apparaît que s'il existe au moins un projet à proposer — un
+      // engagement créé avant que son projet n'existe reste rattachable
+      // depuis ici.
+      if (state.projets.isNotEmpty)
+        PopupMenuItem(value: 'projet', child: Row(children: [
+          const Icon(Icons.link, size: 15, color: AppColors.blue),
+          const SizedBox(width: 8),
+          Text(e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet',
+              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+        ])),
       if (!e.annule)
         PopupMenuItem(value: 'annuler', child: Row(children: [
           const Icon(Icons.block, size: 15, color: AppColors.text3),
@@ -937,6 +1005,9 @@ class _ComptaTabState extends State<_ComptaTab> {
   DateTime _date = DateTime.now();
   String _categorie = kCategoriesDepense.first;
   String? _factureNumero; // null = générale
+  /// Projet auquel rattacher la dépense — même rôle que dans le formulaire
+  /// créance/dette : c'est ce qui alimente `montantDepense` du projet.
+  int? _projetId;
   /// Mois consulté. La comptabilité ne montre qu'un mois à la fois : au
   /// passage au mois suivant, l'écran repart à zéro sur le nouveau mois.
   String? _mois;
@@ -969,6 +1040,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     state.addEngagement(Engagement(
       id: id, sens: 'sortant', tiers: libelle, montant: montant,
       echeance: _date, categorie: _categorie, documentNumero: _factureNumero,
+      projetId: _projetId,
     ));
     state.ajouterReglement(id, montant, _date);
     return true;
@@ -982,6 +1054,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     _date = DateTime.now();
     _categorie = kCategoriesDepense.first;
     _factureNumero = null;
+    _projetId = null;
     _erreurDepense = false;
 
     await showDialog<void>(
@@ -1040,6 +1113,21 @@ class _ComptaTabState extends State<_ComptaTab> {
                   ]),
                   const SizedBox(height: 14),
                   _field('RATTACHEMENT', _factureDropdown(factures, setLocal)),
+                  // Masqué s'il n'existe aucun projet. Quand une facture est
+                  // choisie ci-dessus, son client — connu via `clientId` —
+                  // fait remonter ses projets en tête : une dépense rattachée
+                  // à une facture porte presque toujours sur le même projet.
+                  if (state.projets.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    Builder(builder: (_) {
+                      final facture = factures.where((f) => f.numero == _factureNumero);
+                      final clientId = facture.isEmpty ? null : facture.first.clientId;
+                      return _field('PROJET', _projetDropdown(
+                          _projetsPourSelecteur(state.projets, clientId: clientId, selectionne: _projetId),
+                          _projetId,
+                          (v) => setLocal(() => _projetId = v)));
+                    }),
+                  ],
                   const SizedBox(height: 16),
                   Text('CATÉGORIE', style: AppTheme.label),
                   const SizedBox(height: 6),
@@ -1452,6 +1540,41 @@ Widget _tf(TextEditingController c, String hint, {bool numeric = false, ValueCha
       focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: AppColors.primary)),
     ),
   ),
+);
+
+// ── Sélecteur de projet, partagé par les boîtes créance/dette/dépense et
+//    par le rattachement d'un engagement existant. Même sémantique que le
+//    sélecteur de document_create_screen.dart (projets annulés exclus, sauf
+//    celui déjà choisi ; « Aucun projet » toujours en tête), mais avec le
+//    vocabulaire propre à cet écran (DropdownButton, comme _factureDropdown)
+//    plutôt que d'importer un idiome étranger.
+//
+// `clientId`, quand connu (un engagement entrant généré depuis une facture
+// porte le sien), fait remonter les projets de ce client en tête — un
+// engagement se rattache presque toujours à un projet de la même contrepartie.
+List<Projet> _projetsPourSelecteur(List<Projet> projets, {int? clientId, int? selectionne}) {
+  final utilisables = projets.where((p) => !p.annule || p.id == selectionne).toList();
+  if (clientId == null) return utilisables;
+  final duClient = utilisables.where((p) => p.clientId == clientId).toList();
+  final autres = utilisables.where((p) => p.clientId != clientId).toList();
+  return [...duClient, ...autres];
+}
+
+Widget _projetDropdown(List<Projet> projets, int? valeur, ValueChanged<int?> onChanged) => Container(
+  height: 40,
+  padding: const EdgeInsets.symmetric(horizontal: 10),
+  decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
+  child: DropdownButtonHideUnderline(child: DropdownButton<int?>(
+    value: valeur,
+    isExpanded: true,
+    hint: Text('Aucun projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+    style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+    items: [
+      DropdownMenuItem<int?>(value: null, child: Text('Aucun projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2))),
+      ...projets.map((p) => DropdownMenuItem<int?>(value: p.id, child: Text(p.nom, overflow: TextOverflow.ellipsis))),
+    ],
+    onChanged: onChanged,
+  )),
 );
 
 Widget _cell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(

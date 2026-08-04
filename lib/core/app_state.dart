@@ -395,6 +395,16 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Rattache (ou détache, si `projetId` est nul) un engagement existant à un
+  /// projet. C'est le seul moyen de lier un engagement créé avant que son
+  /// projet n'existe — la création elle-même propose déjà le choix.
+  void rattacherProjetEngagement(int id, int? projetId) {
+    final e = _engagement(id);
+    if (e == null) return;
+    e.projetId = projetId;
+    _emit();
+  }
+
   // ── Projets ────────────────────────────────────────────
   void addProjet(Projet p) {
     projets.insert(0, p);
