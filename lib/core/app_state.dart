@@ -467,6 +467,40 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  Projet? _projet(int id) {
+    final m = projets.where((p) => p.id == id);
+    return m.isEmpty ? null : m.first;
+  }
+
+  void ajouterJalon(int projetId, Jalon j) {
+    final p = _projet(projetId);
+    if (p == null) return;
+    p.jalons.add(j);
+    _emit();
+  }
+
+  /// Marque un jalon comme réalisé à `date`, ou le démarque si `date` est nul.
+  void marquerJalon(int projetId, int index, DateTime? date) {
+    final p = _projet(projetId);
+    if (p == null || index < 0 || index >= p.jalons.length) return;
+    p.jalons[index].realisee = date;
+    _emit();
+  }
+
+  void supprimerJalon(int projetId, int index) {
+    final p = _projet(projetId);
+    if (p == null || index < 0 || index >= p.jalons.length) return;
+    p.jalons.removeAt(index);
+    _emit();
+  }
+
+  void setAvancementManuel(int projetId, double valeur) {
+    final p = _projet(projetId);
+    if (p == null) return;
+    p.avancementManuel = valeur.clamp(0.0, 1.0);
+    _emit();
+  }
+
   /// Enregistre la quantité livrée d'une ligne de proforma.
   ///
   /// La proforma est la SOURCE DE VÉRITÉ du livré : la facture et le BL,
