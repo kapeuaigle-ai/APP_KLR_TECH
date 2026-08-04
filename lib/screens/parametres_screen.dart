@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../core/theme.dart';
 import '../core/app_state.dart';
+import '../core/models.dart';
 import '../core/signature_image.dart';
 import '../widgets/common.dart';
 import '../widgets/signature_pad.dart';
@@ -115,7 +116,8 @@ class _EntrepriseTabState extends State<_EntrepriseTab> {
 
   @override
   Widget build(BuildContext context) {
-    return ResponsiveSplit(
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      ResponsiveSplit(
       sideWidth: 280,
       breakpoint: 780,
       main: CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -194,7 +196,10 @@ class _EntrepriseTabState extends State<_EntrepriseTab> {
           )),
         ),
       ])),
-    );
+      ),
+      const SizedBox(height: 16),
+      const _TypesProjetCard(),
+    ]);
   }
 }
 
@@ -495,6 +500,312 @@ class _SettingField extends StatelessWidget {
       ),
     ]);
   }
+}
+
+// ── Types de projet ───────────────────────────────────────
+/// Le manager définit ses propres métiers ici. Le code ne connaît jamais un
+/// métier par son nom : il connaît quatre modes d'avancement. Ajouter
+/// « Formation » ou « Infogérance » ne demande donc aucune ligne de code,
+/// juste un type de plus dans cette liste.
+class _TypesProjetCard extends StatelessWidget {
+  const _TypesProjetCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final types = state.settings.typesProjet;
+    final dernierType = types.length <= 1;
+
+    return CardBox(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Expanded(child: Text('TYPES DE PROJET', style: GoogleFonts.dmSans(
+            fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1))),
+        SecondaryBtn(
+          label: 'Ajouter un type', icon: Icons.add,
+          onTap: () => _ouvrirFormulaireType(context, state),
+        ),
+      ]),
+      const SizedBox(height: 6),
+      Text(
+        'Le mode d\'avancement détermine comment la progression d\'un projet '
+        'de ce type est mesurée.',
+        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3, height: 1.5),
+      ),
+      const SizedBox(height: 16),
+      for (final t in types)
+        Padding(
+          padding: const EdgeInsets.only(bottom: 10),
+          child: _TypeProjetRow(
+            type: t,
+            dernier: dernierType,
+            onEdit: () => _ouvrirFormulaireType(context, state, existing: t),
+            onDelete: () => _confirmerSuppressionType(context, state, t),
+          ),
+        ),
+      if (dernierType)
+        Text(
+          'Il ne reste qu\'un seul type : il ne peut pas être supprimé, sinon '
+          'aucun projet ne pourrait plus être créé.',
+          style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
+        ),
+    ]));
+  }
+}
+
+class _TypeProjetRow extends StatelessWidget {
+  final TypeProjet type;
+  final bool dernier;
+  final VoidCallback onEdit;
+  final VoidCallback onDelete;
+  const _TypeProjetRow({
+    required this.type, required this.dernier, required this.onEdit, required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8)),
+      child: Row(children: [
+        Container(width: 12, height: 12,
+            decoration: BoxDecoration(color: type.couleur, shape: BoxShape.circle)),
+        const SizedBox(width: 10),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(type.libelle, style: GoogleFonts.dmSans(
+              fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+          Text(type.mode.libelle,
+              style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
+        ])),
+        IconButton(
+          tooltip: 'Modifier',
+          icon: const Icon(Icons.edit_outlined, size: 17, color: AppColors.text2),
+          onPressed: onEdit,
+        ),
+        IconButton(
+          tooltip: dernier
+              ? 'Impossible de supprimer le dernier type restant.'
+              : 'Supprimer',
+          icon: Icon(Icons.delete_outline, size: 17,
+              color: dernier ? AppColors.border : AppColors.text3),
+          onPressed: dernier ? null : onDelete,
+        ),
+      ]),
+    );
+  }
+}
+
+/// Supprimer un type rebascule silencieusement ses projets sur le premier
+/// type restant (`AppState.supprimerTypeProjet`) — ce qui change aussi leur
+/// mode d'avancement, donc leur pourcentage affiché et leur colonne Kanban.
+/// Même ceremonie que `_confirmDeleteClient` dans clients_screen.dart, mais
+/// en nommant concrètement ce qui va changer.
+void _confirmerSuppressionType(BuildContext context, AppState state, TypeProjet type) {
+  final affectes = state.projets.where((p) => p.typeId == type.id).length;
+  final repli = state.settings.typesProjet.firstWhere((t) => t.id != type.id);
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer ce type ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        affectes == 0
+            ? '« ${type.libelle} » n\'est utilisé par aucun projet. Il sera supprimé.'
+            : '« ${type.libelle} » est utilisé par $affectes '
+              '${affectes > 1 ? 'projets' : 'projet'}. ${affectes > 1 ? 'Ils basculeront' : 'Il basculera'} '
+              'sur « ${repli.libelle} », et ${affectes > 1 ? 'leur' : 'son'} avancement sera '
+              'désormais mesuré par « ${repli.mode.libelle} » au lieu de « ${type.mode.libelle} ».',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            state.supprimerTypeProjet(type.id);
+            Navigator.of(ctx).pop();
+          },
+          child: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
+}
+
+/// Changer le mode d'avancement d'un type recalcule instantanément
+/// l'avancement — et donc la colonne Kanban — de tous ses projets. Même
+/// ampleur que la suppression, mais avec moins de cérémonie jusqu'ici.
+/// N'apparaît que si le mode a réellement changé : changer le libellé ou la
+/// couleur seul reste immédiat, pour ne pas gêner le cas courant.
+void _confirmerChangementMode(BuildContext context, AppState state,
+    TypeProjet existing, ModeAvancement nouveauMode, VoidCallback onConfirme) {
+  final affectes = state.projets.where((p) => p.typeId == existing.id).length;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Changer le mode d\'avancement ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        affectes == 0
+            ? 'Aucun projet n\'utilise actuellement « ${existing.libelle} » : rien ne sera recalculé.'
+            : '$affectes ${affectes > 1 ? 'projets utilisent' : 'projet utilise'} '
+              '« ${existing.libelle} ». ${affectes > 1 ? 'Leur' : 'Son'} avancement, mesuré par '
+              '« ${existing.mode.libelle} », sera désormais mesuré par « ${nouveauMode.libelle} ».',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            onConfirme();
+          },
+          child: Text('Confirmer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        ),
+      ],
+    ),
+  );
+}
+
+const _couleursTypeProjet = [
+  AppColors.primary, AppColors.blue, AppColors.green, AppColors.orange,
+  AppColors.purple, AppColors.teal, AppColors.emerald, AppColors.indigo,
+];
+
+void _ouvrirFormulaireType(BuildContext context, AppState state, {TypeProjet? existing}) {
+  final libelleCtrl = TextEditingController(text: existing?.libelle ?? '');
+  ModeAvancement mode = existing?.mode ?? ModeAvancement.quantites;
+  Color couleur = existing?.couleur ?? _couleursTypeProjet.first;
+  var erreur = false;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text(existing == null ? 'Ajouter un type' : 'Modifier le type',
+          style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: SizedBox(
+        width: dialogWidth(ctx, 380),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _SettingField(label: 'LIBELLÉ *', ctrl: libelleCtrl),
+            const SizedBox(height: 14),
+            Text('MODE D\'AVANCEMENT', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 8, children: ModeAvancement.values.map((m) => GestureDetector(
+              onTap: () => setLocal(() => mode = m),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: mode == m ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: mode == m ? AppColors.primary : AppColors.border),
+                ),
+                child: Text(m.libelle, style: GoogleFonts.dmSans(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: mode == m ? AppColors.primary : AppColors.text2)),
+              ),
+            )).toList()),
+            const SizedBox(height: 6),
+            Text(mode.explication,
+                style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4)),
+            const SizedBox(height: 14),
+            Text('COULEUR', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Wrap(spacing: 10, runSpacing: 10, children: _couleursTypeProjet.map((c) => GestureDetector(
+              onTap: () => setLocal(() => couleur = c),
+              child: Container(
+                width: 28, height: 28,
+                decoration: BoxDecoration(
+                  color: c, shape: BoxShape.circle,
+                  border: Border.all(
+                    color: couleur == c ? AppColors.text1 : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+            )).toList()),
+            if (erreur) ...[
+              const SizedBox(height: 12),
+              Text('Renseignez un libellé.',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+            ],
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        PrimaryBtn(
+          label: existing == null ? 'Ajouter' : 'Enregistrer',
+          icon: existing == null ? Icons.add : Icons.check,
+          onTap: () {
+            final libelle = libelleCtrl.text.trim();
+            if (libelle.isEmpty) { setLocal(() => erreur = true); return; }
+            if (existing == null) {
+              final id = _idDepuisLibelle(
+                  libelle, state.settings.typesProjet.map((t) => t.id).toSet());
+              state.ajouterTypeProjet(TypeProjet(
+                id: id, libelle: libelle, mode: mode, couleur: couleur,
+              ));
+              Navigator.of(ctx).pop();
+            } else if (mode != existing.mode) {
+              // Le mode a changé : ça recalcule l'avancement de tous les
+              // projets de ce type, donc confirmation avant d'appliquer
+              // (§ défaut 3 de la revue finale). Le dialogue d'édition
+              // reste ouvert tant que rien n'est confirmé.
+              _confirmerChangementMode(ctx, state, existing, mode, () {
+                state.majTypeProjet(existing
+                  ..libelle = libelle
+                  ..mode = mode
+                  ..couleur = couleur);
+                Navigator.of(ctx).pop();
+              });
+            } else {
+              state.majTypeProjet(existing
+                ..libelle = libelle
+                ..mode = mode
+                ..couleur = couleur);
+              Navigator.of(ctx).pop();
+            }
+          },
+        ),
+      ],
+    )),
+  );
+}
+
+/// Dérive un identifiant stable d'un libellé : minuscules, sans accents ni
+/// espaces, avec un suffixe numérique en cas de collision.
+String _idDepuisLibelle(String libelle, Set<String> existants) {
+  const avecAccents = 'àáâãäåèéêëìíîïòóôõöùúûüýÿçñ';
+  const sansAccents = 'aaaaaaeeeeiiiiooooouuuuyycn';
+  var base = libelle.toLowerCase();
+  for (var i = 0; i < avecAccents.length; i++) {
+    base = base.replaceAll(avecAccents[i], sansAccents[i]);
+  }
+  base = base.replaceAll(RegExp(r'[^a-z0-9]+'), '');
+  if (base.isEmpty) base = 'type';
+
+  if (!existants.contains(base)) return base;
+  var i = 2;
+  while (existants.contains('$base$i')) {
+    i++;
+  }
+  return '$base$i';
 }
 
 // ── Facturation Tab ───────────────────────────────────────

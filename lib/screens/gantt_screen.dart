@@ -6,6 +6,7 @@ import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
 import '../core/avancement.dart';
+import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
@@ -90,6 +91,7 @@ class GanttScreen extends StatelessWidget {
                   child: _GanttRow(
                     projet: p,
                     avancement: state.avancementProjet(p.id, now: now),
+                    mode: state.modeDuProjet(p),
                     axeDebut: debut, nbMois: nbMois),
                 )),
               ]),
@@ -122,10 +124,11 @@ double _positionMois(DateTime axeDebut, DateTime d) {
 class _GanttRow extends StatelessWidget {
   final Projet projet;
   final Avancement avancement;
+  final ModeAvancement mode;
   final DateTime axeDebut;
   final int nbMois;
   const _GanttRow({
-    required this.projet, required this.avancement,
+    required this.projet, required this.avancement, required this.mode,
     required this.axeDebut, required this.nbMois,
   });
 
@@ -189,6 +192,31 @@ class _GanttRow extends StatelessWidget {
               label: pctFinancier > 0 ? '$pctFinancier %' : '',
             ),
           ),
+
+          // Repères de jalons : losange plein si réalisé, creux sinon. Ne
+          // s'affichent que pour le mode jalons — sur les autres modes, un
+          // projet n'a d'ailleurs aucun jalon à montrer. La clé permet de les
+          // cibler en test sans dépendre du rendu graphique.
+          if (mode == ModeAvancement.jalons)
+            ...projet.jalons.asMap().entries.map((e) {
+              final j = e.value;
+              final pos = _positionMois(axeDebut, j.prevue) * unitW;
+              return Positioned(
+                key: ValueKey('jalon-${projet.id}-${e.key}'),
+                left: pos - 5, top: 1, width: 10, height: 10,
+                child: Tooltip(
+                  message: '${j.nom} — ${j.fait ? 'réalisé' : 'prévu'} '
+                      'le ${Fmt.jour(j.realisee ?? j.prevue)}',
+                  child: Transform.rotate(
+                    angle: 0.785, // 45° : un carré tourné se lit comme un losange
+                    child: Container(decoration: BoxDecoration(
+                      color: j.fait ? AppColors.primary : Colors.white,
+                      border: Border.all(color: AppColors.primary, width: 1.5),
+                    )),
+                  ),
+                ),
+              );
+            }),
         ]));
       })),
     ]);

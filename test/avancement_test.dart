@@ -182,6 +182,54 @@ void main() {
       expect(a.marge, 400);
     });
 
+    // Régression : même défaut que sur `Engagement.reste` (Phase 1) et
+    // `Avancement.financier` (Phase 2), une troisième fois. Un projet à
+    // l'équilibre exact (encaissé == décaissé, pass-through de
+    // sous-traitance, cas normal du métier) peut laisser un résidu flottant
+    // IEEE-754 tout juste sous zéro — affiché en rouge par `projets_screen`
+    // alors que le projet n'a rien perdu.
+    test('un résidu flottant sous le centime rapporte une marge de zéro', () {
+      // 132.81 + 711.54 + 155.65 = 999.9999999999999 en IEEE-754, contre
+      // 1000 décaissé en un seul règlement : résidu de -1.1368683772161603e-13.
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [
+          _entrant(1, 1000, [
+            _r(132.81, DateTime(2026, 4, 1)),
+            _r(711.54, DateTime(2026, 4, 2)),
+            _r(155.65, DateTime(2026, 4, 3)),
+          ]),
+          _sortant(1, 1000, [_r(1000, DateTime(2026, 4, 4))]),
+        ],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.marge, 0);
+    });
+
+    test('une perte réelle de 0.02 reste reportée, pas avalée par l\'écrêtage', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [
+          _entrant(1, 1000, [_r(999.98, DateTime(2026, 4, 1))]),
+          _sortant(1, 1000, [_r(1000, DateTime(2026, 4, 2))]),
+        ],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.marge, closeTo(-0.02, 0.0001));
+    });
+
+    test('un profit réel n\'est pas affecté par l\'écrêtage', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [
+          _entrant(1, 1000, [_r(1000, DateTime(2026, 4, 1))]),
+          _sortant(1, 600, [_r(600, DateTime(2026, 4, 2))]),
+        ],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.marge, 400);
+    });
+
     test('en retard si la fin prévue est dépassée et le physique incomplet', () {
       final a = Avancement.calculer(
         projet: _projet(fin: DateTime(2026, 6, 30)),

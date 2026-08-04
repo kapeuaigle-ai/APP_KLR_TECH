@@ -10,16 +10,6 @@ import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
-/// Types de projet proposés à la création. En phase 2, `typeId` n'influence
-/// encore rien (le mode d'avancement est toujours `quantites`) : la liste
-/// deviendra paramétrable en phase 3 (`AppSettings.typesProjet`).
-const _typesProjet = [
-  ('fourniture', 'Fourniture de matériel'),
-  ('installation', 'Installation / déploiement'),
-  ('maintenance', 'Maintenance / contrat'),
-  ('interne', 'Projet interne'),
-];
-
 /// Kanban des projets, en lecture seule.
 ///
 /// La colonne d'une carte se déduit de son avancement physique et financier
@@ -281,7 +271,7 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
   final nomCtrl = TextEditingController(text: existing?.nom ?? '');
   int? clientId = existing?.clientId;
   String client = existing?.client ?? '';
-  String typeId = existing?.typeId ?? _typesProjet.first.$1;
+  String typeId = existing?.typeId ?? state.settings.typesProjet.first.id;
   DateTime debut = existing?.debut ?? DateTime.now();
   DateTime finPrevue = existing?.finPrevue ?? DateTime.now().add(const Duration(days: 30));
   var erreur = false;
@@ -321,20 +311,66 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             const SizedBox(height: 12),
             Text('TYPE', style: AppTheme.label),
             const SizedBox(height: 6),
-            Wrap(spacing: 8, runSpacing: 8, children: _typesProjet.map((t) => GestureDetector(
-              onTap: () => setLocal(() => typeId = t.$1),
+            // Les types du manager — définis dans les Paramètres, jamais
+            // une liste figée dans le code (§ 5.4 de la conception).
+            Wrap(spacing: 8, runSpacing: 8, children: state.settings.typesProjet.map((t) => GestureDetector(
+              onTap: () => setLocal(() => typeId = t.id),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: typeId == t.$1 ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                  color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: typeId == t.$1 ? AppColors.primary : AppColors.border),
+                  border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
                 ),
-                child: Text(t.$2, style: GoogleFonts.dmSans(
+                child: Text(t.libelle, style: GoogleFonts.dmSans(
                     fontSize: 12, fontWeight: FontWeight.w600,
-                    color: typeId == t.$1 ? AppColors.primary : AppColors.text2)),
+                    color: typeId == t.id ? AppColors.primary : AppColors.text2)),
               ),
             )).toList()),
+            const SizedBox(height: 8),
+            // Comment son avancement sera mesuré, avant qu'il ne valide —
+            // pour que le choix du type ne soit jamais un pari (§ 11).
+            Builder(builder: (_) {
+              final m = state.settings.typesProjet.where((t) => t.id == typeId);
+              final mode = m.isEmpty ? null : m.first.mode;
+              if (mode == null) return const SizedBox.shrink();
+              return Text(mode.explication,
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3));
+            }),
+            // Sur un projet existant, la reclassification reste permise —
+            // mais un jalon déjà coché ou une quantité déjà livrée changerait
+            // de mode d'avancement sans un mot (§ défaut 4 de la revue
+            // finale). L'avertissement ne remplace jamais le champ : il
+            // prévient juste avant l'enregistrement.
+            if (existing != null)
+              Builder(builder: (_) {
+                final ancien = state.typeProjet(existing.typeId)?.mode;
+                final m = state.settings.typesProjet.where((t) => t.id == typeId);
+                final nouveau = m.isEmpty ? null : m.first.mode;
+                if (ancien == null || nouveau == null || ancien == nouveau) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        'Ce projet était mesuré par « ${ancien.libelle} » : ${ancien.explication} '
+                        'Avec ce type, il sera désormais mesuré par « ${nouveau.libelle} » : ${nouveau.explication}',
+                        style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text2, height: 1.4),
+                      )),
+                    ]),
+                  ),
+                );
+              }),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: _champDate(ctx, 'DÉBUT', debut, (d) => setLocal(() => debut = d))),
@@ -408,6 +444,7 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
           final vivant = state.projets.any((p) => p.id == projet.id);
           if (!vivant) return const SizedBox(width: 400, height: 100);
           final avancement = state.avancementProjet(projet.id);
+          final mode = state.modeDuProjet(projet);
 
           return Column(mainAxisSize: MainAxisSize.min, children: [
             Padding(
@@ -441,6 +478,17 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   child: Text(avancement.statut.libelle,
                       style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
                 ),
+                // Un `typeId` orphelin (type supprimé, restauration d'une
+                // sauvegarde plus ancienne) fait retomber `modeDuProjet` sur
+                // `quantites` en silence — le manager doit au moins le savoir.
+                if (state.typeProjet(projet.typeId) == null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Le type de ce projet n\'existe plus : son avancement est '
+                    'mesuré par défaut sur les quantités livrées.',
+                    style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.orange, height: 1.4),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
                 const SizedBox(height: 12),
@@ -449,25 +497,14 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                 _ligneMontant('Montant attendu', avancement.montantAttendu),
                 _ligneMontant('Encaissé', avancement.montantEncaisse),
                 _ligneMontant('Reste dû', avancement.montantRestant),
+                _ligneMontant('Décaissé', avancement.montantDepense),
+                _LigneMarge(marge: avancement.marge),
 
-                // ── Livraison ──────────────────────────────
-                // La proforma est la source de vérité du livré (§ 5.2 de la
-                // conception) : c'est elle qu'on modifie ici, jamais la
-                // facture ni le BL, déjà figés à la validation. Le BL imprimé
-                // continue d'afficher les quantités commandées (§ 12).
-                if (state.proformasDuProjet(projet.id).isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  const Divider(color: AppColors.border),
-                  const SizedBox(height: 12),
-                  Text('QUANTITÉS LIVRÉES', style: AppTheme.label),
-                  const SizedBox(height: 8),
-                  for (final p in state.proformasDuProjet(projet.id))
-                    for (var i = 0; i < p.lines.length; i++)
-                      _LigneLivraisonRow(
-                        key: ValueKey('${p.id}-$i'),
-                        proformaId: p.id, index: i, ligne: p.lines[i],
-                      ),
-                ],
+                // ── Avancement, selon le mode du type de projet ─────
+                // Chaque mode a sa propre façon de saisir l'avancement ;
+                // n'en montrer qu'une évite qu'un manager voie, par exemple,
+                // un champ de quantité livrée sur un contrat de maintenance.
+                _SectionSuivi(projet: projet, mode: mode, state: state),
               ]),
             )),
           ]);
@@ -485,6 +522,264 @@ Widget _ligneMontant(String label, double montant) => Padding(
     Text(Fmt.money(montant), style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
   ]),
 );
+
+/// Marge du projet — encaissé moins décaissé, tel que calculé par
+/// `Avancement.marge`. Jamais recalculée ici : cash-basis, sur les
+/// règlements réels uniquement. Rouge dès qu'elle est négative, pour que le
+/// manager la repère sans avoir à lire le chiffre.
+class _LigneMarge extends StatelessWidget {
+  final double marge;
+  const _LigneMarge({required this.marge});
+
+  @override
+  Widget build(BuildContext context) {
+    final negative = marge < 0;
+    final couleur = negative ? AppColors.red : AppColors.green;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6, top: 2),
+      child: Row(children: [
+        Text('Marge', style: GoogleFonts.dmSans(
+            fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
+        const Spacer(),
+        Flexible(child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(Fmt.money(marge),
+              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w800, color: couleur)),
+        )),
+      ]),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────
+//  Section « avancement » de la fiche projet — une présentation par mode.
+//  Montrer les quatre à la fois laisserait croire au manager qu'il peut
+//  saisir des quantités livrées sur un contrat de maintenance ; le mode du
+//  type choisi tranche pour lui.
+// ─────────────────────────────────────────────────────────
+class _SectionSuivi extends StatelessWidget {
+  final Projet projet;
+  final ModeAvancement mode;
+  final AppState state;
+  const _SectionSuivi({required this.projet, required this.mode, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    switch (mode) {
+      case ModeAvancement.quantites:
+        // La proforma est la source de vérité du livré (§ 5.2 de la
+        // conception) : c'est elle qu'on modifie ici, jamais la facture ni
+        // le BL, déjà figés à la validation. Le BL imprimé continue
+        // d'afficher les quantités commandées (§ 12).
+        final proformas = state.proformasDuProjet(projet.id);
+        if (proformas.isEmpty) return const SizedBox.shrink();
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 12),
+            Text('QUANTITÉS LIVRÉES', style: AppTheme.label),
+            const SizedBox(height: 8),
+            for (final p in proformas)
+              for (var i = 0; i < p.lines.length; i++)
+                _LigneLivraisonRow(
+                  key: ValueKey('${p.id}-$i'),
+                  proformaId: p.id, index: i, ligne: p.lines[i],
+                ),
+          ]),
+        );
+
+      case ModeAvancement.jalons:
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 12),
+            _SectionJalons(projet: projet, state: state),
+          ]),
+        );
+
+      case ModeAvancement.duree:
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 12),
+            Text('AVANCEMENT', style: AppTheme.label),
+            const SizedBox(height: 8),
+            Text(
+              'L\'avancement suit le calendrier : il progresse '
+              'automatiquement du début à la fin prévue, sans saisie.',
+              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3),
+            ),
+          ]),
+        );
+
+      case ModeAvancement.manuel:
+        return Padding(
+          padding: const EdgeInsets.only(top: 16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Divider(color: AppColors.border),
+            const SizedBox(height: 12),
+            _SectionManuel(projet: projet, state: state),
+          ]),
+        );
+    }
+  }
+}
+
+// ── Mode jalons : liste éditable, chaque jalon coché fait avancer la
+//    pondération portée par son poids (§ 6.1).
+class _SectionJalons extends StatelessWidget {
+  final Projet projet;
+  final AppState state;
+  const _SectionJalons({required this.projet, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text('JALONS', style: AppTheme.label),
+        const Spacer(),
+        SecondaryBtn(
+          label: 'Ajouter un jalon', icon: Icons.add,
+          onTap: () => _ouvrirFormulaireJalon(context, state, projet),
+        ),
+      ]),
+      const SizedBox(height: 8),
+      if (projet.jalons.isEmpty)
+        Text('Aucun jalon défini.',
+            style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))
+      else
+        for (var i = 0; i < projet.jalons.length; i++)
+          _JalonRow(key: ValueKey('jalon-${projet.id}-$i'),
+              projet: projet, index: i, jalon: projet.jalons[i], state: state),
+    ]);
+  }
+}
+
+class _JalonRow extends StatelessWidget {
+  final Projet projet;
+  final int index;
+  final Jalon jalon;
+  final AppState state;
+  const _JalonRow({super.key, required this.projet, required this.index,
+      required this.jalon, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(children: [
+        Checkbox(
+          value: jalon.fait,
+          activeColor: AppColors.primary,
+          onChanged: (v) => state.marquerJalon(
+              projet.id, index, v == true ? DateTime.now() : null),
+        ),
+        Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Text(jalon.nom, style: GoogleFonts.dmSans(fontSize: 12.5,
+              fontWeight: FontWeight.w600, color: AppColors.text1)),
+          Text(
+            'Prévu le ${Fmt.jour(jalon.prevue)} — poids '
+            '${jalon.poids == jalon.poids.roundToDouble() ? jalon.poids.toStringAsFixed(0) : jalon.poids.toString()}',
+            style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3),
+          ),
+        ])),
+        IconButton(
+          tooltip: 'Supprimer',
+          icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.text3),
+          onPressed: () => state.supprimerJalon(projet.id, index),
+        ),
+      ]),
+    );
+  }
+}
+
+void _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet projet) {
+  final nomCtrl = TextEditingController();
+  final poidsCtrl = TextEditingController(text: '1');
+  DateTime prevue = DateTime.now();
+  var erreur = false;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Ajouter un jalon', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: SizedBox(
+        width: dialogWidth(ctx, 360),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('NOM *', style: AppTheme.label),
+            const SizedBox(height: 6),
+            TextField(controller: nomCtrl, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                decoration: _deco(ctx, 'Ex : Étude technique')),
+            const SizedBox(height: 12),
+            _champDate(ctx, 'DATE PRÉVUE', prevue, (d) => setLocal(() => prevue = d)),
+            const SizedBox(height: 12),
+            Text('POIDS', style: AppTheme.label),
+            const SizedBox(height: 6),
+            TextField(controller: poidsCtrl, keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                decoration: _deco(ctx, '1')),
+            if (erreur) ...[
+              const SizedBox(height: 12),
+              Text('Renseignez un nom de jalon.',
+                  style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600, color: AppColors.red)),
+            ],
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        PrimaryBtn(
+          label: 'Ajouter', icon: Icons.add,
+          onTap: () {
+            final nom = nomCtrl.text.trim();
+            if (nom.isEmpty) { setLocal(() => erreur = true); return; }
+            final poids = double.tryParse(poidsCtrl.text) ?? 1;
+            state.ajouterJalon(projet.id, Jalon(nom: nom, prevue: prevue, poids: poids));
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ],
+    )),
+  );
+}
+
+// ── Mode manuel : un curseur, rien d'autre. Aucun contrôle possible sur la
+//    valeur saisie (§ 6.1) — c'est le mode le moins fiable, assumé comme tel.
+class _SectionManuel extends StatelessWidget {
+  final Projet projet;
+  final AppState state;
+  const _SectionManuel({required this.projet, required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    final valeur = projet.avancementManuel.clamp(0.0, 1.0);
+    final pct = (valeur * 100).round();
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Row(children: [
+        Text('AVANCEMENT', style: AppTheme.label),
+        const Spacer(),
+        Text('$pct %', style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+      ]),
+      Slider(
+        value: valeur,
+        activeColor: AppColors.primary,
+        onChanged: (v) => state.setAvancementManuel(projet.id, v),
+      ),
+    ]);
+  }
+}
 
 // ─────────────────────────────────────────────────────────
 //  Une ligne de saisie de quantité livrée, dans la fiche projet.

@@ -14,6 +14,20 @@ extension StatutProjetLibelle on StatutProjet {
   };
 }
 
+/// Une rentrée attendue, à une échéance.
+class EcheanceAttendue {
+  final DateTime echeance;
+  final double montant;
+  final String tiers;
+  final String? documentNumero;
+  final bool enRetard;
+
+  const EcheanceAttendue({
+    required this.echeance, required this.montant, required this.tiers,
+    required this.documentNumero, required this.enRetard,
+  });
+}
+
 /// Résultat complet du calcul d'un projet. Aucun de ces chiffres n'est stocké.
 class Avancement {
   final double physique;   // 0..1
@@ -34,7 +48,16 @@ class Avancement {
     required this.enRetardLivraison, required this.enRetardPaiement,
   });
 
-  double get marge => montantEncaisse - montantDepense;
+  /// Marge réalisée : encaissé moins décaissé, en base caisse.
+  ///
+  /// Un résidu inférieur au centime est ramené à zéro. Les deux termes somment
+  /// un nombre quelconque de règlements, et l'arithmétique flottante laisserait
+  /// sinon un projet à l'équilibre exact du mauvais côté du zéro — affiché en
+  /// rouge alors qu'il n'a rien perdu. Même précaution que `Engagement.reste`.
+  double get marge {
+    final m = montantEncaisse - montantDepense;
+    return m.abs() < 0.01 ? 0 : m;
+  }
 
   /// Calcule tout l'état d'un projet à la date `now`.
   ///
@@ -84,8 +107,7 @@ class Avancement {
     );
   }
 
-  /// Avancement physique selon le mode. En phase 2, seul `quantites` est
-  /// implémenté ; les trois autres arrivent en phase 3 et rendent 0 d'ici là.
+  /// Avancement physique selon le mode.
   static double _physique(Projet projet, ModeAvancement mode,
       List<DocumentItem> proformas, DateTime now) {
     switch (mode) {
@@ -98,11 +120,54 @@ class Avancement {
           }
         }
         return total == 0 ? 0.0 : (livre / total).clamp(0.0, 1.0);
+
       case ModeAvancement.jalons:
+        // Pondéré par `poids`, pas par simple décompte : un jalon lourd fait
+        // avancer plus qu'un jalon léger.
+        var total = 0.0, fait = 0.0;
+        for (final j in projet.jalons) {
+          total += j.poids;
+          if (j.fait) fait += j.poids;
+        }
+        return total == 0 ? 0.0 : (fait / total).clamp(0.0, 1.0);
+
       case ModeAvancement.duree:
+        // Fraction du temps écoulé entre `debut` et `finPrevue`, écrêtée à
+        // [0, 1]. `debut == finPrevue` (durée nulle) ne doit pas diviser
+        // par zéro : avant strictement le terme, 0 ; sinon, 1.
+        final debut = DateTime(projet.debut.year, projet.debut.month, projet.debut.day);
+        final fin = DateTime(
+            projet.finPrevue.year, projet.finPrevue.month, projet.finPrevue.day);
+        final jour = DateTime(now.year, now.month, now.day);
+        final duree = fin.difference(debut).inDays;
+        if (duree <= 0) return jour.isBefore(fin) ? 0.0 : 1.0;
+        final ecoule = jour.difference(debut).inDays;
+        return (ecoule / duree).clamp(0.0, 1.0);
+
       case ModeAvancement.manuel:
-        return 0.0; // phase 3
+        return projet.avancementManuel.clamp(0.0, 1.0);
     }
+  }
+
+  /// Ce qui doit rentrer, et quand : le reste dû de chaque engagement entrant
+  /// non soldé, trié de l'échéance la plus proche à la plus lointaine.
+  ///
+  /// Ne devient calculable qu'une fois les engagements unifiés : c'est une
+  /// retombée directe de la phase 1.
+  static List<EcheanceAttendue> tresoreriePrevisionnelle(
+      List<Engagement> engagements, {required DateTime now}) {
+    final res = engagements
+        .where((e) => e.estEntrant && !e.annule && !e.solde)
+        .map((e) => EcheanceAttendue(
+              echeance: e.echeance,
+              montant: e.reste,
+              tiers: e.tiers,
+              documentNumero: e.documentNumero,
+              enRetard: e.enRetard(now),
+            ))
+        .toList();
+    res.sort((a, b) => a.echeance.compareTo(b.echeance));
+    return res;
   }
 
   /// Les règles sont évaluées dans l'ordre : la première qui correspond

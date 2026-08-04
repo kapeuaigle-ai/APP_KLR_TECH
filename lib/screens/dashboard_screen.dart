@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/charts.dart';
@@ -55,6 +56,11 @@ class DashboardScreen extends StatelessWidget {
               sideWidth: 320,
               breakpoint: 820,
             ),
+            const SizedBox(height: 20),
+
+            // Trésorerie prévisionnelle : ce qui doit rentrer, et quand.
+            // Impossible avant la Phase 1 — voir Avancement.tresoreriePrevisionnelle.
+            const _TresorerieCard(),
           ],
         ),
       ),
@@ -256,6 +262,82 @@ class _ActivitiesCard extends StatelessWidget {
                 ]),
               );
             }),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Trésorerie prévisionnelle ────────────────────────────
+/// Ce qui doit rentrer, et quand : le reste dû de chaque engagement entrant
+/// non soldé. Impossible avant la Phase 1 — `facture.encaissee` était un
+/// booléen sans échéance, et une créance saisie à la main n'était liée à
+/// rien. `Engagement` porte les deux depuis l'unification.
+class _TresorerieCard extends StatelessWidget {
+  const _TresorerieCard();
+
+  @override
+  Widget build(BuildContext context) {
+    final engagements = context.watch<AppState>().engagements;
+    final echeances = Avancement.tresoreriePrevisionnelle(
+        engagements, now: DateTime.now());
+    final total = echeances.fold(0.0, (s, e) => s + e.montant);
+    final aAfficher = echeances.take(5).toList();
+
+    return CardBox(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            const Icon(Icons.account_balance_wallet_outlined, size: 16, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text('À encaisser', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+          ]),
+          const SizedBox(height: 16),
+          if (aAfficher.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 28),
+              child: Center(child: Text('Rien à encaisser pour le moment',
+                  style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3))),
+            )
+          else ...[
+            for (var i = 0; i < aAfficher.length; i++)
+              Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                decoration: BoxDecoration(
+                  border: i < aAfficher.length - 1
+                      ? const Border(bottom: BorderSide(color: Color(0xFFF3F4F6)))
+                      : null,
+                ),
+                child: Row(children: [
+                  Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(aAfficher[i].tiers, style: GoogleFonts.dmSans(
+                        fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+                    Text(
+                      aAfficher[i].enRetard
+                          ? 'Échéance dépassée le ${Fmt.jour(aAfficher[i].echeance)}'
+                          : 'Échéance le ${Fmt.jour(aAfficher[i].echeance)}',
+                      style: GoogleFonts.dmSans(fontSize: 12,
+                          color: aAfficher[i].enRetard ? AppColors.red : AppColors.text3),
+                    ),
+                  ])),
+                  Text(Fmt.money(aAfficher[i].montant), style: GoogleFonts.dmSans(
+                      fontSize: 13, fontWeight: FontWeight.w700,
+                      color: aAfficher[i].enRetard ? AppColors.red : AppColors.text1)),
+                ]),
+              ),
+            const Divider(height: 24, color: AppColors.border),
+            Row(children: [
+              Text('Total attendu', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text2)),
+              const Spacer(),
+              Flexible(child: FittedBox(
+                fit: BoxFit.scaleDown,
+                alignment: Alignment.centerRight,
+                child: Text(Fmt.money(total), style: GoogleFonts.dmSans(
+                    fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.text1)),
+              )),
+            ]),
+          ],
         ],
       ),
     );
