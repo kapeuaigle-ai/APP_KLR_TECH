@@ -5,6 +5,29 @@ import 'commun.dart';
 /// lui, est identique pour tous les modes : règlements ÷ montant engagé.
 enum ModeAvancement { quantites, jalons, duree, manuel }
 
+/// Libellé et explication d'un mode, affichés dans les Paramètres (choix du
+/// mode d'un type) et à la création d'un projet (comment son avancement
+/// sera mesuré). Centralisés ici pour n'exister qu'une fois.
+extension ModeAvancementLibelle on ModeAvancement {
+  String get libelle => switch (this) {
+    ModeAvancement.quantites => 'Quantités livrées',
+    ModeAvancement.jalons => 'Jalons',
+    ModeAvancement.duree => 'Durée écoulée',
+    ModeAvancement.manuel => 'Saisie manuelle',
+  };
+
+  String get explication => switch (this) {
+    ModeAvancement.quantites =>
+      'L\'avancement se déduit des quantités livrées, pondérées par le montant.',
+    ModeAvancement.jalons =>
+      'L\'avancement se déduit des jalons réalisés, selon leur poids.',
+    ModeAvancement.duree =>
+      'L\'avancement suit le calendrier, du début à la fin prévue.',
+    ModeAvancement.manuel =>
+      'L\'avancement est saisi à la main. Aucun contrôle possible.',
+  };
+}
+
 /// Un type de projet, défini par le manager dans les Paramètres.
 ///
 /// Le code ne connaît jamais les métiers : il connaît quatre modes
