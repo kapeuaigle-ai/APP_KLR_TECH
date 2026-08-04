@@ -47,14 +47,14 @@ void main() {
     expect(find.text('Fourniture ACME'), findsOneWidget);
   });
 
-  testWidgets('tout livré, rien encaissé : colonne « Livré — reste à encaisser »', (tester) async {
+  testWidgets('tout livré, rien encaissé : colonne « Terminé — reste à encaisser »', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 10));
     expect(find.textContaining('reste à encaisser'), findsWidgets);
   });
 
-  testWidgets('tout livré et tout encaissé : colonne « Soldé »', (tester) async {
+  testWidgets('tout livré et tout encaissé : colonne « Terminé »', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 10, encaisse: 3000));
-    expect(find.text('Soldé'), findsWidgets);
+    expect(find.text('Terminé'), findsWidgets);
   });
 
   testWidgets('les cartes ne sont plus déplaçables', (tester) async {

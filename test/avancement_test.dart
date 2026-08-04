@@ -152,7 +152,7 @@ void main() {
         physiqueForce: 1,
       );
       expect(a.financier, 1);
-      expect(a.statut, StatutProjet.solde);
+      expect(a.statut, StatutProjet.termine);
       expect(a.montantRestant, 0);
     });
 
@@ -165,7 +165,7 @@ void main() {
       );
       expect(a.montantRestant, closeTo(0.02, 0.0001));
       expect(a.financier, lessThan(1));
-      expect(a.statut, StatutProjet.livreNonPaye);
+      expect(a.statut, StatutProjet.termineNonPaye);
     });
   });
 
@@ -275,17 +275,95 @@ void main() {
     test('0 et 0 : à démarrer', () {
       expect(calculerStatut(phys: 0, fin: 0), StatutProjet.aDemarrer);
     });
-    test('100 et 100 : soldé', () {
-      expect(calculerStatut(phys: 1, fin: 1), StatutProjet.solde);
+    test('100 et 100 : terminé', () {
+      expect(calculerStatut(phys: 1, fin: 1), StatutProjet.termine);
     });
-    test('100 livré, 50 encaissé : livré, reste à encaisser', () {
-      expect(calculerStatut(phys: 1, fin: 0.5), StatutProjet.livreNonPaye);
+    test('100 livré, 50 encaissé : terminé, reste à encaisser', () {
+      expect(calculerStatut(phys: 1, fin: 0.5), StatutProjet.termineNonPaye);
     });
     test('50 livré : en cours', () {
       expect(calculerStatut(phys: 0.5, fin: 0.5), StatutProjet.enCours);
     });
     test('0 livré mais déjà encaissé : en cours, pas à démarrer', () {
       expect(calculerStatut(phys: 0, fin: 0.3), StatutProjet.enCours);
+    });
+  });
+
+  group('statut déduit — Défaut 2 : rien n\'est dû', () {
+    // Un projet interne (pas de client, pas de facture, mode manuel) n'a
+    // aucun engagement entrant : `attendu` vaut 0 et `financier` reste nul
+    // à jamais. Sans le correctif, ce projet ne peut jamais atteindre la
+    // colonne finale.
+    test('projet interne (aucun engagement, mode manuel) à 100 % : terminé, '
+        'pas « reste à encaisser »', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.manuel,
+        proformas: const [], engagements: const [],
+        now: DateTime(2026, 4, 1), physiqueForce: 1,
+      );
+      expect(a.montantAttendu, 0);
+      expect(a.statut, StatutProjet.termine);
+    });
+
+    test('le même projet interne à 0 % : à démarrer', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.manuel,
+        proformas: const [], engagements: const [],
+        now: DateTime(2026, 4, 1), physiqueForce: 0,
+      );
+      expect(a.statut, StatutProjet.aDemarrer);
+    });
+
+    test('le même projet interne à 50 % : en cours', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.manuel,
+        proformas: const [], engagements: const [],
+        now: DateTime(2026, 4, 1), physiqueForce: 0.5,
+      );
+      expect(a.statut, StatutProjet.enCours);
+    });
+
+    test('projet fourniture entièrement livré et entièrement payé : terminé', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [_entrant(1, 1000, [_r(1000, DateTime(2026, 4, 1))])],
+        now: DateTime(2026, 4, 1), physiqueForce: 1,
+      );
+      expect(a.statut, StatutProjet.termine);
+    });
+
+    // Cas critique : de l'argent est bel et bien attendu (`attendu` > 0) et
+    // rien n'a été encaissé. `rienARecevoir` ne doit PAS avaler ce cas — il
+    // doit rester « reste à encaisser », pas basculer à « terminé ».
+    test('entièrement livré, rien payé, mais de l\'argent est attendu : '
+        'reste à encaisser, PAS terminé', () {
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [_entrant(1, 1000, const [])],
+        now: DateTime(2026, 4, 1), physiqueForce: 1,
+      );
+      expect(a.montantAttendu, 1000);
+      expect(a.financier, 0);
+      expect(a.statut, StatutProjet.termineNonPaye);
+    });
+
+    test('projet en mode durée, fin prévue dépassée, sans engagement : terminé', () {
+      final a = Avancement.calculer(
+        projet: _projet(debut: DateTime(2026, 1, 1), fin: DateTime(2026, 2, 1)),
+        mode: ModeAvancement.duree,
+        proformas: const [], engagements: const [],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.physique, 1);
+      expect(a.montantAttendu, 0);
+      expect(a.statut, StatutProjet.termine);
+    });
+  });
+
+  group('libellés du statut', () {
+    test('les libellés sont exactement ceux voulus', () {
+      expect(StatutProjet.termine.libelle, 'Terminé');
+      expect(StatutProjet.termineNonPaye.libelle, 'Terminé — reste à encaisser');
     });
   });
 }

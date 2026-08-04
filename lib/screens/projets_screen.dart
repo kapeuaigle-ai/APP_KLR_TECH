@@ -24,8 +24,8 @@ class ProjetsScreen extends StatelessWidget {
   static const _colonnes = [
     StatutProjet.aDemarrer,
     StatutProjet.enCours,
-    StatutProjet.livreNonPaye,
-    StatutProjet.solde,
+    StatutProjet.termineNonPaye,
+    StatutProjet.termine,
   ];
 
   @override
@@ -103,8 +103,8 @@ class _KanbanColonne extends StatelessWidget {
   static const _couleurs = {
     StatutProjet.aDemarrer: AppColors.text3,
     StatutProjet.enCours: AppColors.blue,
-    StatutProjet.livreNonPaye: AppColors.orange,
-    StatutProjet.solde: AppColors.green,
+    StatutProjet.termineNonPaye: AppColors.orange,
+    StatutProjet.termine: AppColors.green,
   };
 
   @override
