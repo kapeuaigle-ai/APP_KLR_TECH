@@ -636,6 +636,47 @@ void _confirmerSuppressionType(BuildContext context, AppState state, TypeProjet 
   );
 }
 
+/// Changer le mode d'avancement d'un type recalcule instantanément
+/// l'avancement — et donc la colonne Kanban — de tous ses projets. Même
+/// ampleur que la suppression, mais avec moins de cérémonie jusqu'ici.
+/// N'apparaît que si le mode a réellement changé : changer le libellé ou la
+/// couleur seul reste immédiat, pour ne pas gêner le cas courant.
+void _confirmerChangementMode(BuildContext context, AppState state,
+    TypeProjet existing, ModeAvancement nouveauMode, VoidCallback onConfirme) {
+  final affectes = state.projets.where((p) => p.typeId == existing.id).length;
+
+  showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Changer le mode d\'avancement ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        affectes == 0
+            ? 'Aucun projet n\'utilise actuellement « ${existing.libelle} » : rien ne sera recalculé.'
+            : '$affectes ${affectes > 1 ? 'projets utilisent' : 'projet utilise'} '
+              '« ${existing.libelle} ». ${affectes > 1 ? 'Leur' : 'Son'} avancement, mesuré par '
+              '« ${existing.mode.libelle} », sera désormais mesuré par « ${nouveauMode.libelle} ».',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            Navigator.of(ctx).pop();
+            onConfirme();
+          },
+          child: Text('Confirmer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.primary)),
+        ),
+      ],
+    ),
+  );
+}
+
 const _couleursTypeProjet = [
   AppColors.primary, AppColors.blue, AppColors.green, AppColors.orange,
   AppColors.purple, AppColors.teal, AppColors.emerald, AppColors.indigo,
@@ -720,13 +761,26 @@ void _ouvrirFormulaireType(BuildContext context, AppState state, {TypeProjet? ex
               state.ajouterTypeProjet(TypeProjet(
                 id: id, libelle: libelle, mode: mode, couleur: couleur,
               ));
+              Navigator.of(ctx).pop();
+            } else if (mode != existing.mode) {
+              // Le mode a changé : ça recalcule l'avancement de tous les
+              // projets de ce type, donc confirmation avant d'appliquer
+              // (§ défaut 3 de la revue finale). Le dialogue d'édition
+              // reste ouvert tant que rien n'est confirmé.
+              _confirmerChangementMode(ctx, state, existing, mode, () {
+                state.majTypeProjet(existing
+                  ..libelle = libelle
+                  ..mode = mode
+                  ..couleur = couleur);
+                Navigator.of(ctx).pop();
+              });
             } else {
               state.majTypeProjet(existing
                 ..libelle = libelle
                 ..mode = mode
                 ..couleur = couleur);
+              Navigator.of(ctx).pop();
             }
-            Navigator.of(ctx).pop();
           },
         ),
       ],
