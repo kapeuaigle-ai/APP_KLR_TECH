@@ -47,9 +47,9 @@ void main() {
     expect(find.text('Fourniture ACME'), findsOneWidget);
   });
 
-  testWidgets('tout livré, rien encaissé : colonne « Terminé — reste à encaisser »', (tester) async {
+  testWidgets('tout livré, rien encaissé : colonne « En révision »', (tester) async {
     await _pump(tester, _avecProjet(qteLivree: 10));
-    expect(find.textContaining('reste à encaisser'), findsWidgets);
+    expect(find.text('En révision'), findsWidgets);
   });
 
   testWidgets('tout livré et tout encaissé : colonne « Terminé »', (tester) async {

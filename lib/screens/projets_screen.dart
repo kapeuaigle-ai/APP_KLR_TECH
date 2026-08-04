@@ -121,7 +121,11 @@ class _KanbanColonne extends StatelessWidget {
             child: Row(children: [
               Container(width: 10, height: 10, decoration: BoxDecoration(color: couleur, shape: BoxShape.circle)),
               const SizedBox(width: 8),
-              Expanded(child: Text(statut.libelle,
+              // `Flexible` et non `Expanded` : le titre ne prend que la place
+              // qu'il lui faut, et le compteur le suit immédiatement. Avec
+              // `Expanded` il occupait les 280 px de la colonne et repoussait
+              // le compteur contre le bord droit, loin du titre qu'il compte.
+              Flexible(child: Text(statut.libelle,
                   style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1),
                   overflow: TextOverflow.ellipsis)),
               const SizedBox(width: 8),

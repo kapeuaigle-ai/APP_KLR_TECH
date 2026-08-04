@@ -363,7 +363,7 @@ void main() {
   group('libellés du statut', () {
     test('les libellés sont exactement ceux voulus', () {
       expect(StatutProjet.termine.libelle, 'Terminé');
-      expect(StatutProjet.termineNonPaye.libelle, 'Terminé — reste à encaisser');
+      expect(StatutProjet.termineNonPaye.libelle, 'En révision');
     });
   });
 }

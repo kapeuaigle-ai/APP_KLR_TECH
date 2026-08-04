@@ -9,7 +9,11 @@ extension StatutProjetLibelle on StatutProjet {
     StatutProjet.annule => 'Annulé',
     StatutProjet.aDemarrer => 'À démarrer',
     StatutProjet.termine => 'Terminé',
-    StatutProjet.termineNonPaye => 'Terminé — reste à encaisser',
+    // Le nom interne dit l'état réel — le travail est fait, l'argent non
+    // rentré. Le libellé affiché est celui qu'a choisi le manager, et les
+    // deux n'ont pas à coïncider : « Terminé » deux fois de suite dans le
+    // bandeau du Kanban se lisait comme un doublon.
+    StatutProjet.termineNonPaye => 'En révision',
     StatutProjet.enCours => 'En cours',
   };
 }
