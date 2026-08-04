@@ -420,6 +420,23 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Annule un projet : il reste avec tout son historique, mais sort du
+  /// Kanban et du Gantt (§ 6.4/7 de la conception) — même logique que
+  /// `annulerEngagement`, appliquée à un projet plutôt qu'à un engagement.
+  void annulerProjet(int id) {
+    final p = _projet(id);
+    if (p == null) return;
+    p.annule = true;
+    _emit();
+  }
+
+  void reactiverProjet(int id) {
+    final p = _projet(id);
+    if (p == null) return;
+    p.annule = false;
+    _emit();
+  }
+
   /// Supprime un projet et délie tout ce qui le désignait : un document ou un
   /// engagement pointant vers un projet disparu produirait un calcul faux.
   void deleteProjet(int id) {
