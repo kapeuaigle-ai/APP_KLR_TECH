@@ -62,4 +62,17 @@ void main() {
     expect(find.byType(Draggable), findsNothing,
         reason: 'la colonne est deduite : la deplacer a la main n\'aurait aucun sens');
   });
+
+  // Le mot « Livré » ne parlait que de fourniture ; la barre physique est
+  // commune aux quatre modes d'avancement (quantités, jalons, durée,
+  // manuel), d'où le renommage en « Réalisé ». « Encaissé » reste inchangé :
+  // l'argent est de l'argent, quel que soit le type de projet.
+  testWidgets('la fiche projet affiche les libellés « Réalisé » et « Encaissé »', (tester) async {
+    await _pump(tester, _avecProjet(qteLivree: 5, encaisse: 900));
+    await tester.tap(find.text('Fourniture ACME'));
+    await tester.pumpAndSettle();
+    expect(find.text('Réalisé'), findsWidgets);
+    expect(find.text('Encaissé'), findsWidgets);
+    expect(find.text('Livré'), findsNothing);
+  });
 }

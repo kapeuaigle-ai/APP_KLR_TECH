@@ -11,7 +11,7 @@ import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
 /// Vue chronologique des projets réels : deux barres par projet — physique
-/// (livré) et financier (encaissé) — sur un axe calculé depuis leurs vraies
+/// (réalisé) et financier (encaissé) — sur un axe calculé depuis leurs vraies
 /// dates. Aucune donnée codée en dur : sans projet enregistré, l'écran le dit
 /// plutôt que d'afficher une maquette.
 class GanttScreen extends StatelessWidget {
@@ -59,7 +59,7 @@ class GanttScreen extends StatelessWidget {
           SectionHeader(
             title: 'Gantt',
             subtitle: 'Vue chronologique des projets. '
-                'Barre pleine = livré, barre claire = encaissé.',
+                'Barre pleine = réalisé, barre claire = encaissé.',
             actions: [
               if (!isPhone(context))
                 SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
@@ -117,7 +117,7 @@ double _positionMois(DateTime axeDebut, DateTime d) {
 }
 
 /// Une ligne du Gantt : le nom du projet, puis sur l'axe des mois, la plage
-/// de dates du projet portant deux barres empilées — le physique (livré) en
+/// de dates du projet portant deux barres empilées — le physique (réalisé) en
 /// couleur pleine, le financier (encaissé) juste en dessous, en teinte
 /// claire. Le nom passe en rouge en cas de retard de livraison, une pastille
 /// orange signale un retard de paiement.
@@ -169,7 +169,7 @@ class _GanttRow extends StatelessWidget {
             child: Container(color: AppColors.border),
           )),
 
-          // Barre physique (livré) — pleine couleur, en haut.
+          // Barre physique (réalisé) — pleine couleur, en haut.
           Positioned(
             left: barLeft + 2, top: 2,
             width: barWidth, height: 15,
