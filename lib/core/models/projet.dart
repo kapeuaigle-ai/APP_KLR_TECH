@@ -1,6 +1,54 @@
+import 'package:flutter/material.dart';
+import 'commun.dart';
+
 /// Façon de mesurer l'avancement PHYSIQUE d'un projet. Le suivi financier,
 /// lui, est identique pour tous les modes : règlements ÷ montant engagé.
 enum ModeAvancement { quantites, jalons, duree, manuel }
+
+/// Un type de projet, défini par le manager dans les Paramètres.
+///
+/// Le code ne connaît jamais les métiers : il connaît quatre modes
+/// d'avancement. Ajouter « Formation » ou « Infogérance » ne demande donc
+/// aucune ligne de code.
+class TypeProjet {
+  final String id;
+  String libelle;
+  ModeAvancement mode;
+  Color couleur;
+
+  TypeProjet({
+    required this.id, required this.libelle,
+    required this.mode, required this.couleur,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id, 'libelle': libelle, 'mode': mode.name,
+    'couleur': colorToInt(couleur),
+  };
+
+  factory TypeProjet.fromJson(Map<String, dynamic> j) => TypeProjet(
+    id: j['id'], libelle: j['libelle'],
+    // Un mode inconnu (type supprimé, sauvegarde d'une version ultérieure)
+    // ne doit jamais faire planter le chargement.
+    mode: ModeAvancement.values.firstWhere(
+      (m) => m.name == j['mode'],
+      orElse: () => ModeAvancement.quantites,
+    ),
+    couleur: colorFromInt(j['couleur']),
+  );
+
+  /// Types livrés au premier lancement. Tous modifiables et supprimables.
+  static List<TypeProjet> get defauts => [
+    TypeProjet(id: 'fourniture', libelle: 'Fourniture de matériel',
+        mode: ModeAvancement.quantites, couleur: const Color(0xFF2563EB)),
+    TypeProjet(id: 'installation', libelle: 'Installation / déploiement',
+        mode: ModeAvancement.jalons, couleur: const Color(0xFFF59E0B)),
+    TypeProjet(id: 'maintenance', libelle: 'Maintenance / contrat',
+        mode: ModeAvancement.duree, couleur: const Color(0xFF10B981)),
+    TypeProjet(id: 'interne', libelle: 'Projet interne',
+        mode: ModeAvancement.manuel, couleur: const Color(0xFF8B5CF6)),
+  ];
+}
 
 /// Une étape datée d'un projet, pondérée dans l'avancement.
 class Jalon {
