@@ -337,6 +337,40 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
               return Text(mode.explication,
                   style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3));
             }),
+            // Sur un projet existant, la reclassification reste permise —
+            // mais un jalon déjà coché ou une quantité déjà livrée changerait
+            // de mode d'avancement sans un mot (§ défaut 4 de la revue
+            // finale). L'avertissement ne remplace jamais le champ : il
+            // prévient juste avant l'enregistrement.
+            if (existing != null)
+              Builder(builder: (_) {
+                final ancien = state.typeProjet(existing.typeId)?.mode;
+                final m = state.settings.typesProjet.where((t) => t.id == typeId);
+                final nouveau = m.isEmpty ? null : m.first.mode;
+                if (ancien == null || nouveau == null || ancien == nouveau) {
+                  return const SizedBox.shrink();
+                }
+                return Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.orange.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Icon(Icons.info_outline, size: 16, color: AppColors.orange),
+                      const SizedBox(width: 8),
+                      Expanded(child: Text(
+                        'Ce projet était mesuré par « ${ancien.libelle} » : ${ancien.explication} '
+                        'Avec ce type, il sera désormais mesuré par « ${nouveau.libelle} » : ${nouveau.explication}',
+                        style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text2, height: 1.4),
+                      )),
+                    ]),
+                  ),
+                );
+              }),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: _champDate(ctx, 'DÉBUT', debut, (d) => setLocal(() => debut = d))),
