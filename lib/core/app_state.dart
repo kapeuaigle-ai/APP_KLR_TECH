@@ -431,9 +431,41 @@ class AppState extends ChangeNotifier {
   List<Engagement> engagementsDuProjet(int projetId) =>
       engagements.where((e) => e.projetId == projetId).toList();
 
-  /// Mode d'avancement du projet. En phase 2, tous les projets sont en
-  /// `quantites` ; la phase 3 le lira depuis `AppSettings.typesProjet`.
-  ModeAvancement modeDuProjet(Projet p) => ModeAvancement.quantites;
+  TypeProjet? typeProjet(String id) {
+    final m = settings.typesProjet.where((t) => t.id == id);
+    return m.isEmpty ? null : m.first;
+  }
+
+  /// Mode d'avancement d'un projet. Un type disparu retombe sur `quantites`
+  /// plutôt que de faire échouer le calcul.
+  ModeAvancement modeDuProjet(Projet p) =>
+      typeProjet(p.typeId)?.mode ?? ModeAvancement.quantites;
+
+  void ajouterTypeProjet(TypeProjet t) {
+    if (typeProjet(t.id) != null) return;
+    settings.typesProjet.add(t);
+    _emit();
+  }
+
+  void majTypeProjet(TypeProjet t) {
+    final i = settings.typesProjet.indexWhere((x) => x.id == t.id);
+    if (i < 0) return;
+    settings.typesProjet[i] = t;
+    _emit();
+  }
+
+  /// Supprime un type et rebascule ses projets sur le premier type restant.
+  /// Le dernier type ne peut pas être supprimé : aucun projet ne serait
+  /// créable ensuite.
+  void supprimerTypeProjet(String id) {
+    if (settings.typesProjet.length <= 1) return;
+    settings.typesProjet.removeWhere((t) => t.id == id);
+    final repli = settings.typesProjet.first.id;
+    for (final p in projets) {
+      if (p.typeId == id) p.typeId = repli;
+    }
+    _emit();
+  }
 
   /// Enregistre la quantité livrée d'une ligne de proforma.
   ///
