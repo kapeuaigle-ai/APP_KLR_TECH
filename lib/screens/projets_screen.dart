@@ -478,6 +478,17 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   child: Text(avancement.statut.libelle,
                       style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
                 ),
+                // Un `typeId` orphelin (type supprimé, restauration d'une
+                // sauvegarde plus ancienne) fait retomber `modeDuProjet` sur
+                // `quantites` en silence — le manager doit au moins le savoir.
+                if (state.typeProjet(projet.typeId) == null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Le type de ce projet n\'existe plus : son avancement est '
+                    'mesuré par défaut sur les quantités livrées.',
+                    style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.orange, height: 1.4),
+                  ),
+                ],
                 const SizedBox(height: 16),
                 _LigneAvancement(label: 'Livré', fraction: avancement.physique, couleur: AppColors.primary),
                 const SizedBox(height: 12),
