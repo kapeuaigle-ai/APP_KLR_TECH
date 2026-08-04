@@ -10,16 +10,6 @@ import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
 
-/// Types de projet proposés à la création. En phase 2, `typeId` n'influence
-/// encore rien (le mode d'avancement est toujours `quantites`) : la liste
-/// deviendra paramétrable en phase 3 (`AppSettings.typesProjet`).
-const _typesProjet = [
-  ('fourniture', 'Fourniture de matériel'),
-  ('installation', 'Installation / déploiement'),
-  ('maintenance', 'Maintenance / contrat'),
-  ('interne', 'Projet interne'),
-];
-
 /// Kanban des projets, en lecture seule.
 ///
 /// La colonne d'une carte se déduit de son avancement physique et financier
@@ -281,7 +271,7 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
   final nomCtrl = TextEditingController(text: existing?.nom ?? '');
   int? clientId = existing?.clientId;
   String client = existing?.client ?? '';
-  String typeId = existing?.typeId ?? _typesProjet.first.$1;
+  String typeId = existing?.typeId ?? state.settings.typesProjet.first.id;
   DateTime debut = existing?.debut ?? DateTime.now();
   DateTime finPrevue = existing?.finPrevue ?? DateTime.now().add(const Duration(days: 30));
   var erreur = false;
@@ -321,20 +311,32 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             const SizedBox(height: 12),
             Text('TYPE', style: AppTheme.label),
             const SizedBox(height: 6),
-            Wrap(spacing: 8, runSpacing: 8, children: _typesProjet.map((t) => GestureDetector(
-              onTap: () => setLocal(() => typeId = t.$1),
+            // Les types du manager — définis dans les Paramètres, jamais
+            // une liste figée dans le code (§ 5.4 de la conception).
+            Wrap(spacing: 8, runSpacing: 8, children: state.settings.typesProjet.map((t) => GestureDetector(
+              onTap: () => setLocal(() => typeId = t.id),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: typeId == t.$1 ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                  color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: typeId == t.$1 ? AppColors.primary : AppColors.border),
+                  border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
                 ),
-                child: Text(t.$2, style: GoogleFonts.dmSans(
+                child: Text(t.libelle, style: GoogleFonts.dmSans(
                     fontSize: 12, fontWeight: FontWeight.w600,
-                    color: typeId == t.$1 ? AppColors.primary : AppColors.text2)),
+                    color: typeId == t.id ? AppColors.primary : AppColors.text2)),
               ),
             )).toList()),
+            const SizedBox(height: 8),
+            // Comment son avancement sera mesuré, avant qu'il ne valide —
+            // pour que le choix du type ne soit jamais un pari (§ 11).
+            Builder(builder: (_) {
+              final m = state.settings.typesProjet.where((t) => t.id == typeId);
+              final mode = m.isEmpty ? null : m.first.mode;
+              if (mode == null) return const SizedBox.shrink();
+              return Text(mode.explication,
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3));
+            }),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: _champDate(ctx, 'DÉBUT', debut, (d) => setLocal(() => debut = d))),
