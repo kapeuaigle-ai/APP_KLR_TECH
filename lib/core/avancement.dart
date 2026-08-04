@@ -14,6 +14,20 @@ extension StatutProjetLibelle on StatutProjet {
   };
 }
 
+/// Une rentrée attendue, à une échéance.
+class EcheanceAttendue {
+  final DateTime echeance;
+  final double montant;
+  final String tiers;
+  final String? documentNumero;
+  final bool enRetard;
+
+  const EcheanceAttendue({
+    required this.echeance, required this.montant, required this.tiers,
+    required this.documentNumero, required this.enRetard,
+  });
+}
+
 /// Résultat complet du calcul d'un projet. Aucun de ces chiffres n'est stocké.
 class Avancement {
   final double physique;   // 0..1
@@ -124,6 +138,27 @@ class Avancement {
       case ModeAvancement.manuel:
         return projet.avancementManuel.clamp(0.0, 1.0);
     }
+  }
+
+  /// Ce qui doit rentrer, et quand : le reste dû de chaque engagement entrant
+  /// non soldé, trié de l'échéance la plus proche à la plus lointaine.
+  ///
+  /// Ne devient calculable qu'une fois les engagements unifiés : c'est une
+  /// retombée directe de la phase 1.
+  static List<EcheanceAttendue> tresoreriePrevisionnelle(
+      List<Engagement> engagements, {required DateTime now}) {
+    final res = engagements
+        .where((e) => e.estEntrant && !e.annule && !e.solde)
+        .map((e) => EcheanceAttendue(
+              echeance: e.echeance,
+              montant: e.reste,
+              tiers: e.tiers,
+              documentNumero: e.documentNumero,
+              enRetard: e.enRetard(now),
+            ))
+        .toList();
+    res.sort((a, b) => a.echeance.compareTo(b.echeance));
+    return res;
   }
 
   /// Les règles sont évaluées dans l'ordre : la première qui correspond

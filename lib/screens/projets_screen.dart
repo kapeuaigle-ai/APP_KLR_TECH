@@ -450,6 +450,8 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                 _ligneMontant('Montant attendu', avancement.montantAttendu),
                 _ligneMontant('Encaissé', avancement.montantEncaisse),
                 _ligneMontant('Reste dû', avancement.montantRestant),
+                _ligneMontant('Décaissé', avancement.montantDepense),
+                _LigneMarge(marge: avancement.marge),
 
                 // ── Avancement, selon le mode du type de projet ─────
                 // Chaque mode a sa propre façon de saisir l'avancement ;
@@ -473,6 +475,35 @@ Widget _ligneMontant(String label, double montant) => Padding(
     Text(Fmt.money(montant), style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
   ]),
 );
+
+/// Marge du projet — encaissé moins décaissé, tel que calculé par
+/// `Avancement.marge`. Jamais recalculée ici : cash-basis, sur les
+/// règlements réels uniquement. Rouge dès qu'elle est négative, pour que le
+/// manager la repère sans avoir à lire le chiffre.
+class _LigneMarge extends StatelessWidget {
+  final double marge;
+  const _LigneMarge({required this.marge});
+
+  @override
+  Widget build(BuildContext context) {
+    final negative = marge < 0;
+    final couleur = negative ? AppColors.red : AppColors.green;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6, top: 2),
+      child: Row(children: [
+        Text('Marge', style: GoogleFonts.dmSans(
+            fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
+        const Spacer(),
+        Flexible(child: FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerRight,
+          child: Text(Fmt.money(marge),
+              style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w800, color: couleur)),
+        )),
+      ]),
+    );
+  }
+}
 
 // ─────────────────────────────────────────────────────────
 //  Section « avancement » de la fiche projet — une présentation par mode.
