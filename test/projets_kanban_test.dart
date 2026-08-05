@@ -75,4 +75,37 @@ void main() {
     expect(find.text('Encaissé'), findsWidgets);
     expect(find.text('Livré'), findsNothing);
   });
+
+  // ── Badge « Échéance atteinte » ──────────────────────────
+  // Rien livré, rien encaissé, mais l'échéance est passée : le projet reste
+  // en « À démarrer » (règle 3 avant règle 4) — le badge est le seul rappel
+  // qu'il reste au manager.
+  testWidgets('à démarrer, échéance passée : le badge « Échéance atteinte » apparaît', (tester) async {
+    final s = AppState()..viderDonnees();
+    s.addProjet(Projet(
+      id: 1, nom: 'Idée jamais lancée', typeId: 'interne', clientId: null,
+      client: '', debut: DateTime(2020, 1, 1), finPrevue: DateTime(2020, 6, 30)));
+    await _pump(tester, s);
+    expect(find.text('À démarrer'), findsOneWidget);
+    expect(find.text('Échéance atteinte'), findsOneWidget);
+  });
+
+  testWidgets('à démarrer, échéance PAS passée : pas de badge', (tester) async {
+    final s = AppState()..viderDonnees();
+    s.addProjet(Projet(
+      id: 1, nom: 'Projet futur', typeId: 'interne', clientId: null,
+      client: '', debut: DateTime(2030, 1, 1), finPrevue: DateTime(2030, 6, 30)));
+    await _pump(tester, s);
+    expect(find.text('À démarrer'), findsOneWidget);
+    expect(find.text('Échéance atteinte'), findsNothing);
+  });
+
+  testWidgets('« En révision » ne porte pas le badge : le statut est déjà le signal', (tester) async {
+    // Livré et échéance dépassée (finPrevue par défaut le 30 juin 2026, bien
+    // avant la date système réelle) : la carte tombe en « En révision », pas
+    // « À démarrer », et ne doit donc jamais porter le badge.
+    await _pump(tester, _avecProjet(qteLivree: 10));
+    expect(find.text('En révision'), findsWidgets);
+    expect(find.text('Échéance atteinte'), findsNothing);
+  });
 }

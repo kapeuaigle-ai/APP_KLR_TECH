@@ -183,6 +183,26 @@ class _ProjetCard extends StatelessWidget {
           const SizedBox(height: 3),
           Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
               style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+          // Rien démarré et l'échéance est passée : le seul rappel que reçoit
+          // le manager, puisque la colonne ne bouge pas (§ règle 3 avant
+          // règle 4 — un projet jamais lancé peut n'avoir aucun client à
+          // renégocier). N'apparaît que sur « À démarrer » : ailleurs,
+          // « En révision » *est* déjà le signal.
+          if (avancement.statut == StatutProjet.aDemarrer && avancement.finDepassee) ...[
+            const SizedBox(height: 6),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text('Échéance atteinte',
+                    style: GoogleFonts.dmSans(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.orange)),
+              ),
+            ),
+          ],
           const SizedBox(height: 12),
           _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
           const SizedBox(height: 8),
