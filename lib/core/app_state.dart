@@ -437,6 +437,23 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Repousse la fin prévue d'un projet — l'action « Reporter l'échéance »
+  /// du Kanban, qui fait sortir un projet d'« En révision » vers « En
+  /// cours ». Refuse silencieusement une date antérieure au début, comme le
+  /// formulaire de création/édition : `Projet.periodeValide` encode déjà
+  /// cette règle, pas de comparaison de dates dupliquée ici.
+  void reporterEcheance(int id, DateTime nouvelleFin) {
+    final p = _projet(id);
+    if (p == null) return;
+    final ancienneFin = p.finPrevue;
+    p.finPrevue = nouvelleFin;
+    if (!p.periodeValide) {
+      p.finPrevue = ancienneFin;
+      return;
+    }
+    _emit();
+  }
+
   /// Supprime un projet et délie tout ce qui le désignait : un document ou un
   /// engagement pointant vers un projet disparu produirait un calcul faux.
   void deleteProjet(int id) {

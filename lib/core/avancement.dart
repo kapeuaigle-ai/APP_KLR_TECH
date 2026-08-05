@@ -43,6 +43,7 @@ class Avancement {
   final StatutProjet statut;
   final bool enRetardLivraison;
   final bool enRetardPaiement;
+  final bool finDepassee;
 
   const Avancement({
     required this.physique, required this.financier,
@@ -50,6 +51,7 @@ class Avancement {
     required this.montantDepense, required this.montantRestant,
     required this.statut,
     required this.enRetardLivraison, required this.enRetardPaiement,
+    required this.finDepassee,
   });
 
   /// Marge réalisée : encaissé moins décaissé, en base caisse.
@@ -95,6 +97,9 @@ class Avancement {
     final financier =
         attendu == 0 ? 0.0 : ((attendu - restant) / attendu).clamp(0.0, 1.0);
 
+    // Le jour de l'échéance n'est pas un dépassement — même règle que
+    // `Engagement.enRetard` (§ notes d'environnement) : deux règles de date
+    // contradictoires dans la même appli seraient pires que l'une ou l'autre.
     final finDepassee = now.isAfter(DateTime(
         projet.finPrevue.year, projet.finPrevue.month, projet.finPrevue.day));
 
@@ -105,9 +110,10 @@ class Avancement {
       montantEncaisse: encaisse,
       montantDepense: depense,
       montantRestant: restant,
-      statut: _statut(projet, physique, financier, attendu),
+      statut: _statut(projet, physique, financier, attendu, finDepassee),
       enRetardLivraison: !projet.annule && finDepassee && physique < 1,
       enRetardPaiement: entrants.any((e) => e.enRetard(now)),
+      finDepassee: finDepassee,
     );
   }
 
@@ -182,13 +188,28 @@ class Avancement {
   /// et le projet doit pouvoir se terminer : sans ce cas, `financier` reste
   /// nul à jamais et le projet resterait bloqué à « reste à encaisser » en
   /// annonçant un encaissement qui n'a jamais été attendu.
-  static StatutProjet _statut(
-      Projet projet, double physique, double financier, double attendu) {
+  ///
+  /// « En révision » ne dit plus « livré mais pas payé » : le manager l'a
+  /// redéfini comme « l'échéance est là, il faut renégocier ». D'où l'ordre :
+  ///
+  /// 1. Un projet livré ET soldé (`termine`) l'emporte toujours sur la date —
+  ///    sans ce test avant celui de l'échéance, tout projet terminé finirait,
+  ///    des mois après sa clôture, par retomber en « En révision » puisque sa
+  ///    fin prévue est nécessairement dans le passé.
+  /// 2. Un projet jamais démarré (`aDemarrer`) reste dans sa colonne même
+  ///    après sa date : une idée notée et jamais lancée peut n'avoir aucun
+  ///    client à renégocier. Le badge « Échéance atteinte » porte ce rappel,
+  ///    pas un changement de colonne.
+  /// 3. Sinon, une échéance dépassée bascule en révision : soit le client
+  ///    n'a pas honoré son côté, soit l'entreprise le sien, et le manager
+  ///    doit trancher.
+  static StatutProjet _statut(Projet projet, double physique, double financier,
+      double attendu, bool finDepassee) {
     if (projet.annule) return StatutProjet.annule;
-    if (physique == 0 && financier == 0) return StatutProjet.aDemarrer;
     final rienARecevoir = attendu == 0 || financier >= 1;
     if (physique >= 1 && rienARecevoir) return StatutProjet.termine;
-    if (physique >= 1) return StatutProjet.termineNonPaye;
+    if (physique == 0 && financier == 0) return StatutProjet.aDemarrer;
+    if (finDepassee) return StatutProjet.termineNonPaye;
     return StatutProjet.enCours;
   }
 }
