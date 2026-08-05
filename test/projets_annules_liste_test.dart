@@ -195,4 +195,84 @@ void main() {
     final eng = state.engagements.firstWhere((e) => e.id == 9);
     expect(eng.projetId, isNull, reason: 'détaché, pas supprimé');
   });
+
+  // ── Menu de la carte, dans la liste des annulés ──────────
+  // « Annuler le projet » sur un projet déjà annulé est un geste sans
+  // effet visible : le manager clique et doute que l'application ait
+  // enregistré quoi que ce soit. « Reporter l'échéance » sur un projet
+  // abandonné n'a pas plus de sens. La carte doit suivre la même
+  // distinction que la fiche (§ !projet.annule).
+  group('menu de la carte — projet annulé', () {
+    testWidgets('propose seulement Réactiver et Modifier — pas Relancer, Reporter, Annuler ni Supprimer',
+        (tester) async {
+      final state = AppState()..viderDonnees();
+      state.addProjet(_p());
+      state.annulerProjet(1);
+      await _pump(tester, state);
+
+      await tester.tap(find.text('Annulés (1)'));
+      await tester.pumpAndSettle();
+
+      // Aucun dialogue n'est ouvert ici : le more_vert n'est pas ambigu.
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Réactiver'), findsOneWidget);
+      expect(find.text('Modifier'), findsOneWidget);
+      expect(find.text('Relancer le client'), findsNothing);
+      expect(find.text('Reporter l\'échéance'), findsNothing);
+      expect(find.text('Annuler le projet'), findsNothing);
+      expect(find.text('Supprimer'), findsNothing);
+    });
+
+    testWidgets('un projet vivant garde son menu de carte inchangé — les quatre entrées',
+        (tester) async {
+      final state = AppState()..viderDonnees();
+      state.addProjet(_p());
+      state.saveOrUpdateProforma(DocumentItem(
+        id: 1, numero: 'KLR-P01-10012026', date: '10/01/2026', clientId: 5,
+        client: 'ACME', objet: 'PC', montant: 3000, statut: 'cours', projetId: 1,
+        lines: [LineItem(ref: 'PC', designation: 'PC', qte: 10, pu: 300, qteLivree: 10)],
+      ));
+      state.validateProforma(1); // crée un entrant → « Relancer le client » proposé
+      await _pump(tester, state);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Relancer le client'), findsOneWidget);
+      expect(find.text('Reporter l\'échéance'), findsOneWidget);
+      expect(find.text('Modifier'), findsOneWidget);
+      expect(find.text('Annuler le projet'), findsOneWidget);
+      expect(find.text('Réactiver'), findsNothing);
+      expect(find.text('Supprimer'), findsNothing);
+    });
+
+    testWidgets('taper Réactiver depuis la carte fait revenir le projet au tableau normal',
+        (tester) async {
+      final state = AppState()..viderDonnees();
+      state.addProjet(_p());
+      state.annulerProjet(1);
+      await _pump(tester, state);
+
+      await tester.tap(find.text('Annulés (1)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fourniture matériel'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Réactiver'));
+      await tester.pumpAndSettle();
+
+      expect(state.projets.first.annule, isFalse);
+      // Disparaît de la liste des annulés — son compteur retombe à 0.
+      expect(find.text('Annulés (0)'), findsOneWidget);
+      expect(find.text('Fourniture matériel'), findsNothing);
+
+      // Réapparaît parmi les vivants une fois le filtre désactivé.
+      await tester.tap(find.text('Annulés (0)'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fourniture matériel'), findsOneWidget);
+    });
+  });
 }

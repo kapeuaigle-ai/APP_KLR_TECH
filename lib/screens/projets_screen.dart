@@ -250,31 +250,54 @@ class _ProjetCard extends StatelessWidget {
                     _ouvrirFormulaireProjet(context, state, existing: projet);
                   case 'annuler':
                     state.annulerProjet(projet.id);
+                  case 'reactiver':
+                    state.reactiverProjet(projet.id);
                 }
               },
-              itemBuilder: (_) => [
-                if (aUnEntrant)
-                  PopupMenuItem(value: 'relancer', child: Row(children: [
-                    const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
-                    const SizedBox(width: 8),
-                    Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                  ])),
-                PopupMenuItem(value: 'reporter', child: Row(children: [
-                  const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-                PopupMenuItem(value: 'modifier', child: Row(children: [
-                  const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-                PopupMenuItem(value: 'annuler', child: Row(children: [
-                  const Icon(Icons.block, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-              ],
+              // Un projet annulé n'a plus de client à relancer ni d'échéance
+              // à reporter, et « Annuler le projet » y serait un geste sans
+              // effet visible — le manager cliquerait sans rien voir changer
+              // et douterait que l'app ait enregistré quoi que ce soit. La
+              // carte suit donc la même distinction que la fiche (§ !annule) :
+              // seuls Réactiver et Modifier restent pertinents. « Supprimer »
+              // reste absent d'ici dans les deux cas — irréversible, il reste
+              // sur la fiche derrière sa confirmation (§ garde-fou).
+              itemBuilder: (_) => projet.annule
+                  ? [
+                      PopupMenuItem(value: 'reactiver', child: Row(children: [
+                        const Icon(Icons.undo, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'modifier', child: Row(children: [
+                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                    ]
+                  : [
+                      if (aUnEntrant)
+                        PopupMenuItem(value: 'relancer', child: Row(children: [
+                          const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
+                          const SizedBox(width: 8),
+                          Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                        ])),
+                      PopupMenuItem(value: 'reporter', child: Row(children: [
+                        const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'modifier', child: Row(children: [
+                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'annuler', child: Row(children: [
+                        const Icon(Icons.block, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                    ],
             ),
           ]),
           // Rien démarré et l'échéance est passée : le seul rappel que reçoit
