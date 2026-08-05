@@ -81,4 +81,40 @@ void main() {
     expect(s.avancementProjet(1, now: DateTime(2026, 4, 1)).montantAttendu, 1000);
     expect(s.avancementProjet(2, now: DateTime(2026, 4, 1)).montantAttendu, 7000);
   });
+
+  group('reporterEcheance', () {
+    test('repousse finPrevue et fait sortir le projet d\'« En révision »', () {
+      final s = AppState()..viderDonnees();
+      s.addProjet(_p()); // debut 1/3/2026, finPrevue 30/6/2026
+
+      // Livré à 100 %, rien encaissé, échéance dépassée : « En révision ».
+      s.saveOrUpdateProforma(DocumentItem(
+        id: 1, numero: 'KLR-P01-10032026', date: '10/03/2026', clientId: 5,
+        client: 'ACME', objet: 'PC', montant: 3000, statut: 'cours', projetId: 1,
+        lines: [LineItem(ref: 'PC', designation: 'PC', qte: 10, pu: 300, qteLivree: 10)],
+      ));
+      s.validateProforma(1);
+      expect(s.avancementProjet(1, now: DateTime(2026, 7, 15)).statut,
+          StatutProjet.termineNonPaye);
+
+      s.reporterEcheance(1, DateTime(2026, 9, 30));
+      expect(s.projets.first.finPrevue, DateTime(2026, 9, 30));
+      expect(s.avancementProjet(1, now: DateTime(2026, 7, 15)).statut,
+          StatutProjet.enCours);
+    });
+
+    test('une date antérieure au début est refusée', () {
+      final s = AppState()..viderDonnees();
+      s.addProjet(_p()); // debut 1/3/2026, finPrevue 30/6/2026
+
+      s.reporterEcheance(1, DateTime(2026, 2, 1)); // avant le début
+      expect(s.projets.first.finPrevue, DateTime(2026, 6, 30),
+          reason: 'la fin prévue ne doit pas bouger sur une date invalide');
+    });
+
+    test('un projet inconnu est ignoré sans planter', () {
+      final s = AppState()..viderDonnees();
+      expect(() => s.reporterEcheance(999, DateTime(2026, 9, 30)), returnsNormally);
+    });
+  });
 }

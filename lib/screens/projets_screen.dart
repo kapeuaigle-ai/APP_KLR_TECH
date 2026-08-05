@@ -165,6 +165,12 @@ class _ProjetCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    // « Relancer le client » n'a de sens que s'il y a un client à relancer :
+    // un engagement entrant actif rattaché au projet.
+    final aUnEntrant = state.engagementsDuProjet(projet.id)
+        .any((e) => e.estEntrant && !e.annule);
+
     return InkWell(
       borderRadius: BorderRadius.circular(10),
       onTap: () => _ouvrirFicheProjet(context, projet),
@@ -178,11 +184,62 @@ class _ProjetCard extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text(projet.nom, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1),
-              maxLines: 2, overflow: TextOverflow.ellipsis),
-          const SizedBox(height: 3),
-          Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
-              style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(projet.nom, style: GoogleFonts.dmSans(fontSize: 13.5, fontWeight: FontWeight.w700, color: AppColors.text1),
+                  maxLines: 2, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 3),
+              Text(projet.client.isEmpty ? 'Projet interne' : projet.client,
+                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+            ])),
+            // Les actions vivent directement sur la carte : le manager n'a
+            // pas à ouvrir la fiche pour relancer un client, reporter une
+            // échéance, corriger un champ ou annuler. « Supprimer » reste
+            // volontairement absent d'ici — irréversible, il reste sur la
+            // fiche derrière sa confirmation (§ garde-fou).
+            PopupMenuButton<String>(
+              tooltip: 'Actions',
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.more_vert, size: 18, color: AppColors.text3),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              color: Colors.white,
+              onSelected: (action) {
+                switch (action) {
+                  case 'relancer':
+                    state.navigate(NavScreen.suivi);
+                  case 'reporter':
+                    _reporterEcheance(context, state, projet);
+                  case 'modifier':
+                    _ouvrirFormulaireProjet(context, state, existing: projet);
+                  case 'annuler':
+                    state.annulerProjet(projet.id);
+                }
+              },
+              itemBuilder: (_) => [
+                if (aUnEntrant)
+                  PopupMenuItem(value: 'relancer', child: Row(children: [
+                    const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
+                    const SizedBox(width: 8),
+                    Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                  ])),
+                PopupMenuItem(value: 'reporter', child: Row(children: [
+                  const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
+                  const SizedBox(width: 8),
+                  Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                ])),
+                PopupMenuItem(value: 'modifier', child: Row(children: [
+                  const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
+                  const SizedBox(width: 8),
+                  Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                ])),
+                PopupMenuItem(value: 'annuler', child: Row(children: [
+                  const Icon(Icons.block, size: 15, color: AppColors.text3),
+                  const SizedBox(width: 8),
+                  Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                ])),
+              ],
+            ),
+          ]),
           // Rien démarré et l'échéance est passée : le seul rappel que reçoit
           // le manager, puisque la colonne ne bouge pas (§ règle 3 avant
           // règle 4 — un projet jamais lancé peut n'avoir aucun client à
@@ -262,6 +319,23 @@ InputDecoration _deco(BuildContext context, String hint) => InputDecoration(
   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
   isDense: true,
 );
+
+// ─────────────────────────────────────────────────────────
+//  Action « Reporter l'échéance » — depuis le menu de la carte
+// ─────────────────────────────────────────────────────────
+/// `firstDate: projet.debut` empêche déjà, dans le calendrier lui-même, de
+/// choisir une date antérieure au début — `AppState.reporterEcheance`
+/// refuse quand même la même règle en profondeur (`Projet.periodeValide`),
+/// au cas où cette action serait un jour appelée autrement que d'ici.
+Future<void> _reporterEcheance(BuildContext context, AppState state, Projet projet) async {
+  final d = await showDatePicker(
+    context: context,
+    initialDate: projet.finPrevue,
+    firstDate: projet.debut,
+    lastDate: DateTime(2100),
+  );
+  if (d != null) state.reporterEcheance(projet.id, d);
+}
 
 Widget _champDate(BuildContext context, String label, DateTime valeur, ValueChanged<DateTime> onPicked) {
   return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

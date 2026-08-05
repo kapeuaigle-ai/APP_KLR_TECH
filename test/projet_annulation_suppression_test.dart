@@ -105,7 +105,11 @@ void main() {
       await tester.tap(find.text('Fourniture matériel'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       expect(find.text('Annuler le projet'), findsOneWidget);
       expect(find.text('Réactiver'), findsNothing);
@@ -115,7 +119,11 @@ void main() {
 
       expect(state.projets.first.annule, isTrue);
 
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       expect(find.text('Réactiver'), findsOneWidget);
       expect(find.text('Annuler le projet'), findsNothing);
@@ -130,7 +138,11 @@ void main() {
       await tester.tap(find.text('Fourniture matériel'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Supprimer'));
       await tester.pumpAndSettle();
@@ -155,7 +167,11 @@ void main() {
       await tester.tap(find.text('Fourniture matériel'));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Supprimer'));
       await tester.pumpAndSettle();
@@ -172,7 +188,11 @@ void main() {
 
       await tester.tap(find.text('Fourniture matériel'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Supprimer'));
       await tester.pumpAndSettle();
@@ -202,7 +222,11 @@ void main() {
 
       await tester.tap(find.text('Fourniture matériel'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byIcon(Icons.more_vert));
+      // La carte Kanban, restée montée derrière la fiche, porte elle aussi
+      // un bouton « more_vert » depuis l'ajout de son propre menu d'actions
+      // (§ actions Kanban) : on cible ici précisément celui de la fiche.
+      await tester.tap(find.descendant(
+          of: find.byType(Dialog), matching: find.byIcon(Icons.more_vert)));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Supprimer'));
       await tester.pumpAndSettle();

@@ -108,4 +108,95 @@ void main() {
     expect(find.text('En révision'), findsWidgets);
     expect(find.text('Échéance atteinte'), findsNothing);
   });
+
+  // ── Menu d'actions sur la carte ──────────────────────────
+  group('menu d\'actions de la carte', () {
+    testWidgets('propose « Relancer le client » quand le projet a un engagement entrant', (tester) async {
+      await _pump(tester, _avecProjet(qteLivree: 10)); // validateProforma crée l'entrant
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Relancer le client'), findsOneWidget);
+      expect(find.text('Reporter l\'échéance'), findsOneWidget);
+      expect(find.text('Modifier'), findsOneWidget);
+      expect(find.text('Annuler le projet'), findsOneWidget);
+      // Irréversible : ne doit jamais être à un clic de la carte.
+      expect(find.text('Supprimer'), findsNothing);
+    });
+
+    testWidgets('n\'offre pas « Relancer le client » sans engagement entrant', (tester) async {
+      final s = AppState()..viderDonnees();
+      s.addProjet(Projet(
+        id: 1, nom: 'Projet interne', typeId: 'interne', clientId: null,
+        client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 12, 31)));
+      await _pump(tester, s);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      expect(find.text('Relancer le client'), findsNothing);
+    });
+
+    testWidgets('« Relancer le client » bascule sur l\'écran Suivi', (tester) async {
+      final s = _avecProjet(qteLivree: 10);
+      await _pump(tester, s);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Relancer le client'));
+      await tester.pumpAndSettle();
+      expect(s.screen, NavScreen.suivi);
+    });
+
+    testWidgets('« Annuler le projet » fait sortir la carte du Kanban', (tester) async {
+      final s = _avecProjet();
+      await _pump(tester, s);
+      expect(find.text('Fourniture ACME'), findsOneWidget);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Annuler le projet'));
+      await tester.pumpAndSettle();
+      expect(find.text('Fourniture ACME'), findsNothing);
+      expect(s.projets.first.annule, isTrue);
+    });
+
+    testWidgets('« Modifier » ouvre le formulaire d\'édition du projet', (tester) async {
+      // Projet interne (pas de clientId) : le sélecteur client du
+      // formulaire n'a alors qu'une seule entrée valide (« Projet
+      // interne »), sans quoi `DropdownButtonFormField` exigerait un
+      // client 5 inexistant dans `state.clients`.
+      final s = AppState()..viderDonnees();
+      s.addProjet(Projet(
+        id: 1, nom: 'Projet interne', typeId: 'interne', clientId: null,
+        client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 12, 31)));
+      await _pump(tester, s);
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Modifier'));
+      await tester.pumpAndSettle();
+      expect(find.text('Modifier le projet'), findsOneWidget);
+    });
+
+    testWidgets('« Reporter l\'échéance » ouvre un calendrier et repousse la fin prévue',
+        (tester) async {
+      final s = _avecProjet(qteLivree: 10); // livré, rien encaissé, échéance dépassée → En révision
+      await _pump(tester, s);
+      expect(find.text('En révision'), findsWidgets);
+
+      await tester.tap(find.byIcon(Icons.more_vert));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Reporter l\'échéance'));
+      await tester.pumpAndSettle();
+
+      // Le calendrier s'ouvre sur la fin prévue actuelle (30 juin 2026).
+      // Avancer d'un mois et choisir le 15 donne une date déterministe
+      // (15 juillet 2026), sans dépendre de l'horloge réelle — la règle
+      // « ça sort d'En révision » est déjà couverte, déterministe elle
+      // aussi, au niveau AppState (reporterEcheance, app_state_projets_test).
+      await tester.tap(find.byTooltip('Next month'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('15'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('OK'));
+      await tester.pumpAndSettle();
+
+      expect(s.projets.first.finPrevue, DateTime(2026, 7, 15));
+    });
+  });
 }
