@@ -170,14 +170,25 @@ class _GanttRow extends StatelessWidget {
           )),
 
           // Barre physique (réalisé) — pleine couleur, en haut.
+          //
+          // Chaque barre porte son propre survol : les dates exactes ne se
+          // lisent pas sur un axe gradué au mois, et le survol dit aussi ce
+          // que la barre mesure — il n'y a alors plus de code couleur à
+          // retenir. Même procédé que les repères de jalons.
           Positioned(
             left: barLeft + 2, top: 2,
             width: barWidth, height: 15,
-            child: _Barre(
-              pct: pctPhysique,
-              couleurFond: AppColors.primary.withValues(alpha: 0.15),
-              couleurRemplissage: AppColors.primary,
-              label: pctPhysique > 0 ? '$pctPhysique %' : '',
+            child: Tooltip(
+              key: ValueKey('barre-physique-${projet.id}'),
+              message: 'Réalisé — $pctPhysique %\n'
+                  'Mesuré par : ${mode.libelle}\n'
+                  'Du ${Fmt.jour(projet.debut)} au ${Fmt.jour(projet.finPrevue)}',
+              child: _Barre(
+                pct: pctPhysique,
+                couleurFond: AppColors.primary.withValues(alpha: 0.15),
+                couleurRemplissage: AppColors.primary,
+                label: pctPhysique > 0 ? '$pctPhysique %' : '',
+              ),
             ),
           ),
 
@@ -185,11 +196,18 @@ class _GanttRow extends StatelessWidget {
           Positioned(
             left: barLeft + 2, top: 21,
             width: barWidth, height: 15,
-            child: _Barre(
-              pct: pctFinancier,
-              couleurFond: AppColors.blue.withValues(alpha: 0.12),
-              couleurRemplissage: AppColors.blue.withValues(alpha: 0.55),
-              label: pctFinancier > 0 ? '$pctFinancier %' : '',
+            child: Tooltip(
+              key: ValueKey('barre-financiere-${projet.id}'),
+              message: 'Encaissé — $pctFinancier %\n'
+                  '${Fmt.money(avancement.montantEncaisse)} '
+                  'sur ${Fmt.money(avancement.montantAttendu)}\n'
+                  'Du ${Fmt.jour(projet.debut)} au ${Fmt.jour(projet.finPrevue)}',
+              child: _Barre(
+                pct: pctFinancier,
+                couleurFond: AppColors.blue.withValues(alpha: 0.12),
+                couleurRemplissage: AppColors.blue.withValues(alpha: 0.55),
+                label: pctFinancier > 0 ? '$pctFinancier %' : '',
+              ),
             ),
           ),
 
