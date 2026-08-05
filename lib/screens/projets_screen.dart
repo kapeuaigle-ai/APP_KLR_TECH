@@ -9,6 +9,7 @@ import '../core/avancement.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
+import '../widgets/type_projet_dialog.dart';
 
 /// Kanban des projets, en lecture seule.
 ///
@@ -495,20 +496,46 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             const SizedBox(height: 6),
             // Les types du manager — définis dans les Paramètres, jamais
             // une liste figée dans le code (§ 5.4 de la conception).
-            Wrap(spacing: 8, runSpacing: 8, children: state.settings.typesProjet.map((t) => GestureDetector(
-              onTap: () => setLocal(() => typeId = t.id),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              ...state.settings.typesProjet.map((t) => GestureDetector(
+                onTap: () => setLocal(() => typeId = t.id),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
+                  ),
+                  child: Text(t.libelle, style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: typeId == t.id ? AppColors.primary : AppColors.text2)),
                 ),
-                child: Text(t.libelle, style: GoogleFonts.dmSans(
-                    fontSize: 12, fontWeight: FontWeight.w600,
-                    color: typeId == t.id ? AppColors.primary : AppColors.text2)),
+              )),
+              // Le manager ne trouvait pas toujours le chemin vers
+              // Paramètres → TYPES DE PROJET pour ajouter un type qui lui
+              // manque au moment même où il en a besoin. Cette puce ouvre
+              // le même formulaire que Paramètres (§ ouvrirFormulaireType,
+              // widgets/type_projet_dialog.dart) sans quitter la création du
+              // projet, et sélectionne le type créé pour lui. Style discret
+              // et distinct des vrais types : contour en pointillé visuel
+              // (bordure simple, fond transparent) plutôt que la puce pleine
+              // des types réels, pour qu'elle ne soit jamais confondue avec
+              // un choix existant.
+              GestureDetector(
+                onTap: () => ouvrirFormulaireType(ctx, state,
+                    onCreated: (t) => setLocal(() => typeId = t.id)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text('+ Nouveau type', style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                ),
               ),
-            )).toList()),
+            ]),
             const SizedBox(height: 8),
             // Comment son avancement sera mesuré, avant qu'il ne valide —
             // pour que le choix du type ne soit jamais un pari (§ 11).
