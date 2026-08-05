@@ -16,8 +16,21 @@ import '../widgets/responsive.dart';
 /// (`Avancement.calculer(...).statut`) — jamais saisie à la main. Un projet
 /// qui stockerait sa colonne pourrait mentir ; un projet calculé ne le peut
 /// pas. Conséquence assumée : plus de glisser-déposer.
-class ProjetsScreen extends StatelessWidget {
+class ProjetsScreen extends StatefulWidget {
   const ProjetsScreen({super.key});
+
+  @override
+  State<ProjetsScreen> createState() => _ProjetsScreenState();
+}
+
+class _ProjetsScreenState extends State<ProjetsScreen> {
+  /// Un projet annulé n'a pas sa place dans une colonne du Kanban (aucune
+  /// des quatre ne correspond à `StatutProjet.annule`), mais doit rester
+  /// atteignable — sinon l'annulation équivaut à une suppression muette.
+  /// Ce filtre bascule entre le tableau normal et une liste unique des
+  /// projets annulés, à défaut d'une cinquième colonne qui n'aurait aucun
+  /// sens dans un flux de travail.
+  bool _showAnnules = false;
 
   /// Une colonne par statut, hors `annule` : un projet annulé disparaît
   /// simplement du tableau plutôt que d'occuper une colonne dédiée.
@@ -31,7 +44,10 @@ class ProjetsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    final projets = state.projets.where((p) => !p.annule).toList();
+    final projetsAnnules = state.projets.where((p) => p.annule).toList();
+    final projets = _showAnnules
+        ? projetsAnnules
+        : state.projets.where((p) => !p.annule).toList();
     final avancements = {
       for (final p in projets) p.id: state.avancementProjet(p.id),
     };
@@ -39,8 +55,10 @@ class ProjetsScreen extends StatelessWidget {
     final parColonne = <StatutProjet, List<Projet>>{
       for (final s in _colonnes) s: <Projet>[],
     };
-    for (final p in projets) {
-      parColonne[avancements[p.id]!.statut]?.add(p);
+    if (!_showAnnules) {
+      for (final p in projets) {
+        parColonne[avancements[p.id]!.statut]?.add(p);
+      }
     }
 
     return Padding(
@@ -53,6 +71,14 @@ class ProjetsScreen extends StatelessWidget {
             subtitle: 'Tableau Kanban en lecture seule : la colonne se '
                 'déduit de l\'avancement réalisé / encaissé.',
             actions: [
+              // Toujours visible, même à 0 : c'est la seule porte d'entrée
+              // vers les projets annulés — les cacher au compteur nul les
+              // rendrait à nouveau introuvables.
+              AppFilterChip(
+                label: 'Annulés (${projetsAnnules.length})',
+                active: _showAnnules,
+                onTap: () => setState(() => _showAnnules = !_showAnnules),
+              ),
               SecondaryBtn(label: 'Gantt', icon: Icons.bar_chart_rounded,
                   onTap: () => context.read<AppState>().navigate(NavScreen.gantt)),
               PrimaryBtn(label: 'Nouveau projet', icon: Icons.add,
@@ -66,24 +92,35 @@ class ProjetsScreen extends StatelessWidget {
                 ? Center(child: CardBox(
                     padding: const EdgeInsets.all(40),
                     child: Text(
-                      'Aucun projet enregistré.',
+                      _showAnnules ? 'Aucun projet annulé.' : 'Aucun projet enregistré.',
                       style: GoogleFonts.dmSans(fontSize: 13.5, color: AppColors.text3),
                     ),
                   ))
-                : SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: _colonnes.map((s) => Padding(
-                        padding: const EdgeInsets.only(right: 16),
-                        child: _KanbanColonne(
-                          statut: s,
-                          projets: parColonne[s]!,
-                          avancements: avancements,
+                : _showAnnules
+                    ? SingleChildScrollView(
+                        child: Wrap(
+                          spacing: 16,
+                          runSpacing: 16,
+                          children: projets.map((p) => _ProjetCard(
+                            projet: p,
+                            avancement: avancements[p.id]!,
+                          )).toList(),
                         ),
-                      )).toList(),
-                    ),
-                  ),
+                      )
+                    : SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: _colonnes.map((s) => Padding(
+                            padding: const EdgeInsets.only(right: 16),
+                            child: _KanbanColonne(
+                              statut: s,
+                              projets: parColonne[s]!,
+                              avancements: avancements,
+                            ),
+                          )).toList(),
+                        ),
+                      ),
           ),
         ],
       ),
@@ -213,31 +250,54 @@ class _ProjetCard extends StatelessWidget {
                     _ouvrirFormulaireProjet(context, state, existing: projet);
                   case 'annuler':
                     state.annulerProjet(projet.id);
+                  case 'reactiver':
+                    state.reactiverProjet(projet.id);
                 }
               },
-              itemBuilder: (_) => [
-                if (aUnEntrant)
-                  PopupMenuItem(value: 'relancer', child: Row(children: [
-                    const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
-                    const SizedBox(width: 8),
-                    Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                  ])),
-                PopupMenuItem(value: 'reporter', child: Row(children: [
-                  const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-                PopupMenuItem(value: 'modifier', child: Row(children: [
-                  const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-                PopupMenuItem(value: 'annuler', child: Row(children: [
-                  const Icon(Icons.block, size: 15, color: AppColors.text3),
-                  const SizedBox(width: 8),
-                  Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                ])),
-              ],
+              // Un projet annulé n'a plus de client à relancer ni d'échéance
+              // à reporter, et « Annuler le projet » y serait un geste sans
+              // effet visible — le manager cliquerait sans rien voir changer
+              // et douterait que l'app ait enregistré quoi que ce soit. La
+              // carte suit donc la même distinction que la fiche (§ !annule) :
+              // seuls Réactiver et Modifier restent pertinents. « Supprimer »
+              // reste absent d'ici dans les deux cas — irréversible, il reste
+              // sur la fiche derrière sa confirmation (§ garde-fou).
+              itemBuilder: (_) => projet.annule
+                  ? [
+                      PopupMenuItem(value: 'reactiver', child: Row(children: [
+                        const Icon(Icons.undo, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'modifier', child: Row(children: [
+                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                    ]
+                  : [
+                      if (aUnEntrant)
+                        PopupMenuItem(value: 'relancer', child: Row(children: [
+                          const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
+                          const SizedBox(width: 8),
+                          Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                        ])),
+                      PopupMenuItem(value: 'reporter', child: Row(children: [
+                        const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'modifier', child: Row(children: [
+                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                      PopupMenuItem(value: 'annuler', child: Row(children: [
+                        const Icon(Icons.block, size: 15, color: AppColors.text3),
+                        const SizedBox(width: 8),
+                        Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
+                      ])),
+                    ],
             ),
           ]),
           // Rien démarré et l'échéance est passée : le seul rappel que reçoit
