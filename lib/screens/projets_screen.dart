@@ -221,10 +221,16 @@ class _ProjetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    // « Relancer le client » n'a de sens que s'il y a un client à relancer :
-    // un engagement entrant actif rattaché au projet.
-    final aUnEntrant = state.engagementsDuProjet(projet.id)
-        .any((e) => e.estEntrant && !e.annule);
+    // Relancer n'a de sens que s'il reste réellement quelque chose à
+    // percevoir, ET que le moment de réclamer est venu : soit l'échéance du
+    // projet est passée — c'est le motif même de « En révision » — soit une
+    // créance est elle-même échue alors que le projet, lui, tient encore ses
+    // délais. Un projet Terminé a tout encaissé (`resteAPercevoir` est
+    // faux) : il ne doit jamais proposer de relance.
+    final resteAPercevoir = state.engagementsDuProjet(projet.id)
+        .any((e) => e.estEntrant && !e.annule && !e.solde);
+    final aRelancer = resteAPercevoir &&
+        (avancement.finDepassee || avancement.enRetardPaiement);
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -294,7 +300,7 @@ class _ProjetCard extends StatelessWidget {
                       ])),
                     ]
                   : [
-                      if (aUnEntrant)
+                      if (aRelancer)
                         PopupMenuItem(value: 'relancer', child: Row(children: [
                           const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
                           const SizedBox(width: 8),
