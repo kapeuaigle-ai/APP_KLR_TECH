@@ -9,6 +9,7 @@ import '../core/avancement.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
+import '../widgets/type_projet_dialog.dart';
 
 /// Kanban des projets, en lecture seule.
 ///
@@ -148,6 +149,9 @@ class _KanbanColonne extends StatelessWidget {
   Widget build(BuildContext context) {
     final couleur = _couleurs[statut] ?? AppColors.text3;
     return Container(
+      // Clé par statut : c'est par elle qu'un test cible le `Scrollable`
+      // d'une colonne précise parmi les quatre (§ défilement par colonne).
+      key: ValueKey('colonne-${statut.name}'),
       width: 280,
       padding: const EdgeInsets.all(8),
       child: Column(
@@ -175,17 +179,32 @@ class _KanbanColonne extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 12),
-          if (projets.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Aucun projet',
-                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-            )
-          else
-            ...projets.map((p) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ProjetCard(projet: p, avancement: avancements[p.id]!),
-            )),
+          // La colonne défile verticalement pour son propre compte : avec
+          // neuf cartes dans « En cours » et trois visibles à l'écran, rien
+          // d'autre ne rendait les six suivantes atteignables. `Expanded`
+          // ici est valide parce que le `Row` parent (dans une
+          // `SingleChildScrollView` horizontale, elle-même dans l'`Expanded`
+          // de l'écran) transmet déjà une hauteur bornée à chaque colonne —
+          // sans quoi `Expanded` lèverait une exception de hauteur infinie.
+          // L'en-tête ci-dessus reste hors de ce `SingleChildScrollView` :
+          // il ne défile jamais, contrairement aux cartes.
+          Expanded(
+            child: projets.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('Aucun projet',
+                        style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: projets.map((p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ProjetCard(projet: p, avancement: avancements[p.id]!),
+                      )).toList(),
+                    ),
+                  ),
+          ),
         ],
       ),
     );
@@ -203,10 +222,16 @@ class _ProjetCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
-    // « Relancer le client » n'a de sens que s'il y a un client à relancer :
-    // un engagement entrant actif rattaché au projet.
-    final aUnEntrant = state.engagementsDuProjet(projet.id)
-        .any((e) => e.estEntrant && !e.annule);
+    // Relancer n'a de sens que s'il reste réellement quelque chose à
+    // percevoir, ET que le moment de réclamer est venu : soit l'échéance du
+    // projet est passée — c'est le motif même de « En révision » — soit une
+    // créance est elle-même échue alors que le projet, lui, tient encore ses
+    // délais. Un projet Terminé a tout encaissé (`resteAPercevoir` est
+    // faux) : il ne doit jamais proposer de relance.
+    final resteAPercevoir = state.engagementsDuProjet(projet.id)
+        .any((e) => e.estEntrant && !e.annule && !e.solde);
+    final aRelancer = resteAPercevoir &&
+        (avancement.finDepassee || avancement.enRetardPaiement);
 
     return InkWell(
       borderRadius: BorderRadius.circular(10),
@@ -276,7 +301,7 @@ class _ProjetCard extends StatelessWidget {
                       ])),
                     ]
                   : [
-                      if (aUnEntrant)
+                      if (aRelancer)
                         PopupMenuItem(value: 'relancer', child: Row(children: [
                           const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
                           const SizedBox(width: 8),
@@ -471,20 +496,46 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             const SizedBox(height: 6),
             // Les types du manager — définis dans les Paramètres, jamais
             // une liste figée dans le code (§ 5.4 de la conception).
-            Wrap(spacing: 8, runSpacing: 8, children: state.settings.typesProjet.map((t) => GestureDetector(
-              onTap: () => setLocal(() => typeId = t.id),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              ...state.settings.typesProjet.map((t) => GestureDetector(
+                onTap: () => setLocal(() => typeId = t.id),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
+                  ),
+                  child: Text(t.libelle, style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600,
+                      color: typeId == t.id ? AppColors.primary : AppColors.text2)),
                 ),
-                child: Text(t.libelle, style: GoogleFonts.dmSans(
-                    fontSize: 12, fontWeight: FontWeight.w600,
-                    color: typeId == t.id ? AppColors.primary : AppColors.text2)),
+              )),
+              // Le manager ne trouvait pas toujours le chemin vers
+              // Paramètres → TYPES DE PROJET pour ajouter un type qui lui
+              // manque au moment même où il en a besoin. Cette puce ouvre
+              // le même formulaire que Paramètres (§ ouvrirFormulaireType,
+              // widgets/type_projet_dialog.dart) sans quitter la création du
+              // projet, et sélectionne le type créé pour lui. Style discret
+              // et distinct des vrais types : contour en pointillé visuel
+              // (bordure simple, fond transparent) plutôt que la puce pleine
+              // des types réels, pour qu'elle ne soit jamais confondue avec
+              // un choix existant.
+              GestureDetector(
+                onTap: () => ouvrirFormulaireType(ctx, state,
+                    onCreated: (t) => setLocal(() => typeId = t.id)),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.transparent,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Text('+ Nouveau type', style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                ),
               ),
-            )).toList()),
+            ]),
             const SizedBox(height: 8),
             // Comment son avancement sera mesuré, avant qu'il ne valide —
             // pour que le choix du type ne soit jamais un pari (§ 11).
