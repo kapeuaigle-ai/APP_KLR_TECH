@@ -148,6 +148,9 @@ class _KanbanColonne extends StatelessWidget {
   Widget build(BuildContext context) {
     final couleur = _couleurs[statut] ?? AppColors.text3;
     return Container(
+      // Clé par statut : c'est par elle qu'un test cible le `Scrollable`
+      // d'une colonne précise parmi les quatre (§ défilement par colonne).
+      key: ValueKey('colonne-${statut.name}'),
       width: 280,
       padding: const EdgeInsets.all(8),
       child: Column(
@@ -175,17 +178,32 @@ class _KanbanColonne extends StatelessWidget {
             ]),
           ),
           const SizedBox(height: 12),
-          if (projets.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Text('Aucun projet',
-                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-            )
-          else
-            ...projets.map((p) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _ProjetCard(projet: p, avancement: avancements[p.id]!),
-            )),
+          // La colonne défile verticalement pour son propre compte : avec
+          // neuf cartes dans « En cours » et trois visibles à l'écran, rien
+          // d'autre ne rendait les six suivantes atteignables. `Expanded`
+          // ici est valide parce que le `Row` parent (dans une
+          // `SingleChildScrollView` horizontale, elle-même dans l'`Expanded`
+          // de l'écran) transmet déjà une hauteur bornée à chaque colonne —
+          // sans quoi `Expanded` lèverait une exception de hauteur infinie.
+          // L'en-tête ci-dessus reste hors de ce `SingleChildScrollView` :
+          // il ne défile jamais, contrairement aux cartes.
+          Expanded(
+            child: projets.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 4),
+                    child: Text('Aucun projet',
+                        style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+                  )
+                : SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: projets.map((p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _ProjetCard(projet: p, avancement: avancements[p.id]!),
+                      )).toList(),
+                    ),
+                  ),
+          ),
         ],
       ),
     );
