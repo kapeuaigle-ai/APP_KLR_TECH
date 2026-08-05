@@ -448,6 +448,53 @@ void main() {
       expect(a.statut, StatutProjet.enCours);
     });
 
+    // Régression : `finDepassee` comparait `now` BRUT à minuit du jour
+    // d'échéance. À 14 h le jour même, `14h.isAfter(minuit)` est vrai et le
+    // projet basculait en révision avec une journée d'avance. Le test
+    // ci-dessus ne l'avait pas vu parce qu'il passait minuit pile — or
+    // `DateTime.now()` porte toujours une heure dans la vraie application.
+    test('le jour même à 14 h : toujours pas en révision', () {
+      final a = Avancement.calculer(
+        projet: _projet(debut: DateTime(2026, 3, 1), fin: DateTime(2026, 6, 30)),
+        mode: ModeAvancement.manuel, proformas: const [], engagements: const [],
+        now: DateTime(2026, 6, 30, 14, 23, 45), physiqueForce: 0.5,
+      );
+      expect(a.finDepassee, isFalse);
+      expect(a.statut, StatutProjet.enCours);
+    });
+
+    test('le lendemain à 00 h 01 : en révision', () {
+      final a = Avancement.calculer(
+        projet: _projet(debut: DateTime(2026, 3, 1), fin: DateTime(2026, 6, 30)),
+        mode: ModeAvancement.manuel, proformas: const [], engagements: const [],
+        now: DateTime(2026, 7, 1, 0, 1), physiqueForce: 0.5,
+      );
+      expect(a.finDepassee, isTrue);
+      expect(a.statut, StatutProjet.termineNonPaye);
+    });
+
+    // Les deux règles de date de l'application doivent basculer ensemble.
+    test('finDepassee et Engagement.enRetard basculent au même instant', () {
+      final ech = DateTime(2026, 6, 30);
+      for (final now in [
+        DateTime(2026, 6, 30),
+        DateTime(2026, 6, 30, 14, 23),
+        DateTime(2026, 6, 30, 23, 59, 59),
+        DateTime(2026, 7, 1),
+        DateTime(2026, 7, 1, 0, 1),
+      ]) {
+        final e = Engagement(
+          id: 1, sens: 'entrant', tiers: 'ACME', montant: 1000, echeance: ech);
+        final a = Avancement.calculer(
+          projet: _projet(debut: DateTime(2026, 3, 1), fin: ech),
+          mode: ModeAvancement.manuel, proformas: const [],
+          engagements: const [], now: now, physiqueForce: 0.5,
+        );
+        expect(a.finDepassee, e.enRetard(now),
+            reason: 'divergence à $now entre le projet et l\'engagement');
+      }
+    });
+
     test('le lendemain de finPrevue : en révision', () {
       final a = Avancement.calculer(
         projet: _projet(debut: DateTime(2026, 3, 1), fin: DateTime(2026, 6, 30)),

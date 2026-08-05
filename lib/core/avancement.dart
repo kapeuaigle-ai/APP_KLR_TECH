@@ -100,7 +100,13 @@ class Avancement {
     // Le jour de l'échéance n'est pas un dépassement — même règle que
     // `Engagement.enRetard` (§ notes d'environnement) : deux règles de date
     // contradictoires dans la même appli seraient pires que l'une ou l'autre.
-    final finDepassee = now.isAfter(DateTime(
+    // `now` est TRONQUÉ au jour avant comparaison, exactement comme
+    // `Engagement.enRetard`. Sans cette troncature, `now` porte ses heures :
+    // à 14 h le jour même de l'échéance, `14h.isAfter(minuit)` est vrai et le
+    // projet bascule en révision avec une journée d'avance. Le test ne l'avait
+    // pas vu parce qu'il passait un `now` à minuit pile.
+    final jourCourant = DateTime(now.year, now.month, now.day);
+    final finDepassee = jourCourant.isAfter(DateTime(
         projet.finPrevue.year, projet.finPrevue.month, projet.finPrevue.day));
 
     return Avancement(
