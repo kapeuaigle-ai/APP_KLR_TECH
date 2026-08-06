@@ -21,7 +21,7 @@ void main() {
       _entrant(1000, [_r(400, DateTime(2026, 3, 3))]),
       _entrant(2000, []),
     ]);
-    expect(t.revenuHt, 400);
+    expect(t.revenu, 400);
     expect(t.depenses, 0);
     expect(t.benefice, 400);
   });
@@ -31,7 +31,7 @@ void main() {
       _entrant(1000, [_r(1000, DateTime(2026, 3, 3))]),
       _sortant(600, [_r(600, DateTime(2026, 3, 5))]),
     ]);
-    expect(t.revenuHt, 1000);
+    expect(t.revenu, 1000);
     expect(t.depenses, 600);
     expect(t.benefice, 400);
   });
@@ -43,8 +43,8 @@ void main() {
         _r(600, DateTime(2026, 5, 9)),
       ]),
     ], const {}, const {});
-    expect(Comptabilite.ligneMois('2026-03', rows)!.revenuHt, 400);
-    expect(Comptabilite.ligneMois('2026-05', rows)!.revenuHt, 600);
+    expect(Comptabilite.ligneMois('2026-03', rows)!.revenu, 400);
+    expect(Comptabilite.ligneMois('2026-05', rows)!.revenu, 600);
     expect(Comptabilite.ligneMois('2026-04', rows), isNull);
   });
 
@@ -123,7 +123,7 @@ void main() {
   test('annuler ne réécrit pas un mois déjà clôturé', () {
     final annule = _entrant(1000, [_r(400, DateTime(2026, 3, 3))])..annule = true;
     final rows = Comptabilite.bilanMensuel([annule], const {}, const {});
-    expect(Comptabilite.ligneMois('2026-03', rows)!.revenuHt, 400);
+    expect(Comptabilite.ligneMois('2026-03', rows)!.revenu, 400);
   });
 
   test('un décaissement passé demeure lui aussi après annulation', () {

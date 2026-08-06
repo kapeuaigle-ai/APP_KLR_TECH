@@ -36,7 +36,7 @@ void main() {
 
   double revenuDuMois(String mois, List<Engagement> engagements) {
     final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
-    return Comptabilite.ligneMois(mois, rows)?.revenuHt ?? 0;
+    return Comptabilite.ligneMois(mois, rows)?.revenu ?? 0;
   }
 
   group('comptabilité', () {
@@ -58,7 +58,7 @@ void main() {
       expect(revenuDuMois('2026-08', [e]), 700000); // le solde seulement
 
       final total = Comptabilite.totaux([e]);
-      expect(total.revenuHt, 1000000); // et jamais 1 300 000
+      expect(total.revenu, 1000000); // et jamais 1 300 000
     });
 
     test('acompte et règlement le même mois : total juste', () {
@@ -76,7 +76,7 @@ void main() {
       );
       expect(e.reste, 0);
       expect(revenuDuMois('2026-08', [e]), 0);
-      expect(Comptabilite.totaux([e]).revenuHt, 500000);
+      expect(Comptabilite.totaux([e]).revenu, 500000);
     });
 
     test('dette avec acompte : même règle côté dépenses', () {

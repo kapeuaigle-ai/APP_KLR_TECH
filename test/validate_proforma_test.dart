@@ -71,7 +71,7 @@ void main() {
     expect(e.documentNumero, 'KLR-F01-10012026');
     expect(e.clientId, 5);
     expect(e.tiers, 'ACME');
-    expect(e.montant, 3000, reason: 'la somme des lignes, comme factureHt');
+    expect(e.montant, 3000, reason: 'la somme des lignes, comme montantFacture');
     expect(e.projetId, 42);
     expect(e.reglements, isEmpty, reason: 'rien n\'est encore encaissé');
   });

@@ -180,7 +180,7 @@ class _FinancierTab extends StatelessWidget {
                 )
               else ...[
                 SizedBox(height: 180, child: BarLineChart(
-                  barValues: rapport.mois.map((m) => m.revenuHt / 1000).toList(),
+                  barValues: rapport.mois.map((m) => m.revenu / 1000).toList(),
                   lineValues: rapport.mois.map((m) => m.benefice / 1000).toList(),
                   labels: rapport.mois.map((m) => m.label.split(' ').first.substring(0, 3)).toList(),
                 )),

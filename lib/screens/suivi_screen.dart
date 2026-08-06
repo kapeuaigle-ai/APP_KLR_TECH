@@ -1188,7 +1188,7 @@ class _ComptaTabState extends State<_ComptaTab> {
   }
 
   /// Bascule l'encaissement d'une facture. Faute d'engagement déjà lié, on en
-  /// crée un (montant = HT de la facture) avant d'y porter le règlement — la
+  /// crée un (montant = somme des lignes de la facture) avant d'y porter le règlement — la
   /// génération automatique à la validation de la proforma est une évolution
   /// de phase 2, hors de ce lot.
   Future<void> _toggleEncaissement(
@@ -1201,7 +1201,7 @@ class _ComptaTabState extends State<_ComptaTab> {
         final id = DateTime.now().microsecondsSinceEpoch;
         state.addEngagement(Engagement(
           id: id, sens: 'entrant', tiers: f.client, clientId: f.clientId,
-          montant: Comptabilite.factureHt(f),
+          montant: Comptabilite.montantFacture(f),
           echeance: Comptabilite.parseJour(f.date) ?? d,
           documentNumero: f.numero,
         ));
@@ -1260,7 +1260,7 @@ class _ComptaTabState extends State<_ComptaTab> {
 
       // Synthèse du mois affiché
       StatGrid(cards: [
-        StatCard(label: 'REVENU HT ENCAISSÉ', value: Fmt.number(bilan?.revenuHt ?? 0), unit: 'FCFA'),
+        StatCard(label: 'REVENU ENCAISSÉ', value: Fmt.number(bilan?.revenu ?? 0), unit: 'FCFA'),
         StatCard(label: 'DÉPENSES', value: Fmt.number(bilan?.depenses ?? 0), unit: 'FCFA'),
         StatCard(label: 'BÉNÉFICE', value: Fmt.number(bilan?.benefice ?? 0), unit: 'FCFA', red: (bilan?.benefice ?? 0) < 0),
         StatCard(label: 'DÎME (10%)', value: Fmt.number(bilan?.dime ?? 0), unit: 'FCFA'),
@@ -1296,7 +1296,7 @@ class _ComptaTabState extends State<_ComptaTab> {
         messageVide: 'Aucune facture sur ce mois',
         // Téléphone : une carte par facture.
         cartes: facturesMois.map((f) {
-          final ht = Comptabilite.factureHt(f);
+          final ht = Comptabilite.montantFacture(f);
           final dep = Comptabilite.depensesFacture(f.numero, engagements);
           final benef = ht - dep;
           final eng = _engagementFacture(engagements, f.numero);
@@ -1310,7 +1310,7 @@ class _ComptaTabState extends State<_ComptaTab> {
             subtitle: Text(f.client, style: GoogleFonts.dmSans(
               fontSize: 13, color: AppColors.text1), maxLines: 1, overflow: TextOverflow.ellipsis),
             fields: [
-              ('HT', CardValue(Fmt.money(ht))),
+              ('MONTANT', CardValue(Fmt.money(ht))),
               ('DÉPENSES', CardValue(Fmt.money(dep))),
               ('BÉNÉFICE', CardValue(Fmt.money(benef), bold: true,
                   color: benef < 0 ? AppColors.red : AppColors.text1)),
@@ -1336,7 +1336,7 @@ class _ComptaTabState extends State<_ComptaTab> {
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 3, child: ThCell('N° FACTURE')),
             Expanded(flex: 4, child: ThCell('CLIENT')),
-            Expanded(flex: 3, child: ThCell('HT')),
+            Expanded(flex: 3, child: ThCell('MONTANT')),
             Expanded(flex: 3, child: ThCell('DÉPENSES')),
             Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
             Expanded(flex: 3, child: ThCell('ENCAISSÉE')),
@@ -1412,7 +1412,7 @@ class _ComptaTabState extends State<_ComptaTab> {
   );
 
   Widget _factureRow(AppState state, List<Engagement> engagements, DocumentItem f) {
-    final ht = Comptabilite.factureHt(f);
+    final ht = Comptabilite.montantFacture(f);
     final dep = Comptabilite.depensesFacture(f.numero, engagements);
     final benef = ht - dep;
     final eng = _engagementFacture(engagements, f.numero);

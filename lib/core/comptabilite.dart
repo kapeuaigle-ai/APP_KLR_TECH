@@ -1,13 +1,15 @@
 import 'models.dart';
 
-/// Totaux globaux (base caisse, HT).
+/// Totaux globaux, en base caisse : seules les sommes réellement encaissées ou
+/// décaissées comptent. Il n'y a plus de distinction HT/TTC — l'application ne
+/// gère aucune taxe, un document vaut la somme de ses lignes.
 class ComptaTotaux {
-  final double revenuHt; // factures encaissées uniquement
+  final double revenu; // factures encaissées uniquement
   final double depenses; // toutes les dépenses
-  final double benefice; // revenuHt - depenses
+  final double benefice; // revenu - depenses
   final double dime;     // somme des dîmes mensuelles
   const ComptaTotaux({
-    required this.revenuHt, required this.depenses,
+    required this.revenu, required this.depenses,
     required this.benefice, required this.dime,
   });
 }
@@ -16,14 +18,14 @@ class ComptaTotaux {
 class MonthlyRow {
   final String monthKey; // 'yyyy-MM'
   final String label;    // 'Juillet 2026'
-  final double revenuHt;
+  final double revenu;
   final double depenses;
   final double benefice;
   final double dime;
   final bool dimePaid;
   final String? dimeDate;
   const MonthlyRow({
-    required this.monthKey, required this.label, required this.revenuHt,
+    required this.monthKey, required this.label, required this.revenu,
     required this.depenses, required this.benefice, required this.dime,
     required this.dimePaid, required this.dimeDate,
   });
@@ -76,7 +78,7 @@ class Comptabilite {
     'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre',
   ];
 
-  static double factureHt(DocumentItem f) =>
+  static double montantFacture(DocumentItem f) =>
       f.lines.fold(0.0, (s, l) => s + l.total);
 
   /// Décaissements rattachés à une facture — sert au bénéfice par facture.
@@ -90,7 +92,7 @@ class Comptabilite {
           .fold(0.0, (s, e) => s + e.regle);
 
   static double beneficeFacture(DocumentItem f, List<Engagement> engagements) =>
-      factureHt(f) - depensesFacture(f.numero, engagements);
+      montantFacture(f) - depensesFacture(f.numero, engagements);
 
   static String monthKeyFromDdMmYyyy(String date) {
     final p = date.split('/'); // dd/MM/yyyy
@@ -133,7 +135,7 @@ class Comptabilite {
     final dime = bilanMensuel(engagements, const {}, const {})
         .fold(0.0, (s, r) => s + r.dime);
     return ComptaTotaux(
-      revenuHt: revenu, depenses: dep, benefice: revenu - dep, dime: dime,
+      revenu: revenu, depenses: dep, benefice: revenu - dep, dime: dime,
     );
   }
 
@@ -161,7 +163,7 @@ class Comptabilite {
       final r = rev[k] ?? 0, d = dep[k] ?? 0;
       final b = r - d;
       return MonthlyRow(
-        monthKey: k, label: monthLabel(k), revenuHt: r, depenses: d,
+        monthKey: k, label: monthLabel(k), revenu: r, depenses: d,
         benefice: b, dime: b > 0 ? b * 0.10 : 0.0,
         dimePaid: dimePaidMonths.contains(k), dimeDate: dimePaidDates[k],
       );

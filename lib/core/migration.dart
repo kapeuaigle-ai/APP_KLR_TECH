@@ -92,7 +92,7 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
 /// v3 retire la TVA (jamais appliquée en pratique : le régime du manager n'y
 /// est pas assujetti) et corrige le bug qu'elle cachait : `DocumentItem.montant`
 /// valait le TTC pour une proforma/facture créée depuis l'écran, alors que la
-/// comptabilité (`Comptabilite.factureHt`, l'engagement créé à la validation)
+/// comptabilité (`Comptabilite.montantFacture`, l'engagement créé à la validation)
 /// a toujours sommé les lignes (HT). L'écart ne se voyait nulle part — jusqu'à
 /// ce qu'un client règle une facture en entier : `ajouterReglement` écrête le
 /// paiement au `reste` de l'engagement (HT), et la différence avec le TTC
@@ -318,7 +318,7 @@ void _fusionnerPaiement(
 }
 
 /// Montant d'une facture : la SOMME DE SES LIGNES, et non son champ
-/// `montant`. C'est ce que `Comptabilite.factureHt` calculait en v1 ; prendre
+/// `montant`. C'est ce que `Comptabilite.montantFacture` calculait en v1 ; prendre
 /// l'autre ferait diverger le bilan après migration.
 double _montantFacture(Map<String, dynamic> f) => (f['lines'] as List? ?? [])
     .whereType<Map>()

@@ -84,7 +84,7 @@ void main() {
       s.ajouterReglement(90, e.reste, DateTime(2026, 3, 15));
 
       final rows = Comptabilite.bilanMensuel(s.engagements, const {}, const {});
-      expect(Comptabilite.ligneMois('2026-03', rows)?.revenuHt, 300000);
+      expect(Comptabilite.ligneMois('2026-03', rows)?.revenu, 300000);
     });
 
     test('valider une dette la fait entrer en dépense', () {
@@ -125,7 +125,7 @@ void main() {
       s.supprimerReglement(93, dernier);
 
       expect(s.engagements.single.regle, 0);
-      expect(Comptabilite.totaux(s.engagements).revenuHt, 0);
+      expect(Comptabilite.totaux(s.engagements).revenu, 0);
     });
   });
 }

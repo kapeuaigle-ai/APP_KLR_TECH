@@ -41,8 +41,8 @@ Engagement dette(double montant, {String? regleLe}) => Engagement(
     reglements: regleLe == null ? [] : [reg(montant, Comptabilite.parseJour(regleLe)!)]);
 
 void main() {
-  test('factureHt = somme des lignes (HT)', () {
-    expect(Comptabilite.factureHt(facture('F1', [l(2, 1000), l(1, 500)])), 2500);
+  test('montantFacture = somme des lignes (HT)', () {
+    expect(Comptabilite.montantFacture(facture('F1', [l(2, 1000), l(1, 500)])), 2500);
   });
 
   test('beneficeFacture = HT - dépenses rattachées', () {
@@ -63,7 +63,7 @@ void main() {
       dep(200, DateTime(2026, 1, 5)),
     ];
     final t = Comptabilite.totaux(engagements);
-    expect(t.revenuHt, 1000);
+    expect(t.revenu, 1000);
     expect(t.depenses, 200);
     expect(t.benefice, 800);
   });
@@ -78,7 +78,7 @@ void main() {
     final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
     expect(rows.length, 2);
     expect(rows[0].monthKey, '2026-01');
-    expect(rows[0].revenuHt, 1000);
+    expect(rows[0].revenu, 1000);
     expect(rows[0].depenses, 300);
     expect(rows[0].benefice, 700);
     expect(rows[0].dime, closeTo(70, 0.001));
@@ -117,7 +117,7 @@ void main() {
         creance(1000, regleLe: '10/01/2026'),
         creance(9999), // en cours -> hors comptabilité
       ]);
-      expect(t.revenuHt, 1000);
+      expect(t.revenu, 1000);
       expect(t.benefice, 1000);
     });
 
@@ -135,7 +135,7 @@ void main() {
       final rows = Comptabilite.bilanMensuel(
           [creance(2000, regleLe: '05/03/2026')], const {}, const {});
       expect(rows.single.monthKey, '2026-03');
-      expect(rows.single.revenuHt, 2000);
+      expect(rows.single.revenu, 2000);
       expect(rows.single.dime, closeTo(200, 0.001));
     });
 
@@ -144,14 +144,14 @@ void main() {
         creance(5000, regleLe: '05/04/2026'),
         dette(2000, regleLe: '20/04/2026'),
       ], const {}, const {});
-      expect(rows.single.revenuHt, 5000);
+      expect(rows.single.revenu, 5000);
       expect(rows.single.depenses, 2000);
       expect(rows.single.benefice, 3000);
     });
 
     test('engagement sans règlement : ignoré', () {
       final e = creance(1000);
-      expect(Comptabilite.totaux([e]).revenuHt, 0);
+      expect(Comptabilite.totaux([e]).revenu, 0);
       expect(Comptabilite.bilanMensuel([e], const {}, const {}), isEmpty);
     });
 
@@ -161,7 +161,7 @@ void main() {
         creance(500, regleLe: '25/05/2026'),
       ];
       final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
-      expect(rows.single.revenuHt, 2000);
+      expect(rows.single.revenu, 2000);
     });
   });
 
@@ -197,7 +197,7 @@ void main() {
   test('ligneMois retrouve le bilan d\'un mois donné', () {
     final engagements = [factureEncaissee('F1', 1000, DateTime(2026, 1, 10))];
     final rows = Comptabilite.bilanMensuel(engagements, const {}, const {});
-    expect(Comptabilite.ligneMois('2026-01', rows)?.revenuHt, 1000);
+    expect(Comptabilite.ligneMois('2026-01', rows)?.revenu, 1000);
     expect(Comptabilite.ligneMois('2026-02', rows), isNull);
   });
 }

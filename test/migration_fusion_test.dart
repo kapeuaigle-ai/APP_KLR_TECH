@@ -208,6 +208,6 @@ void main() {
     final engagements = _engs(v2).map((e) => Engagement.fromJson(e)).toList();
     final bilan = Comptabilite.bilanMensuel(engagements, const {}, const {});
     final fevrier = bilan.firstWhere((r) => r.monthKey == '2026-02');
-    expect(fevrier.revenuHt, 1234.5);
+    expect(fevrier.revenu, 1234.5);
   });
 }

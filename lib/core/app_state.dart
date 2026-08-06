@@ -608,7 +608,7 @@ class AppState extends ChangeNotifier {
       _logActivity(
         'comptabilite',
         'Comptabilité clôturée — ${r.label}',
-        'Revenu ${Fmt.money(r.revenuHt)} · Dépenses ${Fmt.money(r.depenses)} · '
+        'Revenu ${Fmt.money(r.revenu)} · Dépenses ${Fmt.money(r.depenses)} · '
         'Bénéfice ${Fmt.money(r.benefice)} · Dîme ${Fmt.money(r.dime)}',
         AppColors.emerald,
         quand: Fmt.jour(now),

@@ -50,7 +50,7 @@ Map<String, dynamic> _v2({double tva = 5.0}) => {
       },
     ],
   },
-  // L'engagement, lui, était déjà correct (HT, comme `factureHt` l'a toujours
+  // L'engagement, lui, était déjà correct (HT, comme `montantFacture` l'a toujours
   // calculé) : c'est le règlement en entier qui a fait disparaître les 75 000
   // F d'écart avec la facture (le manager avait paramétré la TVA à 5 % —
   // AppState.ajouterReglement écrête au reste dû de l'engagement).
@@ -168,7 +168,7 @@ void main() {
     expect(avant.length, apres.length);
     for (var i = 0; i < avant.length; i++) {
       expect(apres[i].monthKey, avant[i].monthKey);
-      expect(apres[i].revenuHt, avant[i].revenuHt);
+      expect(apres[i].revenu, avant[i].revenu);
       expect(apres[i].depenses, avant[i].depenses);
       expect(apres[i].benefice, avant[i].benefice);
       expect(apres[i].dime, avant[i].dime);
@@ -177,7 +177,7 @@ void main() {
     // seulement une égalité entre deux copies du même nombre : c'est le HT
     // réellement encaissé (1 500 000), jamais le TTC affiché sur la facture
     // avant migration (1 575 000).
-    expect(avant.first.revenuHt, 1500000.0);
-    expect(apres.first.revenuHt, 1500000.0);
+    expect(avant.first.revenu, 1500000.0);
+    expect(apres.first.revenu, 1500000.0);
   });
 }

@@ -647,7 +647,7 @@ class PdfGenerator {
                   decoration: pw.BoxDecoration(color: e.key % 2 == 0 ? _rowAlt : PdfColors.white),
                   children: [
                     cell(e.value.label),
-                    cell(Fmt.number(e.value.revenuHt), right: true),
+                    cell(Fmt.number(e.value.revenu), right: true),
                     cell(Fmt.number(e.value.depenses), right: true),
                     cell(Fmt.number(e.value.benefice), right: true),
                     cell(Fmt.number(e.value.dime), right: true),
