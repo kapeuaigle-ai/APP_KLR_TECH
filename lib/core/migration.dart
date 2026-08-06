@@ -1,6 +1,8 @@
 /// Migration des sauvegardes : v1 (quatre mécanismes d'argent) → v2
 /// (Engagement + Reglement) → v3 (suppression de la TVA, montant des
-/// documents réaligné sur la somme de leurs lignes).
+/// documents réaligné sur la somme de leurs lignes) → v4 (le registre
+/// `settings.typesProjet` disparaît, chaque projet porte directement son
+/// libellé et son mode).
 ///
 /// Travaille sur le JSON brut, jamais sur les modèles : les classes v1
 /// n'existent plus, et une migration liée au code courant se casserait à
@@ -132,6 +134,58 @@ Map<String, dynamic> migrerV2versV3(Map<String, dynamic> j) {
   }
 
   return v3;
+}
+
+/// Convertit une sauvegarde v3 en v4. Une sauvegarde déjà en v4 est rendue
+/// telle quelle, sans copie.
+///
+/// v4 retire le registre `settings.typesProjet` : chaque projet portait un
+/// `typeId` qui pointait dedans, pour deux informations que ce registre
+/// confondait dans une seule entité — un libellé libre et un mode
+/// d'avancement. Le manager n'a besoin d'aucun registre pour un libellé qu'il
+/// ne tape qu'une fois par projet ; seul le mode compte pour le calcul
+/// (`avancement.dart`). Chaque projet porte désormais directement `type`
+/// (chaîne libre) et `mode` (le nom de l'enum `ModeAvancement`).
+///
+/// Un `typeId` qui ne correspond à aucun type du registre — déjà toléré
+/// avant cette version, `AppState.modeDuProjet` retombait alors sur
+/// `quantites` — devient `type: ''` et `mode: 'quantites'` : rien à
+/// retrouver pour un type qui n'existait déjà plus.
+Map<String, dynamic> migrerV3versV4(Map<String, dynamic> j) {
+  if (j['version'] == 4) return j;
+
+  final v4 = Map<String, dynamic>.from(j);
+  v4['version'] = 4;
+
+  final settingsBrut = v4['settings'];
+  final typesBruts = settingsBrut is Map
+      ? (settingsBrut['typesProjet'] as List? ?? []).whereType<Map>().toList()
+      : const <Map>[];
+
+  Map? typeParId(dynamic id) {
+    for (final t in typesBruts) {
+      if (t['id'] == id) return t;
+    }
+    return null;
+  }
+
+  final projetsBruts = (v4['projets'] as List? ?? []).cast<Map<String, dynamic>>();
+  v4['projets'] = projetsBruts.map((p) {
+    final pp = Map<String, dynamic>.from(p);
+    final t = typeParId(pp['typeId']);
+    pp['type'] = t == null ? '' : (t['libelle'] ?? '');
+    pp['mode'] = t == null ? 'quantites' : (t['mode'] ?? 'quantites');
+    pp.remove('typeId');
+    return pp;
+  }).toList();
+
+  if (settingsBrut is Map) {
+    final settings = Map<String, dynamic>.from(settingsBrut);
+    settings.remove('typesProjet');
+    v4['settings'] = settings;
+  }
+
+  return v4;
 }
 
 /// Somme des lignes d'un document brut — même calcul que `_montantFacture`
