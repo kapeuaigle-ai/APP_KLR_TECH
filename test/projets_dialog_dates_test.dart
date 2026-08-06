@@ -31,7 +31,7 @@ void main() {
     // fin ne demande de choisir qu'un autre jour dans le calendrier déjà
     // ouvert sur ce mois-là, sans naviguer entre les mois.
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture',
+      id: 1, nom: 'Fourniture ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: null, client: '',
       debut: DateTime(2026, 6, 5), finPrevue: DateTime(2026, 6, 25),
     ));
@@ -70,7 +70,7 @@ void main() {
   testWidgets('une fin prévue le même jour que le début est acceptée', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture',
+      id: 1, nom: 'Fourniture ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: null, client: '',
       debut: DateTime(2026, 6, 5), finPrevue: DateTime(2026, 6, 25),
     ));

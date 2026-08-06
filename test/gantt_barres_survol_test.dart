@@ -32,7 +32,8 @@ void main() {
       (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Câblage', typeId: 'installation', clientId: null, client: '',
+      id: 1, nom: 'Câblage',
+      type: 'Installation / déploiement', mode: ModeAvancement.jalons, clientId: null, client: '',
       debut: DateTime(2026, 3, 12), finPrevue: DateTime(2026, 6, 28),
       jalons: [
         Jalon(nom: 'Étude', prevue: DateTime(2026, 4, 1),
@@ -53,7 +54,8 @@ void main() {
       (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Prestation', typeId: 'interne', clientId: null, client: '',
+      id: 1, nom: 'Prestation',
+      type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null, client: '',
       debut: DateTime(2026, 3, 12), finPrevue: DateTime(2026, 6, 28)));
     s.addEngagement(Engagement(
       id: 9, sens: 'entrant', tiers: 'ACME', montant: 1000,
@@ -78,7 +80,8 @@ void main() {
       (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Fourniture', typeId: 'fourniture', clientId: null, client: '',
+      id: 1, nom: 'Fourniture',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: null, client: '',
       debut: DateTime(2026, 1, 5), finPrevue: DateTime(2026, 2, 20)));
 
     await _pump(tester, s);

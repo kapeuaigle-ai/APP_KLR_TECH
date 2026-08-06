@@ -31,7 +31,7 @@ void main() {
   testWidgets('un projet enregistré apparaît avec son nom', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture matériel ACME', typeId: 'fourniture',
+      id: 1, nom: 'Fourniture matériel ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
 
@@ -43,7 +43,7 @@ void main() {
   testWidgets('les deux barres sont distinctes : livré et encaissé', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture',
+      id: 1, nom: 'Fourniture ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
     state.saveOrUpdateProforma(DocumentItem(
@@ -62,7 +62,7 @@ void main() {
   testWidgets('un projet annulé n\'apparaît pas', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Abandonné', typeId: 'fourniture', clientId: 5, client: 'ACME',
+      id: 1, nom: 'Abandonné', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30), annule: true));
 
     await _pump(tester, state);

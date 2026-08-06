@@ -20,7 +20,8 @@ Future<void> _pump(WidgetTester tester, AppState state) async {
 AppState _avecProjet({int qteLivree = 0, double encaisse = 0}) {
   final s = AppState()..viderDonnees();
   s.addProjet(Projet(
-    id: 1, nom: 'Fourniture ACME', typeId: 'fourniture', clientId: 5,
+    id: 1, nom: 'Fourniture ACME',
+    type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
     client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
   s.saveOrUpdateProforma(DocumentItem(
     id: 1, numero: 'KLR-P01-10032026', date: '10/03/2026', clientId: 5,
@@ -83,7 +84,7 @@ void main() {
   testWidgets('à démarrer, échéance passée : le badge « Échéance atteinte » apparaît', (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Idée jamais lancée', typeId: 'interne', clientId: null,
+      id: 1, nom: 'Idée jamais lancée', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2020, 1, 1), finPrevue: DateTime(2020, 6, 30)));
     await _pump(tester, s);
     expect(find.text('À démarrer'), findsOneWidget);
@@ -93,7 +94,7 @@ void main() {
   testWidgets('à démarrer, échéance PAS passée : pas de badge', (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Projet futur', typeId: 'interne', clientId: null,
+      id: 1, nom: 'Projet futur', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2030, 1, 1), finPrevue: DateTime(2030, 6, 30)));
     await _pump(tester, s);
     expect(find.text('À démarrer'), findsOneWidget);
@@ -126,7 +127,7 @@ void main() {
     testWidgets('n\'offre pas « Relancer le client » sans engagement entrant', (tester) async {
       final s = AppState()..viderDonnees();
       s.addProjet(Projet(
-        id: 1, nom: 'Projet interne', typeId: 'interne', clientId: null,
+        id: 1, nom: 'Projet interne', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
         client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 12, 31)));
       await _pump(tester, s);
       await tester.tap(find.byIcon(Icons.more_vert));
@@ -163,7 +164,7 @@ void main() {
       // client 5 inexistant dans `state.clients`.
       final s = AppState()..viderDonnees();
       s.addProjet(Projet(
-        id: 1, nom: 'Projet interne', typeId: 'interne', clientId: null,
+        id: 1, nom: 'Projet interne', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
         client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 12, 31)));
       await _pump(tester, s);
       await tester.tap(find.byIcon(Icons.more_vert));

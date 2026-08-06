@@ -5,7 +5,8 @@ import 'package:klr_tech_app/core/models.dart';
 AppState _avecProjetJalons() {
   final s = AppState()..viderDonnees();
   s.addProjet(Projet(
-    id: 1, nom: 'Câblage siège', typeId: 'installation', clientId: 5,
+    id: 1, nom: 'Câblage siège',
+    type: 'Installation / déploiement', mode: ModeAvancement.jalons, clientId: 5,
     client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
   return s;
 }

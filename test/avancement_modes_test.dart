@@ -8,7 +8,7 @@ Projet _projet({
   DateTime? debut,
   DateTime? fin,
 }) => Projet(
-      id: 1, nom: 'P', typeId: 't', clientId: 5, client: 'ACME',
+      id: 1, nom: 'P', type: 't', mode: ModeAvancement.quantites, clientId: 5, client: 'ACME',
       debut: debut ?? DateTime(2026, 3, 1),
       finPrevue: fin ?? DateTime(2026, 6, 30),
       jalons: jalons, avancementManuel: manuel);

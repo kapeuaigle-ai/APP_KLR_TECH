@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:klr_tech_app/core/app_state.dart';
 import 'package:klr_tech_app/core/comptabilite.dart';
+import 'package:klr_tech_app/core/models.dart';
 import 'package:klr_tech_app/core/persistence.dart';
 
 /// Store en mémoire qui trace, en plus des écritures normales, les écritures
@@ -57,16 +58,16 @@ void main() {
 
       expect(store.writes, 1);
       final relu = jsonDecode(store.data!) as Map<String, dynamic>;
-      // v1 traverse maintenant v1 → v2 → v3 en un seul chargement : la
-      // version persistée est la version courante de l'app (3), pas l'étape
-      // intermédiaire v2.
-      expect(relu['version'], 3);
+      // v1 traverse maintenant v1 → v2 → v3 → v4 en un seul chargement : la
+      // version persistée est la version courante de l'app (4), pas une
+      // étape intermédiaire.
+      expect(relu['version'], 4);
     });
 
     test('charger une sauvegarde déjà à jour n\'écrit rien', () async {
       final seed = AppState(store: const NoopStore());
-      final v3Json = jsonEncode(seed.toJson());
-      final store = MemoryStore()..data = v3Json;
+      final v4Json = jsonEncode(seed.toJson());
+      final store = MemoryStore()..data = v4Json;
 
       final a = AppState(store: store);
       await a.init();
@@ -89,8 +90,8 @@ void main() {
 
     test('charger une sauvegarde déjà à jour n\'écrit aucun backup', () async {
       final seed = AppState(store: const NoopStore());
-      final v3Json = jsonEncode(seed.toJson());
-      final store = MemoryStore()..data = v3Json;
+      final v4Json = jsonEncode(seed.toJson());
+      final store = MemoryStore()..data = v4Json;
 
       final a = AppState(store: store);
       await a.init();
@@ -122,8 +123,65 @@ void main() {
 
       expect(store.backupWrites, 0);
       final relu = jsonDecode(store.data!) as Map<String, dynamic>;
-      expect(relu['version'], 3);
+      expect(relu['version'], 4);
       expect((relu['settings'] as Map).containsKey('tva'), isFalse);
+    });
+  });
+
+  group('v3 → v4 — pas de nouveau filet de sécurité non plus', () {
+    // Même raisonnement que v2 → v3 : le registre `settings.typesProjet` est
+    // redistribué (son libellé et son mode copiés sur chaque projet), rien
+    // n'est perdu qui ne survive déjà ailleurs dans la sauvegarde migrée.
+    test('charger une sauvegarde v3 migre sans écrire de backup', () async {
+      final v3 = _v1Minimal();
+      v3['version'] = 3;
+      v3['projets'] = <Map<String, dynamic>>[
+        {
+          'id': 1, 'nom': 'Câblage', 'typeId': 'fourniture',
+          'clientId': null, 'client': '',
+          'debut': DateTime(2026, 1, 1).toIso8601String(),
+          'finPrevue': DateTime(2026, 6, 30).toIso8601String(),
+          'jalons': [], 'avancementManuel': 0, 'annule': false,
+        },
+      ];
+      (v3['settings'] as Map)['typesProjet'] = [
+        {'id': 'fourniture', 'libelle': 'Fourniture de matériel', 'mode': 'quantites', 'couleur': 0xFF2563EB},
+      ];
+      final store = MemoryStore()..data = jsonEncode(v3);
+
+      final a = AppState(store: store);
+      await a.init();
+      await a.flush();
+
+      expect(store.backupWrites, 0);
+      final relu = jsonDecode(store.data!) as Map<String, dynamic>;
+      expect(relu['version'], 4);
+      expect((relu['settings'] as Map).containsKey('typesProjet'), isFalse);
+      final projet = (relu['projets'] as List).first as Map<String, dynamic>;
+      expect(projet['type'], 'Fourniture de matériel');
+      expect(projet['mode'], 'quantites');
+    });
+  });
+
+  group('v4 — une sauvegarde déjà à jour traverse le chargement sans y toucher', () {
+    test('charger une sauvegarde v4 la restitue à l\'identique', () async {
+      final seed = AppState(store: const NoopStore())..viderDonnees();
+      seed.addProjet(Projet(
+        id: 1, nom: 'Câblage', type: 'Fourniture de matériel',
+        mode: ModeAvancement.quantites, clientId: null, client: '',
+        debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 6, 30),
+      ));
+      final v4Json = jsonEncode(seed.toJson());
+      final store = MemoryStore()..data = v4Json;
+
+      final a = AppState(store: store);
+      await a.init();
+      await a.flush();
+
+      expect(store.writes, 0);
+      expect(store.backupWrites, 0);
+      expect(a.projets.first.type, 'Fourniture de matériel');
+      expect(a.projets.first.mode, ModeAvancement.quantites);
     });
   });
 }

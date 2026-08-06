@@ -9,7 +9,8 @@ Client _client({int id = 5}) => Client(
     );
 
 Projet _projet(int id, int? clientId) => Projet(
-      id: id, nom: 'Fourniture matériel', typeId: 'fourniture',
+      id: id, nom: 'Fourniture matériel',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: clientId, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     );

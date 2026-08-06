@@ -46,7 +46,7 @@ void main() {
   }) {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: nom, typeId: 'interne', clientId: 5, client: 'ACME',
+      id: 1, nom: nom, type: 'Projet interne', mode: ModeAvancement.manuel, clientId: 5, client: 'ACME',
       debut: DateTime(2020, 1, 1), finPrevue: finPrevueProjet));
     s.setAvancementManuel(1, 0.5); // ni 0 ni 1 : ne tombe jamais dans « À démarrer »/« Terminé ».
     s.saveOrUpdateProforma(DocumentItem(
@@ -113,7 +113,7 @@ void main() {
   testWidgets('À démarrer, aucune créance : pas de relance', (tester) async {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Idée sans client', typeId: 'interne', clientId: null,
+      id: 1, nom: 'Idée sans client', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2035, 1, 1)));
     await pump(tester, s);
     await ouvrirMenu(tester, 'Idée sans client');

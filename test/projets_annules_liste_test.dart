@@ -13,7 +13,8 @@ import 'support/test_fonts.dart';
 /// Projets, affichant les projets annulés en liste unique quand il est actif.
 
 Projet _p({int id = 1, String nom = 'Fourniture matériel'}) => Projet(
-      id: id, nom: nom, typeId: 'fourniture',
+      id: id, nom: nom,
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     );
