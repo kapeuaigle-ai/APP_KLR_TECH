@@ -23,7 +23,6 @@ class AppSettings {
   String email;
   String prefix;
   String startNum;
-  double tva;
   String conditions;
   /// Signature électronique du manager, image PNG encodée en base64.
   /// Vide = aucune signature : la case du document reste alors vierge.
@@ -49,7 +48,7 @@ class AppSettings {
     required this.company, required this.address, required this.bp,
     required this.rccm, required this.regime, required this.tel,
     required this.email, required this.prefix,
-    required this.startNum, required this.tva, required this.conditions,
+    required this.startNum, required this.conditions,
     this.signature = '', this.signatureLabel = '',
     this.warranty = kDefaultWarranty,
     this.username = kDefaultUsername,
@@ -81,7 +80,7 @@ class AppSettings {
   Map<String, dynamic> toJson() => {
     'company': company, 'address': address, 'bp': bp, 'rccm': rccm,
     'regime': regime, 'tel': tel, 'email': email, 'prefix': prefix,
-    'startNum': startNum, 'tva': tva, 'conditions': conditions,
+    'startNum': startNum, 'conditions': conditions,
     'signature': signature, 'signatureLabel': signatureLabel,
     'warranty': warranty,
     'username': username,
@@ -92,7 +91,7 @@ class AppSettings {
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
     company: j['company'], address: j['address'], bp: j['bp'], rccm: j['rccm'],
     regime: j['regime'], tel: j['tel'], email: j['email'], prefix: j['prefix'],
-    startNum: j['startNum'], tva: (j['tva'] as num).toDouble(), conditions: j['conditions'],
+    startNum: j['startNum'], conditions: j['conditions'],
     // Rétro-compatible : les sauvegardes antérieures n'ont pas ces clés.
     signature: j['signature'] ?? '', signatureLabel: j['signatureLabel'] ?? '',
     warranty: j['warranty'] ?? kDefaultWarranty,

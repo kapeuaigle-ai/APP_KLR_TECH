@@ -10,14 +10,14 @@ void main() {
       AppSettings(
         company: 'KLR TECH SARL', address: 'Abidjan', bp: 'BP 1',
         rccm: 'RCCM', regime: 'TEE', tel: '0700', email: 'a@b.ci',
-        prefix: 'KLR', startNum: '01', tva: 5, conditions: 'x',
+        prefix: 'KLR', startNum: '01', conditions: 'x',
         signature: signature, signatureLabel: signatureLabel,
       );
 
   test('signature et légende absentes par défaut : chaînes vides', () {
     final s = AppSettings(
       company: '', address: '', bp: '', rccm: '', regime: '', tel: '',
-      email: '', prefix: '', startNum: '', tva: 0, conditions: '',
+      email: '', prefix: '', startNum: '', conditions: '',
     );
     expect(s.signature, '');
     expect(s.signatureLabel, '');
@@ -42,7 +42,7 @@ void main() {
   test('clause de garantie : valeur par défaut renseignée, personnalisable', () {
     final defaut = AppSettings(
       company: '', address: '', bp: '', rccm: '', regime: '', tel: '',
-      email: '', prefix: '', startNum: '', tva: 0, conditions: '',
+      email: '', prefix: '', startNum: '', conditions: '',
     );
     expect(defaut.warranty, kDefaultWarranty);
     expect(defaut.warranty, isNotEmpty);

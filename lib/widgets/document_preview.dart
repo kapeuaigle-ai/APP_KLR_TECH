@@ -16,8 +16,7 @@ import 'klr_logo.dart';
 class DocumentPreview extends StatelessWidget {
   final String type, numero, client, clientAddr, objet, conditions;
   final List<LineItem> lines;
-  final bool tva;
-  final double ht, tvaAmt, ttc;
+  final double montant;
   final AppSettings settings;
   /// Date imprimée sur le document, saisie librement. Vide = pas de ligne date.
   final String date;
@@ -36,8 +35,8 @@ class DocumentPreview extends StatelessWidget {
     super.key,
     required this.type, required this.numero, required this.settings,
     required this.client, required this.clientAddr,
-    required this.objet, required this.lines, required this.tva,
-    required this.ht, required this.tvaAmt, required this.ttc,
+    required this.objet, required this.lines,
+    required this.montant,
     required this.conditions,
     this.date = '',
     this.onPrint, this.onDownload, this.showToolbar = true,
@@ -67,12 +66,11 @@ class DocumentPreview extends StatelessWidget {
           if (client.isEmpty && clientAddr.isEmpty) '—',
         ],
         objet: objet,
-        montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
+        montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
         conditions: conditions,
         warranty: settings.warranty,
         footerLine: settings.footerLine,
-        showMontant: ttc > 0 && !_isBl,
-        tva: tva,
+        showMontant: montant > 0 && !_isBl,
       );
 
   // ── Découpe les lignes en pages ───────────────────────
@@ -182,17 +180,16 @@ class DocumentPreview extends StatelessWidget {
               // ── Tableau des lignes ────────────────────
               _PreviewTable(
                 lines: pageLines,
-                tva: tva,
-                ht: ht, tvaAmt: tvaAmt, ttc: ttc,
+                montant: montant,
                 showTotals: isLast,
                 isBl: _isBl,
               ),
 
               // ── Totaux + montant en lettres (dernière page) ─
-              if (isLast && ttc > 0 && !_isBl) ...[
+              if (isLast && montant > 0 && !_isBl) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
+                  'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
                   style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text1, height: 1.5),
                 ),
               ],
@@ -422,11 +419,10 @@ class _InfoBox extends StatelessWidget {
 
 class _PreviewTable extends StatelessWidget {
   final List<LineItem> lines;
-  final bool tva;
-  final double ht, tvaAmt, ttc;
+  final double montant;
   final bool showTotals;
   final bool isBl;
-  const _PreviewTable({required this.lines, required this.tva, required this.ht, required this.tvaAmt, required this.ttc, required this.isBl, this.showTotals = true});
+  const _PreviewTable({required this.lines, required this.montant, required this.isBl, this.showTotals = true});
 
   @override
   Widget build(BuildContext context) {
@@ -469,17 +465,15 @@ class _PreviewTable extends StatelessWidget {
           ]),
         );
       }),
-      // Totaux — uniquement sur la dernière page, jamais sur un BL
+      // Total — uniquement sur la dernière page, jamais sur un BL
       if (showTotals && !isBl) ...[
         const SizedBox(height: 8),
         Align(alignment: Alignment.centerRight, child: SizedBox(width: 200, child: Column(children: [
-          _PTotal(label: 'Sous-total HT', value: Fmt.number(ht)),
-          if (tva) _PTotal(label: 'TVA (5%)', value: Fmt.number(tvaAmt)),
           const Divider(height: 8, color: AppColors.border),
           Row(children: [
-            Text('TOTAL TTC', style: GoogleFonts.dmSans(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.text1)),
+            Text('TOTAL', style: GoogleFonts.dmSans(fontSize: 9.5, fontWeight: FontWeight.w800, color: AppColors.text1)),
             const Spacer(),
-            Text(Fmt.number(ttc), style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.primary)),
+            Text(Fmt.number(montant), style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w900, color: AppColors.primary)),
           ]),
         ]))),
       ],
@@ -495,20 +489,6 @@ class _TH extends StatelessWidget {
   Widget build(BuildContext context) => Text(text, style: GoogleFonts.dmSans(
       fontSize: 8, fontWeight: FontWeight.w700, color: Colors.white, letterSpacing: 0.5),
       textAlign: right ? TextAlign.right : TextAlign.left);
-}
-
-class _PTotal extends StatelessWidget {
-  final String label, value;
-  const _PTotal({required this.label, required this.value});
-  @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(vertical: 2),
-    child: Row(children: [
-      Text(label, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2)),
-      const Spacer(),
-      Text(value, style: GoogleFonts.dmSans(fontSize: 8.5, fontWeight: FontWeight.w600, color: AppColors.text1)),
-    ]),
-  );
 }
 
 class _ToolIcon extends StatefulWidget {

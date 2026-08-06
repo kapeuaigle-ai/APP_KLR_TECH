@@ -22,7 +22,6 @@ void main() {
         email: 'klr.tech8@gmail.com',
         prefix: 'KLR',
         startNum: '01',
-        tva: 5,
         conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
       );
 
@@ -35,7 +34,7 @@ void main() {
 
   Future<List<int>> build(int n, String type, String kind) {
     final l = lines(n, kind);
-    final ht = l.fold<double>(0, (s, x) => s + x.total);
+    final montant = l.fold<double>(0, (s, x) => s + x.total);
     return PdfGenerator.generate(
       settings: settings(),
       type: type,
@@ -45,10 +44,7 @@ void main() {
       clientAddr: '45 Avenue des Champs, Lyon, France',
       objet: 'Matériels informatiques',
       lines: l,
-      tva: true,
-      ht: ht,
-      tvaAmt: ht * 0.05,
-      ttc: ht * 1.05,
+      montant: montant,
       conditions: settings().conditions,
     );
   }
@@ -57,7 +53,7 @@ void main() {
   // recalculer la pagination attendue.
   DocumentContext ctx(int n, String type, String kind) {
     final l = lines(n, kind);
-    final ttc = l.fold<double>(0, (s, x) => s + x.total) * 1.05;
+    final montant = l.fold<double>(0, (s, x) => s + x.total);
     return DocumentContext(
       typeLabel: type == 'facture' ? 'FACTURE' : type == 'bl' ? 'BON DE LIVRAISON' : 'FACTURE PROFORMA',
       numero: 'KLR-04-200726',
@@ -65,12 +61,11 @@ void main() {
       deLines: [settings().company, settings().address, settings().bp],
       attentionLines: ['Global Tech', '45 Avenue des Champs, Lyon, France'],
       objet: 'Matériels informatiques',
-      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
+      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
       conditions: settings().conditions,
       warranty: DocumentPagination.warrantyClause,
       footerLine: settings().footerLine,
-      showMontant: ttc > 0 && type != 'bl',
-      tva: true,
+      showMontant: montant > 0 && type != 'bl',
     );
   }
 

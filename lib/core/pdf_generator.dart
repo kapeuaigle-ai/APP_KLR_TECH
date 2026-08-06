@@ -167,10 +167,9 @@ class PdfGenerator {
     );
   }
 
-  // ── Tableau + totaux ──────────────────────────────────
-  static pw.Widget _table(List<LineItem> lines, bool tva,
-      double ht, double tvaAmt, double ttc, bool showTotals, bool isBl,
-      pw.Font bold, pw.Font reg) {
+  // ── Tableau + total ────────────────────────────────────
+  static pw.Widget _table(List<LineItem> lines, double montant,
+      bool showTotals, bool isBl, pw.Font bold, pw.Font reg) {
     return pw.Column(children: [
       // Header rouge
       pw.Container(
@@ -209,29 +208,20 @@ class PdfGenerator {
           ]),
         );
       }),
-      // Totaux (dernière page uniquement, jamais sur un BL)
+      // Total (dernière page uniquement, jamais sur un BL)
       if (showTotals && !isBl) ...[
         pw.SizedBox(height: 8),
         pw.Align(alignment: pw.Alignment.centerRight, child: pw.SizedBox(width: 200, child: pw.Column(children: [
-          _ptRow('Sous-total HT', Fmt.number(ht), reg),
-          if (tva) _ptRow('TVA (5%)', Fmt.number(tvaAmt), reg),
           pw.Divider(color: _border, thickness: 0.5),
           pw.Row(children: [
-            pw.Text('TOTAL TTC', style: _ts(9.5, font: bold)),
+            pw.Text('TOTAL', style: _ts(9.5, font: bold)),
             pw.Spacer(),
-            pw.Text(Fmt.number(ttc), style: _ts(11, color: _red, font: bold)),
+            pw.Text(Fmt.number(montant), style: _ts(11, color: _red, font: bold)),
           ]),
         ]))),
       ],
     ]);
   }
-
-  static pw.Widget _ptRow(String label, String value, pw.Font reg) =>
-    pw.Padding(padding: const pw.EdgeInsets.symmetric(vertical: 2), child: pw.Row(children: [
-      pw.Text(label, style: _ts(8.5, color: _grey2)),
-      pw.Spacer(),
-      pw.Text(value, style: _ts(8.5)),
-    ]));
 
   // ── Conditions + Signature ────────────────────────────
   // Rendu simple et fiable : pas de Stack/Positioned/Overflow qui peuvent
@@ -334,10 +324,7 @@ class PdfGenerator {
     required String clientAddr,
     required String objet,
     required List<LineItem> lines,
-    required bool tva,
-    required double ht,
-    required double tvaAmt,
-    required double ttc,
+    required double montant,
     required String conditions,
     String? numero,
     String? date,
@@ -373,12 +360,11 @@ class PdfGenerator {
         if (client.isEmpty && clientAddr.isEmpty) '—',
       ],
       objet: objet,
-      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(ttc)} FRANCS CFA.',
+      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
       conditions: conditions,
       warranty: settings.warranty,
       footerLine: settings.footerLine,
-      showMontant: ttc > 0 && type != 'bl',
-      tva: tva,
+      showMontant: montant > 0 && type != 'bl',
     );
     final pages  = _paginate(DocumentPagination.visible(lines), type == 'bl', pageContext);
     final total  = pages.length;
@@ -426,14 +412,14 @@ class PdfGenerator {
                 ],
 
                 // Tableau
-                _table(pageLines, tva, ht, tvaAmt, ttc, isLast, type == 'bl', bold, reg),
+                _table(pageLines, montant, isLast, type == 'bl', bold, reg),
 
                 // Montant en lettres (dernière page, jamais sur un BL)
-                if (isLast && ttc > 0 && type != 'bl') ...[
+                if (isLast && montant > 0 && type != 'bl') ...[
                   pw.SizedBox(height: 10),
                   pw.Text(
                     'Arrêté la présente facture à la somme de : '
-                    '${NumberToWords.convert(ttc)} FRANCS CFA.',
+                    '${NumberToWords.convert(montant)} FRANCS CFA.',
                     style: _ts(8.5),
                   ),
                 ],

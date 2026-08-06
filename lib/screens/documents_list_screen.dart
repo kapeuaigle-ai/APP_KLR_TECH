@@ -193,20 +193,16 @@ class _DocActions {
   static const _typeLabels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
   static const _fullTypeLabels = {'proforma': 'Facture Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
 
-  // Totaux recalculés depuis les lignes enregistrées du document.
+  // Montant recalculé depuis les lignes enregistrées du document.
   // Le BL ne porte aucun montant.
-  ({double ht, double tvaAmt, double ttc, bool tva}) totals(AppSettings s) {
-    if (type == 'bl') return (ht: 0, tvaAmt: 0, ttc: 0, tva: false);
-    final ht = doc.lines.fold<double>(0, (sum, l) => sum + l.total);
-    final tva = s.tva > 0;
-    final tvaAmt = tva ? ht * 0.05 : 0.0;
-    return (ht: ht, tvaAmt: tvaAmt, ttc: ht + tvaAmt, tva: tva);
+  double totals() {
+    if (type == 'bl') return 0;
+    return doc.lines.fold<double>(0, (sum, l) => sum + l.total);
   }
 
   // Régénère le PDF du document depuis ses lignes enregistrées.
   Future<List<int>> _buildPdf(BuildContext context) {
     final s = context.read<AppState>().settings;
-    final t = totals(s);
     return PdfGenerator.generate(
       settings: s,
       type: type,
@@ -218,8 +214,7 @@ class _DocActions {
       clientAddr: doc.clientAddr,
       objet: doc.objet,
       lines: doc.lines,
-      tva: t.tva,
-      ht: t.ht, tvaAmt: t.tvaAmt, ttc: t.ttc,
+      montant: totals(),
       conditions: s.conditions,
     );
   }
@@ -227,7 +222,6 @@ class _DocActions {
   // ── Aperçu du document en pleine page ──────────────────
   void showFullDocument(BuildContext context) {
     final s = context.read<AppState>().settings;
-    final t = totals(s);
     const typeLabels = _fullTypeLabels;
 
     showDialog(
@@ -279,8 +273,7 @@ class _DocActions {
                         clientAddr: doc.clientAddr,
                         objet: doc.objet,
                         lines: doc.lines,
-                        tva: t.tva,
-                        ht: t.ht, tvaAmt: t.tvaAmt, ttc: t.ttc,
+                        montant: totals(),
                         conditions: s.conditions,
                         showToolbar: false,
                       ),

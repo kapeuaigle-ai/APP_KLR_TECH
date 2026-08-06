@@ -66,7 +66,6 @@ class AppState extends ChangeNotifier {
       email: 'klr.tech8@gmail.com',
       prefix: 'KLR',
       startNum: '01',
-      tva: 5,
       conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
     );
     tasks = SampleData.initialTasks;

@@ -45,7 +45,7 @@ void main() {
         company: 'KLR TECH SARL', address: 'Abidjan Riviera 2 Lot 128 ilot 307',
         bp: '28 BP 994 Abidjan 28', rccm: 'CI-ABJ-03-2021-B1308160', regime: 'TEE',
         tel: '0708714557', email: 'klr.tech8@gmail.com', prefix: 'KLR',
-        startNum: '01', tva: 5,
+        startNum: '01',
         conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
         signature: signature, signatureLabel: signatureLabel,
       );
@@ -56,11 +56,11 @@ void main() {
 
   Future<List<int>> buildPdf(AppSettings s, int n) {
     final l = lines(n);
-    final ht = l.fold<double>(0, (a, x) => a + x.total);
+    final montant = l.fold<double>(0, (a, x) => a + x.total);
     return PdfGenerator.generate(
       settings: s, type: 'facture', numero: 'KLR-04-200726', date: '20/07/2026',
       client: 'Global Tech', clientAddr: 'Lyon', objet: 'Matériels',
-      lines: l, tva: true, ht: ht, tvaAmt: ht * 0.05, ttc: ht * 1.05,
+      lines: l, montant: montant,
       conditions: s.conditions,
     );
   }

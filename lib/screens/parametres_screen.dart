@@ -648,7 +648,6 @@ class _FacturationTab extends StatefulWidget {
 
 class _FacturationTabState extends State<_FacturationTab> {
   late TextEditingController _prefix, _startNum, _conditions, _warranty;
-  late bool _tvaEnabled;
 
   @override
   void initState() {
@@ -658,7 +657,6 @@ class _FacturationTabState extends State<_FacturationTab> {
     _startNum = TextEditingController(text: s.startNum);
     _conditions = TextEditingController(text: s.conditions);
     _warranty = TextEditingController(text: s.warranty);
-    _tvaEnabled = s.tva > 0;
   }
 
   @override
@@ -715,14 +713,6 @@ class _FacturationTabState extends State<_FacturationTab> {
             Expanded(child: fields[2]),
           ]);
         }),
-        const SizedBox(height: 20),
-        Row(children: [
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('TVA', style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.text1)),
-            Text('Appliquer une TVA de 5% sur les documents', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
-          ])),
-          Switch(value: _tvaEnabled, onChanged: (v) => setState(() => _tvaEnabled = v), activeThumbColor: AppColors.primary),
-        ]),
       ])),
       const SizedBox(height: 16),
 
@@ -745,7 +735,6 @@ class _FacturationTabState extends State<_FacturationTab> {
           final s = state.settings;
           s.prefix = _prefix.text;
           s.startNum = _startNum.text;
-          s.tva = _tvaEnabled ? 5 : 0;
           s.conditions = _conditions.text;
           s.warranty = _warranty.text;
           state.updateSettings(s);
