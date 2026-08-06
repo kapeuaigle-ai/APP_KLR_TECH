@@ -555,6 +555,31 @@ class EmptyHint extends StatelessWidget {
   );
 }
 
+// ── Élément de menu compact ────────────────────────────────
+/// Entrée de `PopupMenuButton`, à la densité du reste de l'app plutôt qu'à
+/// la hauteur de 48 px et au padding de 16 px du Material par défaut — ce qui
+/// rend chaque menu d'actions visuellement lourd à côté des tableaux et
+/// cartes déjà compacts de l'écran.
+///
+/// Présentation seule : `value`, l'icône et le libellé restent ceux voulus
+/// par l'appelant, donc ce qu'un menu propose et déclenche ne change pas.
+PopupMenuItem<T> compactMenuItem<T>({
+  required T value,
+  required IconData icon,
+  required String label,
+  Color iconColor = AppColors.text3,
+  Color textColor = AppColors.text1,
+}) => PopupMenuItem<T>(
+  value: value,
+  height: 34,
+  padding: const EdgeInsets.symmetric(horizontal: 12),
+  child: Row(children: [
+    Icon(icon, size: 14, color: iconColor),
+    const SizedBox(width: 8),
+    Text(label, style: GoogleFonts.dmSans(fontSize: 12.5, color: textColor)),
+  ]),
+);
+
 // ── Table header cell ─────────────────────────────────────
 class ThCell extends StatelessWidget {
   final String label;

@@ -1054,54 +1054,31 @@ Widget _engagementMenu(
     itemBuilder: (ctx) => [
       // Toujours en tête : lire avant d'agir, et le seul geste qui reste
       // pertinent quel que soit le statut de l'engagement.
-      PopupMenuItem(value: 'detail', child: Row(children: [
-        const Icon(Icons.visibility_outlined, size: 15, color: AppColors.text2),
-        const SizedBox(width: 8),
-        Text('Détail', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-      ])),
-      if (!e.solde && !e.annule) ...[
-        PopupMenuItem(value: 'valider', child: Row(children: [
-          const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
-          const SizedBox(width: 8),
-          Text(e.estEntrant ? 'Encaissée' : 'Marquer payée',
-              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
-      ],
+      compactMenuItem(value: 'detail', icon: Icons.visibility_outlined,
+          iconColor: AppColors.text2, label: 'Détail'),
+      if (!e.solde && !e.annule)
+        compactMenuItem(value: 'valider', icon: Icons.check_circle_outline,
+            iconColor: AppColors.green,
+            label: e.estEntrant ? 'Encaissée' : 'Marquer payée'),
       // Accessible tant que l'engagement peut porter des règlements, et en
       // consultation seule une fois soldé.
-      PopupMenuItem(value: 'reglements', child: Row(children: [
-        const Icon(Icons.savings_outlined, size: 15, color: AppColors.blue),
-        const SizedBox(width: 8),
-        Text(e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement',
-            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-      ])),
+      compactMenuItem(value: 'reglements', icon: Icons.savings_outlined,
+          iconColor: AppColors.blue,
+          label: e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement'),
       // N'apparaît que s'il existe au moins un projet à proposer — un
       // engagement créé avant que son projet n'existe reste rattachable
       // depuis ici.
       if (state.projets.isNotEmpty)
-        PopupMenuItem(value: 'projet', child: Row(children: [
-          const Icon(Icons.link, size: 15, color: AppColors.blue),
-          const SizedBox(width: 8),
-          Text(e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet',
-              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
+        compactMenuItem(value: 'projet', icon: Icons.link, iconColor: AppColors.blue,
+            label: e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet'),
       if (!e.annule)
-        PopupMenuItem(value: 'annuler', child: Row(children: [
-          const Icon(Icons.block, size: 15, color: AppColors.text3),
-          const SizedBox(width: 8),
-          Text('Annuler l\'engagement', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ]))
+        compactMenuItem(value: 'annuler', icon: Icons.block, iconColor: AppColors.text3,
+            label: 'Annuler l\'engagement')
       else
-        PopupMenuItem(value: 'reactiver', child: Row(children: [
-          const Icon(Icons.undo, size: 15, color: AppColors.text3),
-          const SizedBox(width: 8),
-          Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
-      PopupMenuItem(value: 'supprimer', child: Row(children: [
-        const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
-        const SizedBox(width: 8),
-        Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-      ])),
+        compactMenuItem(value: 'reactiver', icon: Icons.undo, iconColor: AppColors.text3,
+            label: 'Réactiver'),
+      compactMenuItem(value: 'supprimer', icon: Icons.delete_outline, iconColor: AppColors.red,
+          label: 'Supprimer'),
     ],
   );
 }
