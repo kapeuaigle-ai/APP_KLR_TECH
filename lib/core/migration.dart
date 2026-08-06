@@ -1,5 +1,6 @@
 /// Migration des sauvegardes : v1 (quatre mécanismes d'argent) → v2
-/// (Engagement + Reglement).
+/// (Engagement + Reglement) → v3 (suppression de la TVA, montant des
+/// documents réaligné sur la somme de leurs lignes).
 ///
 /// Travaille sur le JSON brut, jamais sur les modèles : les classes v1
 /// n'existent plus, et une migration liée au code courant se casserait à
@@ -84,6 +85,61 @@ Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
   v2.remove('expenses');
   return v2;
 }
+
+/// Convertit une sauvegarde v2 en v3. Une sauvegarde déjà en v3 est rendue
+/// telle quelle, sans copie.
+///
+/// v3 retire la TVA (jamais appliquée en pratique : le régime du manager n'y
+/// est pas assujetti) et corrige le bug qu'elle cachait : `DocumentItem.montant`
+/// valait le TTC pour une proforma/facture créée depuis l'écran, alors que la
+/// comptabilité (`Comptabilite.factureHt`, l'engagement créé à la validation)
+/// a toujours sommé les lignes (HT). L'écart ne se voyait nulle part — jusqu'à
+/// ce qu'un client règle une facture en entier : `ajouterReglement` écrête le
+/// paiement au `reste` de l'engagement (HT), et la différence avec le TTC
+/// affiché disparaissait sans laisser de trace.
+///
+/// Cette migration réaligne chaque document (proforma, facture) sur la somme
+/// de ses lignes, seule vérité désormais. Un bon de livraison garde
+/// `montant: 0` par convention (voir `AppState.validateProforma`) : il est
+/// donc exclu, pour ne pas lui donner un prix qu'il ne doit pas avoir. Les
+/// engagements ne bougent pas : ils étaient déjà en HT (§ `_montantFacture`
+/// ci-dessus, déjà la somme des lignes depuis toujours).
+Map<String, dynamic> migrerV2versV3(Map<String, dynamic> j) {
+  if (j['version'] == 3) return j;
+
+  final v3 = Map<String, dynamic>.from(j);
+  v3['version'] = 3;
+
+  final settingsBrut = v3['settings'];
+  if (settingsBrut is Map) {
+    final settings = Map<String, dynamic>.from(settingsBrut);
+    settings.remove('tva');
+    v3['settings'] = settings;
+  }
+
+  final documentsBrut = v3['documents'];
+  if (documentsBrut is Map) {
+    final documents = Map<String, dynamic>.from(documentsBrut);
+    for (final type in ['proforma', 'facture']) {
+      final liste = (documents[type] as List? ?? []).cast<Map<String, dynamic>>();
+      documents[type] = liste.map((d) {
+        final dd = Map<String, dynamic>.from(d);
+        dd['montant'] = _sommeLignes(d);
+        return dd;
+      }).toList();
+    }
+    v3['documents'] = documents;
+  }
+
+  return v3;
+}
+
+/// Somme des lignes d'un document brut — même calcul que `_montantFacture`
+/// ci-dessus, sous un nom neutre : cette fois appliqué à tout document
+/// facturable (proforma ou facture), pas seulement à une facture v1.
+double _sommeLignes(Map<String, dynamic> d) => (d['lines'] as List? ?? [])
+    .whereType<Map>()
+    .fold<double>(0.0, (s, l) => s + _double(l['qte']) * _double(l['pu']));
 
 // ── Conversions unitaires ─────────────────────────────────
 

@@ -57,13 +57,16 @@ void main() {
 
       expect(store.writes, 1);
       final relu = jsonDecode(store.data!) as Map<String, dynamic>;
-      expect(relu['version'], 2);
+      // v1 traverse maintenant v1 → v2 → v3 en un seul chargement : la
+      // version persistée est la version courante de l'app (3), pas l'étape
+      // intermédiaire v2.
+      expect(relu['version'], 3);
     });
 
-    test('charger une sauvegarde déjà en v2 n\'écrit rien', () async {
+    test('charger une sauvegarde déjà à jour n\'écrit rien', () async {
       final seed = AppState(store: const NoopStore());
-      final v2Json = jsonEncode(seed.toJson());
-      final store = MemoryStore()..data = v2Json;
+      final v3Json = jsonEncode(seed.toJson());
+      final store = MemoryStore()..data = v3Json;
 
       final a = AppState(store: store);
       await a.init();
@@ -84,16 +87,43 @@ void main() {
       expect(jsonDecode(store.backup!), equals(_v1Minimal()));
     });
 
-    test('charger une sauvegarde déjà en v2 n\'écrit aucun backup', () async {
+    test('charger une sauvegarde déjà à jour n\'écrit aucun backup', () async {
       final seed = AppState(store: const NoopStore());
-      final v2Json = jsonEncode(seed.toJson());
-      final store = MemoryStore()..data = v2Json;
+      final v3Json = jsonEncode(seed.toJson());
+      final store = MemoryStore()..data = v3Json;
 
       final a = AppState(store: store);
       await a.init();
       await a.flush();
 
       expect(store.backupWrites, 0);
+    });
+  });
+
+  group('v2 → v3 — pas de nouveau filet de sécurité', () {
+    // Décision : contrairement à v1 → v2 (qui fond quatre mécanismes d'argent
+    // disjoints en Engagement + Reglement — une restructuration qu'on ne peut
+    // plus reconstituer depuis la sortie), v2 → v3 ne fait que recalculer un
+    // champ DÉRIVÉ (`DocumentItem.montant`) à partir de données qui restent
+    // toutes les deux dans la sauvegarde migrée (les `lines`). Rien n'est
+    // perdu, donc rien à sauvegarder à part — et le fichier `klr_data.v1.json`
+    // du filet existant est nommément celui du v1 brut ; le detourner pour un
+    // second usage (v2 brut) sèmerait la confusion sur ce qu'il contient
+    // vraiment, pour un cas qui ne le justifie pas.
+    test('charger une sauvegarde v2 migre sans écrire de backup', () async {
+      final v2 = _v1Minimal();
+      v2['version'] = 2;
+      v2['projets'] = <Map<String, dynamic>>[];
+      final store = MemoryStore()..data = jsonEncode(v2);
+
+      final a = AppState(store: store);
+      await a.init();
+      await a.flush();
+
+      expect(store.backupWrites, 0);
+      final relu = jsonDecode(store.data!) as Map<String, dynamic>;
+      expect(relu['version'], 3);
+      expect((relu['settings'] as Map).containsKey('tva'), isFalse);
     });
   });
 }
