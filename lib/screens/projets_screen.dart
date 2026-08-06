@@ -288,39 +288,15 @@ class _ProjetCard extends StatelessWidget {
               // sur la fiche derrière sa confirmation (§ garde-fou).
               itemBuilder: (_) => projet.annule
                   ? [
-                      PopupMenuItem(value: 'reactiver', child: Row(children: [
-                        const Icon(Icons.undo, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
-                      PopupMenuItem(value: 'modifier', child: Row(children: [
-                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
+                      compactMenuItem(value: 'reactiver', icon: Icons.undo, label: 'Réactiver'),
+                      compactMenuItem(value: 'modifier', icon: Icons.edit_outlined, label: 'Modifier'),
                     ]
                   : [
                       if (aRelancer)
-                        PopupMenuItem(value: 'relancer', child: Row(children: [
-                          const Icon(Icons.call_outlined, size: 15, color: AppColors.text3),
-                          const SizedBox(width: 8),
-                          Text('Relancer le client', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                        ])),
-                      PopupMenuItem(value: 'reporter', child: Row(children: [
-                        const Icon(Icons.event_repeat_outlined, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Reporter l\'échéance', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
-                      PopupMenuItem(value: 'modifier', child: Row(children: [
-                        const Icon(Icons.edit_outlined, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Modifier', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
-                      PopupMenuItem(value: 'annuler', child: Row(children: [
-                        const Icon(Icons.block, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
+                        compactMenuItem(value: 'relancer', icon: Icons.call_outlined, label: 'Relancer le client'),
+                      compactMenuItem(value: 'reporter', icon: Icons.event_repeat_outlined, label: 'Reporter l\'échéance'),
+                      compactMenuItem(value: 'modifier', icon: Icons.edit_outlined, label: 'Modifier'),
+                      compactMenuItem(value: 'annuler', icon: Icons.block, label: 'Annuler le projet'),
                     ],
             ),
           ]),
@@ -685,22 +661,11 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   },
                   itemBuilder: (_) => [
                     if (!projet.annule)
-                      PopupMenuItem(value: 'annuler', child: Row(children: [
-                        const Icon(Icons.block, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Annuler le projet', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ]))
+                      compactMenuItem(value: 'annuler', icon: Icons.block, label: 'Annuler le projet')
                     else
-                      PopupMenuItem(value: 'reactiver', child: Row(children: [
-                        const Icon(Icons.undo, size: 15, color: AppColors.text3),
-                        const SizedBox(width: 8),
-                        Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-                      ])),
-                    PopupMenuItem(value: 'supprimer', child: Row(children: [
-                      const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
-                      const SizedBox(width: 8),
-                      Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.red)),
-                    ])),
+                      compactMenuItem(value: 'reactiver', icon: Icons.undo, label: 'Réactiver'),
+                    compactMenuItem(value: 'supprimer', icon: Icons.delete_outline,
+                        iconColor: AppColors.red, textColor: AppColors.red, label: 'Supprimer'),
                   ],
                 ),
                 IconButton(

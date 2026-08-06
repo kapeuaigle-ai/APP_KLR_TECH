@@ -909,6 +909,111 @@ Future<void> _rattacherProjetDialog(
   );
 }
 
+/// Fiche de lecture d'un engagement : tout ce que la ligne de tableau tronque
+/// (description, règlement en cours) affiché en entier, sans possibilité
+/// d'édition ni de suppression — ces gestes restent dans leurs boîtes
+/// dédiées (« Gérer les règlements », etc.), pour ne jamais poser une action
+/// destructive dans une boîte ouverte pour simplement lire.
+Future<void> _detailEngagementDialog(
+    BuildContext context, AppState state, Engagement e) async {
+  final now = DateTime.now();
+  final enRetard = e.enRetard(now);
+
+  final clientTrouve = e.clientId == null
+      ? null
+      : state.clients.where((c) => c.id == e.clientId);
+  final clientNom = (clientTrouve != null && clientTrouve.isNotEmpty)
+      ? clientTrouve.first.name : null;
+
+  final projetTrouve = e.projetId == null
+      ? null
+      : state.projets.where((p) => p.id == e.projetId);
+  final projetNom = (projetTrouve != null && projetTrouve.isNotEmpty)
+      ? projetTrouve.first.nom : null;
+
+  final regs = List.of(e.reglements)..sort((a, b) => a.date.compareTo(b.date));
+
+  await showDialog<void>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Row(children: [
+        Expanded(child: Text(
+          e.estEntrant ? 'Détail de la créance' : 'Détail de la dette',
+          style: GoogleFonts.dmSans(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1),
+        )),
+        StatusBadge(status: _statutDe(e, now)),
+      ]),
+      content: SizedBox(
+        width: dialogWidth(context, 420),
+        child: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _field(e.estEntrant ? 'DÉBITEUR' : 'CRÉANCIER',
+                Text(e.tiers, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1))),
+            if (clientNom != null) ...[
+              const SizedBox(height: 12),
+              _field('CLIENT', Text(clientNom, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1))),
+            ],
+            const SizedBox(height: 12),
+            _field('DESCRIPTION', Text(
+              e.description.isEmpty ? '—' : e.description,
+              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1, height: 1.4),
+            )),
+            const SizedBox(height: 12),
+            _field('MONTANT', Text(Fmt.money(e.montant),
+                style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1))),
+            const SizedBox(height: 12),
+            _field('RÉGLÉ', Text(Fmt.money(e.regle),
+                style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.blue))),
+            const SizedBox(height: 12),
+            _field('RESTE DÛ', Text(Fmt.money(e.reste),
+                style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700,
+                    color: e.reste > 0 ? AppColors.red : AppColors.green))),
+            const SizedBox(height: 12),
+            _field('ÉCHÉANCE', Text(
+              enRetard ? '${Fmt.jour(e.echeance)} · en retard' : Fmt.jour(e.echeance),
+              style: GoogleFonts.dmSans(fontSize: 13, color: enRetard ? AppColors.red : AppColors.text1),
+            )),
+            const SizedBox(height: 12),
+            _field('CATÉGORIE', Text(e.categorie, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1))),
+            if (e.documentNumero != null) ...[
+              const SizedBox(height: 12),
+              _field('DOCUMENT LIÉ', Text(e.documentNumero!,
+                  style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary))),
+            ],
+            if (projetNom != null) ...[
+              const SizedBox(height: 12),
+              _field('PROJET', Text(projetNom, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1))),
+            ],
+            const SizedBox(height: 16),
+            const Divider(height: 1, color: AppColors.border),
+            const SizedBox(height: 12),
+            Text('RÈGLEMENTS', style: AppTheme.label),
+            const SizedBox(height: 8),
+            if (regs.isEmpty)
+              Text('Aucun règlement enregistré.', style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3))
+            else
+              ...regs.map((r) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '${Fmt.jour(r.date)} · ${Fmt.money(r.montant)} · ${_moyenLabel(r.moyen)}',
+                  style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                ),
+              )),
+          ]),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(),
+          child: Text('Fermer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text2)),
+        ),
+      ],
+    ),
+  );
+}
+
 /// Menu d'actions d'un engagement, partagé par la ligne de tableau (bureau)
 /// et la carte (téléphone) : solder, gérer les règlements, annuler/réactiver,
 /// supprimer. Seule la taille de la cible change.
@@ -930,6 +1035,8 @@ Widget _engagementMenu(
     color: Colors.white,
     onSelected: (action) {
       switch (action) {
+        case 'detail':
+          _detailEngagementDialog(context, state, e);
         case 'valider':
           _soldeEngagement(context, state, e);
         case 'reglements':
@@ -945,49 +1052,33 @@ Widget _engagementMenu(
       }
     },
     itemBuilder: (ctx) => [
-      if (!e.solde && !e.annule) ...[
-        PopupMenuItem(value: 'valider', child: Row(children: [
-          const Icon(Icons.check_circle_outline, size: 15, color: AppColors.green),
-          const SizedBox(width: 8),
-          Text(e.estEntrant ? 'Encaissée' : 'Marquer payée',
-              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
-      ],
+      // Toujours en tête : lire avant d'agir, et le seul geste qui reste
+      // pertinent quel que soit le statut de l'engagement.
+      compactMenuItem(value: 'detail', icon: Icons.visibility_outlined,
+          iconColor: AppColors.text2, label: 'Détail'),
+      if (!e.solde && !e.annule)
+        compactMenuItem(value: 'valider', icon: Icons.check_circle_outline,
+            iconColor: AppColors.green,
+            label: e.estEntrant ? 'Encaissée' : 'Marquer payée'),
       // Accessible tant que l'engagement peut porter des règlements, et en
       // consultation seule une fois soldé.
-      PopupMenuItem(value: 'reglements', child: Row(children: [
-        const Icon(Icons.savings_outlined, size: 15, color: AppColors.blue),
-        const SizedBox(width: 8),
-        Text(e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement',
-            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-      ])),
+      compactMenuItem(value: 'reglements', icon: Icons.savings_outlined,
+          iconColor: AppColors.blue,
+          label: e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement'),
       // N'apparaît que s'il existe au moins un projet à proposer — un
       // engagement créé avant que son projet n'existe reste rattachable
       // depuis ici.
       if (state.projets.isNotEmpty)
-        PopupMenuItem(value: 'projet', child: Row(children: [
-          const Icon(Icons.link, size: 15, color: AppColors.blue),
-          const SizedBox(width: 8),
-          Text(e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet',
-              style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
+        compactMenuItem(value: 'projet', icon: Icons.link, iconColor: AppColors.blue,
+            label: e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet'),
       if (!e.annule)
-        PopupMenuItem(value: 'annuler', child: Row(children: [
-          const Icon(Icons.block, size: 15, color: AppColors.text3),
-          const SizedBox(width: 8),
-          Text('Annuler l\'engagement', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ]))
+        compactMenuItem(value: 'annuler', icon: Icons.block, iconColor: AppColors.text3,
+            label: 'Annuler l\'engagement')
       else
-        PopupMenuItem(value: 'reactiver', child: Row(children: [
-          const Icon(Icons.undo, size: 15, color: AppColors.text3),
-          const SizedBox(width: 8),
-          Text('Réactiver', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-        ])),
-      PopupMenuItem(value: 'supprimer', child: Row(children: [
-        const Icon(Icons.delete_outline, size: 15, color: AppColors.red),
-        const SizedBox(width: 8),
-        Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1)),
-      ])),
+        compactMenuItem(value: 'reactiver', icon: Icons.undo, iconColor: AppColors.text3,
+            label: 'Réactiver'),
+      compactMenuItem(value: 'supprimer', icon: Icons.delete_outline, iconColor: AppColors.red,
+          label: 'Supprimer'),
     ],
   );
 }
