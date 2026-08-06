@@ -98,4 +98,32 @@ void main() {
     s.validateProforma(1);
     expect(s.engagements.first.echeance, DateTime(2026, 1, 10));
   });
+
+  // Le bug d'origine (audit § « money bug ») : la facture et l'engagement de
+  // créance étaient calculés avec deux expressions différentes — la facture
+  // recopiait `p.montant` (potentiellement TTC ou périmé), l'engagement
+  // resommait les lignes (HT). L'écart entre les deux disparaissait sans
+  // trace au premier règlement complet, `ajouterReglement` écrêtant le
+  // paiement au `reste` de l'engagement. Les deux DOIVENT désormais provenir
+  // de la même expression, même quand `p.montant` ment.
+  test('facture et engagement portent le même montant, la somme des lignes, '
+      'même si le montant stocké de la proforma est faux', () {
+    final s = AppState()..viderDonnees();
+    s.saveOrUpdateProforma(DocumentItem(
+      id: 1, numero: 'KLR-P01-10012026', date: '10/01/2026',
+      clientId: 5, client: 'ACME', objet: 'PC',
+      montant: 999999, // délibérément faux : ne doit influencer ni l'un ni l'autre
+      statut: 'cours',
+      lines: [LineItem(ref: 'PC', designation: 'Ordinateur', qte: 10, pu: 300)],
+    ));
+    s.validateProforma(1);
+
+    final facture = s.documents['facture']!.first;
+    final engagement = s.engagements.first;
+    expect(facture.montant, 3000, reason: 'la somme des lignes, pas p.montant');
+    expect(engagement.montant, 3000);
+    expect(facture.montant, engagement.montant,
+        reason: 'les deux doivent toujours coïncider — c\'est l\'écart entre '
+            'eux qui a fait disparaître de l\'argent réellement encaissé');
+  });
 }

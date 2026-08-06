@@ -12,6 +12,15 @@ class DocumentItem {
   final String client;
   final String clientAddr;
   final String objet;
+  /// Montant total du document. DOIT toujours valoir la somme de ses
+  /// [lines] — un bon de livraison excepté, qui vaut toujours 0 par
+  /// convention (il ne porte aucun prix, voir `AppState.validateProforma`).
+  ///
+  /// Deux endroits maintiennent cette invariance : `AppState.validateProforma`
+  /// pour la facture et le BL générés à la validation, et l'écran de création
+  /// pour la proforma. Un ancien écart entre ce champ (TTC) et ce que sommait
+  /// la comptabilité (HT) a fait disparaître de l'argent réellement encaissé
+  /// sans laisser de trace — voir la migration v2 → v3.
   final double montant;
   String statut; // 'cours' | 'validee' | 'annulee'
   /// Date telle qu'elle apparaît SUR le document (saisie libre par le manager).

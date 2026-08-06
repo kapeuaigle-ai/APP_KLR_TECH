@@ -744,11 +744,18 @@ class AppState extends ChangeNotifier {
         .any((d) => d.numero == factureNum || d.numero == p.numero);
     if (!alreadyGenerated) {
       final now = DateTime.now().millisecondsSinceEpoch;
+      // Montant de la facture ET de l'engagement : volontairement LA MÊME
+      // expression. Les faire diverger (l'un recopiant `p.montant`, l'autre
+      // resommant les lignes) est exactement comment le bug TTC/HT est né —
+      // la facture affichait un montant, la créance en attendait un autre, et
+      // l'écart disparaissait sans trace au premier règlement complet. Ne pas
+      // les re-séparer.
+      final montantHt = p.lines.fold(0.0, (s, l) => s + l.total);
       documents['facture']!.add(DocumentItem(
         id: now, numero: factureNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
-        objet: p.objet, montant: p.montant, statut: 'cours',
+        objet: p.objet, montant: montantHt, statut: 'cours',
         projetId: p.projetId,
         // Copie profonde : chaque document possède ses lignes. Le partage
         // d'instances ne survivrait pas à un rechargement depuis le disque.
@@ -773,7 +780,7 @@ class AppState extends ChangeNotifier {
         clientId: p.clientId,
         tiers: p.client,
         description: p.objet,
-        montant: p.lines.fold(0.0, (s, l) => s + l.total),
+        montant: montantHt,
         echeance: Comptabilite.parseJour(p.date) ?? DateTime.now(),
       ));
       _logActivity('facture', 'Proforma ${p.numero} validée',
