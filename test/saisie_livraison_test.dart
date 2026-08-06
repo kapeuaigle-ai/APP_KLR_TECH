@@ -6,7 +6,8 @@ void main() {
   AppState avecProjet() {
     final s = AppState()..viderDonnees();
     s.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture', clientId: 5,
+      id: 1, nom: 'Fourniture ACME',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
       client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
     s.saveOrUpdateProforma(DocumentItem(
       id: 1, numero: 'KLR-P01-10032026', date: '10/03/2026', clientId: 5,

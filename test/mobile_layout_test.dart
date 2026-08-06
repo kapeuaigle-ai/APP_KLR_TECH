@@ -276,7 +276,8 @@ void main() {
 
       final state = AppState()..login('admin', 'admin');
       state.addProjet(Projet(
-        id: 1, nom: 'Projet de test', typeId: 'fourniture', clientId: null,
+        id: 1, nom: 'Projet de test',
+        type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: null,
         client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2026, 3, 1)));
       state.navigate(NavScreen.gantt);
 

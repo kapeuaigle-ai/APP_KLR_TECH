@@ -67,7 +67,7 @@ void main() {
 
   test('la marge d\'un projet est encaissé moins décaissé', () {
     final a = Avancement.calculer(
-      projet: Projet(id: 1, nom: 'P', typeId: 'fourniture', clientId: 5,
+      projet: Projet(id: 1, nom: 'P', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
           client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)),
       mode: ModeAvancement.quantites,
       proformas: const [],
@@ -84,7 +84,7 @@ void main() {
 
   test('la marge d\'un projet sans flux vaut 0', () {
     final a = Avancement.calculer(
-      projet: Projet(id: 1, nom: 'P', typeId: 'fourniture', clientId: 5,
+      projet: Projet(id: 1, nom: 'P', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
           client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)),
       mode: ModeAvancement.quantites,
       proformas: const [], engagements: const [], now: DateTime(2026, 5, 1),

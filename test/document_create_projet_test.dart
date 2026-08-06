@@ -19,7 +19,7 @@ void main() {
         id: 5, initials: 'AC', color: Colors.blue, name: 'ACME',
         contact: 'Jean', email: 'j@acme.cm', phone: '600', totalFacture: 0));
     state.addProjet(Projet(
-        id: 1, nom: 'Fourniture matériel', typeId: 'fourniture',
+        id: 1, nom: 'Fourniture matériel', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
         clientId: 5, client: 'ACME',
         debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
     state.setDocType('proforma');
@@ -61,11 +61,11 @@ void main() {
           id: 5, initials: 'AC', color: Colors.blue, name: 'ACME',
           contact: 'Jean', email: 'j@acme.cm', phone: '600', totalFacture: 0));
       state.addProjet(Projet(
-          id: 1, nom: 'Projet A', typeId: 'fourniture',
+          id: 1, nom: 'Projet A', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
           clientId: 5, client: 'ACME',
           debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
       state.addProjet(Projet(
-          id: 2, nom: 'Projet B', typeId: 'fourniture',
+          id: 2, nom: 'Projet B', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
           clientId: 5, client: 'ACME',
           debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
       return state;

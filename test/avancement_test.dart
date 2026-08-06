@@ -3,7 +3,8 @@ import 'package:klr_tech_app/core/avancement.dart';
 import 'package:klr_tech_app/core/models.dart';
 
 Projet _projet({int id = 1, DateTime? debut, DateTime? fin}) => Projet(
-      id: id, nom: 'Fourniture', typeId: 'fourniture', clientId: 5,
+      id: id, nom: 'Fourniture',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
       client: 'ACME',
       debut: debut ?? DateTime(2026, 3, 1),
       finPrevue: fin ?? DateTime(2026, 6, 30),

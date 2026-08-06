@@ -145,23 +145,24 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
-    'version': 3,
+    'version': 4,
   };
 
   void loadFromJson(Map<String, dynamic> brut) {
-    // Capturé avant conversion : `migrerV1versV2`/`migrerV2versV3` rendent
-    // `brut` inchangé s'il est déjà à leur version cible, donc c'est le seul
-    // moment où l'on peut encore distinguer « rien à migrer » de « migration
-    // effectuée ». Une sauvegarde v1 n'a pas de clé `version` du tout.
+    // Capturé avant conversion : `migrerV1versV2`/`migrerV2versV3`/
+    // `migrerV3versV4` rendent `brut` inchangé s'il est déjà à leur version
+    // cible, donc c'est le seul moment où l'on peut encore distinguer « rien
+    // à migrer » de « migration effectuée ». Une sauvegarde v1 n'a pas de clé
+    // `version` du tout.
     final versionOrigine = brut['version'];
-    final migration = versionOrigine != 3;
+    final migration = versionOrigine != 4;
     // Le filet de sécurité (spec § 8) ne couvre que la conversion v1 → v2,
     // seule à restructurer des données au point de ne plus pouvoir les
     // reconstituer depuis la sauvegarde migrée (quatre mécanismes d'argent
-    // fondus en Engagement + Reglement). v2 → v3 ne fait que recalculer un
-    // champ dérivé (`montant`) à partir des lignes déjà présentes : rien n'y
-    // est perdu, donc rien à sauvegarder à part.
-    if (versionOrigine != 2 && migration) {
+    // fondus en Engagement + Reglement). v2 → v3 et v3 → v4 ne font que
+    // recalculer/déplacer des champs à partir de données déjà présentes :
+    // rien n'y est perdu, donc rien à sauvegarder à part.
+    if (versionOrigine != 2 && versionOrigine != 3 && migration) {
       // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
       // avant toute réécriture, pour que la conversion reste réversible en
       // cas d'anomalie découverte tardivement. Fire-and-forget, comme
@@ -172,11 +173,17 @@ class AppState extends ChangeNotifier {
           .catchError((_) {});
     }
     // `migrerV1versV2` ne reconnaît que `version == 2` comme « déjà migrée » —
-    // sur une sauvegarde v3, elle la prendrait pour du v1 brut et la
+    // sur une sauvegarde v3 ou v4, elle la prendrait pour du v1 brut et la
     // détruirait (elle réinitialise `projets`, entre autres). On ne l'appelle
-    // donc que si la sauvegarde n'est ni v2 ni v3.
-    final dejaV2OuPlus = versionOrigine == 2 || versionOrigine == 3;
-    final j = migrerV2versV3(dejaV2OuPlus ? brut : migrerV1versV2(brut));
+    // donc que si la sauvegarde n'est ni v2, ni v3, ni v4. Même précaution
+    // pour `migrerV2versV3` face à une sauvegarde déjà en v4 : son propre
+    // garde-fou interne (`version == 3`) ne la protège pas contre une v4, qui
+    // la ferait redescendre à `version: 3` en silence.
+    final dejaV2OuPlus = versionOrigine == 2 || versionOrigine == 3 || versionOrigine == 4;
+    final apresV2 = dejaV2OuPlus ? brut : migrerV1versV2(brut);
+    final dejaV3OuPlus = versionOrigine == 3 || versionOrigine == 4;
+    final apresV3 = dejaV3OuPlus ? apresV2 : migrerV2versV3(apresV2);
+    final j = versionOrigine == 4 ? apresV3 : migrerV3versV4(apresV3);
     // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
     // on les retire du JSON — ils ne doivent pas être persistés — et on les
     // journalise pour que le manager puisse les vérifier.
@@ -487,40 +494,26 @@ class AppState extends ChangeNotifier {
   List<Engagement> engagementsDuProjet(int projetId) =>
       engagements.where((e) => e.projetId == projetId).toList();
 
-  TypeProjet? typeProjet(String id) {
-    final m = settings.typesProjet.where((t) => t.id == id);
-    return m.isEmpty ? null : m.first;
-  }
+  /// Mode d'avancement d'un projet. Simple relais vers `Projet.mode` : le
+  /// type n'est plus un registre qu'il faut résoudre, mais un champ direct
+  /// du projet. Conservé comme méthode (et non inliné chez ses appelants,
+  /// dans gantt_screen.dart et projets_screen.dart) parce que plusieurs
+  /// écrans y passent encore par `AppState`, jamais par `Projet` directement.
+  ModeAvancement modeDuProjet(Projet p) => p.mode;
 
-  /// Mode d'avancement d'un projet. Un type disparu retombe sur `quantites`
-  /// plutôt que de faire échouer le calcul.
-  ModeAvancement modeDuProjet(Projet p) =>
-      typeProjet(p.typeId)?.mode ?? ModeAvancement.quantites;
-
-  void ajouterTypeProjet(TypeProjet t) {
-    if (typeProjet(t.id) != null) return;
-    settings.typesProjet.add(t);
-    _emit();
-  }
-
-  void majTypeProjet(TypeProjet t) {
-    final i = settings.typesProjet.indexWhere((x) => x.id == t.id);
-    if (i < 0) return;
-    settings.typesProjet[i] = t;
-    _emit();
-  }
-
-  /// Supprime un type et rebascule ses projets sur le premier type restant.
-  /// Le dernier type ne peut pas être supprimé : aucun projet ne serait
-  /// créable ensuite.
-  void supprimerTypeProjet(String id) {
-    if (settings.typesProjet.length <= 1) return;
-    settings.typesProjet.removeWhere((t) => t.id == id);
-    final repli = settings.typesProjet.first.id;
+  /// Types déjà utilisés par les projets enregistrés, du plus récent (tête de
+  /// `projets`, qui est en LIFO — voir `addProjet`) au plus ancien, sans
+  /// doublon. Alimente les suggestions de la boîte « Nouveau projet » : il
+  /// n'existe plus de registre à consulter, seulement l'historique déjà
+  /// tapé par le manager.
+  List<String> suggestionsTypeProjet() {
+    final vus = <String>{};
+    final res = <String>[];
     for (final p in projets) {
-      if (p.typeId == id) p.typeId = repli;
+      if (p.type.isEmpty || !vus.add(p.type)) continue;
+      res.add(p.type);
     }
-    _emit();
+    return res;
   }
 
   Projet? _projet(int id) {

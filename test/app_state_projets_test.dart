@@ -5,7 +5,8 @@ import 'package:klr_tech_app/core/avancement.dart';
 import 'package:klr_tech_app/core/models.dart';
 
 Projet _p({int id = 1}) => Projet(
-      id: id, nom: 'Fourniture matériel', typeId: 'fourniture',
+      id: id, nom: 'Fourniture matériel',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     );

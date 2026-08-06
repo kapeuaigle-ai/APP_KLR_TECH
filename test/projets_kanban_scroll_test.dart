@@ -14,7 +14,7 @@ AppState _avecNeufProjetsEnCours() {
   final s = AppState()..viderDonnees();
   for (var i = 1; i <= 9; i++) {
     s.addProjet(Projet(
-      id: i, nom: 'Projet en cours $i', typeId: 'interne', clientId: null,
+      id: i, nom: 'Projet en cours $i', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2035, 1, 1)));
     s.setAvancementManuel(i, 0.5);
   }
@@ -30,7 +30,7 @@ AppState _avecTrenteProjetsAnnules() {
   final s = AppState()..viderDonnees();
   for (var i = 1; i <= 30; i++) {
     s.addProjet(Projet(
-      id: i, nom: 'Projet annulé $i', typeId: 'interne', clientId: null,
+      id: i, nom: 'Projet annulé $i', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2035, 1, 1)));
     s.annulerProjet(i);
   }

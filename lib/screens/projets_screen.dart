@@ -9,7 +9,6 @@ import '../core/avancement.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
 import '../widgets/responsive.dart';
-import '../widgets/type_projet_dialog.dart';
 
 /// Kanban des projets, en lecture seule.
 ///
@@ -452,13 +451,24 @@ Widget _champDate(BuildContext context, String label, DateTime valeur, ValueChan
 // ─────────────────────────────────────────────────────────
 void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? existing}) {
   final nomCtrl = TextEditingController(text: existing?.nom ?? '');
+  final typeCtrl = TextEditingController(text: existing?.type ?? '');
   int? clientId = existing?.clientId;
   String client = existing?.client ?? '';
-  String typeId = existing?.typeId ?? state.settings.typesProjet.first.id;
+  // Quantités livrées est de loin le cas le plus courant du métier : c'est
+  // le défaut d'un nouveau projet. Sur une édition, le mode déjà enregistré.
+  ModeAvancement mode = existing?.mode ?? ModeAvancement.quantites;
+  // Capturé une fois, avant toute modification locale : c'est ce qui permet
+  // de savoir si LE MANAGER a changé le mode pendant cette édition, pas
+  // seulement de comparer deux variables qui bougent ensemble.
+  final ancienMode = existing?.mode;
   DateTime debut = existing?.debut ?? DateTime.now();
   DateTime finPrevue = existing?.finPrevue ?? DateTime.now().add(const Duration(days: 30));
   var erreur = false;
   var erreurDates = false;
+  // Suggestions figées à l'ouverture de la boîte : construites depuis les
+  // projets déjà enregistrés (§ AppState.suggestionsTypeProjet), pas depuis
+  // un registre à maintenir — il n'y en a plus.
+  final suggestions = state.suggestionsTypeProjet();
 
   showDialog<void>(
     context: context,
@@ -494,92 +504,78 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             const SizedBox(height: 12),
             Text('TYPE', style: AppTheme.label),
             const SizedBox(height: 6),
-            // Les types du manager — définis dans les Paramètres, jamais
-            // une liste figée dans le code (§ 5.4 de la conception).
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              ...state.settings.typesProjet.map((t) => GestureDetector(
-                onTap: () => setLocal(() => typeId = t.id),
+            // Étiquette libre : aucun registre à choisir dedans. Les
+            // suggestions ci-dessous viennent des projets déjà enregistrés,
+            // pas d'une liste que le manager devrait entretenir à part.
+            TextField(controller: typeCtrl, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text1),
+                decoration: _deco(ctx, 'Ex : Fourniture de matériel')),
+            if (suggestions.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(spacing: 8, runSpacing: 8, children: suggestions.map((s) => GestureDetector(
+                onTap: () => setLocal(() {
+                  typeCtrl.text = s;
+                  typeCtrl.selection = TextSelection.collapsed(offset: s.length);
+                }),
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                   decoration: BoxDecoration(
-                    color: typeId == t.id ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(color: typeId == t.id ? AppColors.primary : AppColors.border),
-                  ),
-                  child: Text(t.libelle, style: GoogleFonts.dmSans(
-                      fontSize: 12, fontWeight: FontWeight.w600,
-                      color: typeId == t.id ? AppColors.primary : AppColors.text2)),
-                ),
-              )),
-              // Le manager ne trouvait pas toujours le chemin vers
-              // Paramètres → TYPES DE PROJET pour ajouter un type qui lui
-              // manque au moment même où il en a besoin. Cette puce ouvre
-              // le même formulaire que Paramètres (§ ouvrirFormulaireType,
-              // widgets/type_projet_dialog.dart) sans quitter la création du
-              // projet, et sélectionne le type créé pour lui. Style discret
-              // et distinct des vrais types : contour en pointillé visuel
-              // (bordure simple, fond transparent) plutôt que la puce pleine
-              // des types réels, pour qu'elle ne soit jamais confondue avec
-              // un choix existant.
-              GestureDetector(
-                onTap: () => ouvrirFormulaireType(ctx, state,
-                    onCreated: (t) => setLocal(() => typeId = t.id)),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
+                    color: AppColors.bg,
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: AppColors.border),
                   ),
-                  child: Text('+ Nouveau type', style: GoogleFonts.dmSans(
-                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                  child: Text(s, style: GoogleFonts.dmSans(
+                      fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text2)),
                 ),
+              )).toList()),
+            ],
+            const SizedBox(height: 12),
+            Text('MODE D\'AVANCEMENT', style: AppTheme.label),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 8, children: ModeAvancement.values.map((m) => GestureDetector(
+              onTap: () => setLocal(() => mode = m),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: mode == m ? AppColors.primary.withValues(alpha: 0.1) : AppColors.bg,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: mode == m ? AppColors.primary : AppColors.border),
+                ),
+                child: Text(m.libelle, style: GoogleFonts.dmSans(
+                    fontSize: 12, fontWeight: FontWeight.w600,
+                    color: mode == m ? AppColors.primary : AppColors.text2)),
               ),
-            ]),
+            )).toList()),
             const SizedBox(height: 8),
             // Comment son avancement sera mesuré, avant qu'il ne valide —
-            // pour que le choix du type ne soit jamais un pari (§ 11).
-            Builder(builder: (_) {
-              final m = state.settings.typesProjet.where((t) => t.id == typeId);
-              final mode = m.isEmpty ? null : m.first.mode;
-              if (mode == null) return const SizedBox.shrink();
-              return Text(mode.explication,
-                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3));
-            }),
-            // Sur un projet existant, la reclassification reste permise —
-            // mais un jalon déjà coché ou une quantité déjà livrée changerait
-            // de mode d'avancement sans un mot (§ défaut 4 de la revue
-            // finale). L'avertissement ne remplace jamais le champ : il
-            // prévient juste avant l'enregistrement.
-            if (existing != null)
-              Builder(builder: (_) {
-                final ancien = state.typeProjet(existing.typeId)?.mode;
-                final m = state.settings.typesProjet.where((t) => t.id == typeId);
-                final nouveau = m.isEmpty ? null : m.first.mode;
-                if (ancien == null || nouveau == null || ancien == nouveau) {
-                  return const SizedBox.shrink();
-                }
-                return Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: AppColors.orange.withValues(alpha: 0.08),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
-                    ),
-                    child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Icon(Icons.info_outline, size: 16, color: AppColors.orange),
-                      const SizedBox(width: 8),
-                      Expanded(child: Text(
-                        'Ce projet était mesuré par « ${ancien.libelle} » : ${ancien.explication} '
-                        'Avec ce type, il sera désormais mesuré par « ${nouveau.libelle} » : ${nouveau.explication}',
-                        style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text2, height: 1.4),
-                      )),
-                    ]),
+            // pour que le choix du mode ne soit jamais un pari (§ 11).
+            Text(mode.explication,
+                style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
+            // Sur un projet existant, changer le mode reste permis — mais un
+            // jalon déjà coché ou une quantité déjà livrée changerait de
+            // mode d'avancement sans un mot (§ défaut 4 de la revue finale).
+            // L'avertissement ne remplace jamais le champ : il prévient
+            // juste avant l'enregistrement.
+            if (ancienMode != null && mode != ancienMode)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: AppColors.orange.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
                   ),
-                );
-              }),
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Icon(Icons.info_outline, size: 16, color: AppColors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(
+                      'Ce projet était mesuré par « ${ancienMode.libelle} » : ${ancienMode.explication} '
+                      'Avec ce mode, il sera désormais mesuré par « ${mode.libelle} » : ${mode.explication}',
+                      style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text2, height: 1.4),
+                    )),
+                  ]),
+                ),
+              ),
             const SizedBox(height: 12),
             Row(children: [
               Expanded(child: _champDate(ctx, 'DÉBUT', debut, (d) => setLocal(() => debut = d))),
@@ -613,16 +609,18 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             // Même règle que Projet.periodeValide (§ défaut 4) : une durée
             // négative rendrait le Gantt et tous les retards incohérents.
             if (finPrevue.isBefore(debut)) { setLocal(() => erreurDates = true); return; }
+            final type = typeCtrl.text.trim();
             if (existing == null) {
               state.addProjet(Projet(
                 id: DateTime.now().millisecondsSinceEpoch,
-                nom: nom, typeId: typeId, clientId: clientId, client: client,
+                nom: nom, type: type, mode: mode, clientId: clientId, client: client,
                 debut: debut, finPrevue: finPrevue,
               ));
             } else {
               state.updateProjet(existing
                 ..nom = nom
-                ..typeId = typeId
+                ..type = type
+                ..mode = mode
                 ..clientId = clientId
                 ..client = client
                 ..debut = debut
@@ -722,17 +720,6 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                   child: Text(avancement.statut.libelle,
                       style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text2)),
                 ),
-                // Un `typeId` orphelin (type supprimé, restauration d'une
-                // sauvegarde plus ancienne) fait retomber `modeDuProjet` sur
-                // `quantites` en silence — le manager doit au moins le savoir.
-                if (state.typeProjet(projet.typeId) == null) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Le type de ce projet n\'existe plus : son avancement est '
-                    'mesuré par défaut sur les quantités livrées.',
-                    style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.orange, height: 1.4),
-                  ),
-                ],
                 const SizedBox(height: 16),
                 _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
                 const SizedBox(height: 12),

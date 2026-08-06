@@ -6,10 +6,11 @@ import 'package:klr_tech_app/core/models.dart';
 import 'package:klr_tech_app/screens/projets_screen.dart';
 import 'support/test_fonts.dart';
 
-// Défaut 4 de la revue finale de Phase 3 : les puces de type restaient
-// éditables sur un projet existant, indiscernables de la création. Un projet
-// dont des jalons sont déjà cochés, ou des quantités déjà livrées, pouvait
-// changer de mode d'un tap, sans avertissement.
+// Défaut 4 de la revue finale de Phase 3 : le mode d'avancement d'un projet
+// existant pouvait changer d'un tap, sans avertissement. Le registre de
+// types a disparu (§ type-libre) : le mode se choisit maintenant par une
+// puce dédiée (MODE D'AVANCEMENT), plus via un type qui l'impliquait — mais
+// l'avertissement doit survivre, comparant `mode` directement.
 void main() {
   setUpAll(loadTestFonts);
 
@@ -24,11 +25,12 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('choisir un type de mode différent affiche un avertissement',
+  testWidgets('choisir un mode différent affiche un avertissement',
       (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture', // mode quantites
+      id: 1, nom: 'Fourniture ACME',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: null, client: '',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     ));
@@ -40,20 +42,21 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Modifier le projet'), findsOneWidget);
 
-    // Bascule sur « Installation / déploiement », mode jalons.
-    await tester.tap(find.text('Installation / déploiement'));
+    // Bascule sur la puce « Jalons », mode différent du mode enregistré.
+    await tester.tap(find.text('Jalons'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Quantités livrées'), findsWidgets);
     expect(find.textContaining('Jalons'), findsWidgets);
     // Le projet n'est pas modifié tant que rien n'est enregistré.
-    expect(state.projets.first.typeId, 'fourniture');
+    expect(state.projets.first.mode, ModeAvancement.quantites);
   });
 
-  testWidgets('choisir le même type n\'affiche aucun avertissement', (tester) async {
+  testWidgets('choisir le même mode n\'affiche aucun avertissement', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture ACME', typeId: 'fourniture',
+      id: 1, nom: 'Fourniture ACME',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: null, client: '',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     ));
@@ -64,8 +67,8 @@ void main() {
     await tester.tap(find.byTooltip('Modifier'));
     await tester.pumpAndSettle();
 
-    // Retape le même type, déjà sélectionné.
-    await tester.tap(find.text('Fourniture de matériel'));
+    // Retape le même mode, déjà sélectionné.
+    await tester.tap(find.text('Quantités livrées'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('mesuré différemment'), findsNothing);
@@ -78,7 +81,7 @@ void main() {
 
     await tester.tap(find.text('Nouveau projet'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Installation / déploiement'));
+    await tester.tap(find.text('Jalons'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('sera désormais mesuré'), findsNothing);

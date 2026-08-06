@@ -1,5 +1,4 @@
 import '../auth.dart';
-import 'projet.dart';
 
 /// Clause de garantie par défaut, affichée en bas de la dernière page des
 /// documents. Éditable dans les Paramètres (`AppSettings.warranty`) ; sert
@@ -40,10 +39,6 @@ class AppSettings {
   /// Empreinte SHA-256 salée. Le mot de passe en clair n'est jamais conservé.
   String passwordHash;
 
-  /// Types de projet définis par le manager. Jamais vide : supprimer le
-  /// dernier est refusé, faute de quoi aucun projet ne serait créable.
-  List<TypeProjet> typesProjet;
-
   AppSettings({
     required this.company, required this.address, required this.bp,
     required this.rccm, required this.regime, required this.tel,
@@ -53,8 +48,7 @@ class AppSettings {
     this.warranty = kDefaultWarranty,
     this.username = kDefaultUsername,
     this.passwordSalt = '', this.passwordHash = '',
-    List<TypeProjet>? typesProjet,
-  }) : typesProjet = typesProjet ?? TypeProjet.defauts;
+  });
 
   /// Vrai tant que le manager n'a pas défini son propre mot de passe : l'app
   /// accepte alors l'accès d'usine et affiche une alerte dans les Paramètres.
@@ -85,7 +79,6 @@ class AppSettings {
     'warranty': warranty,
     'username': username,
     'passwordSalt': passwordSalt, 'passwordHash': passwordHash,
-    'typesProjet': typesProjet.map((t) => t.toJson()).toList(),
   };
 
   factory AppSettings.fromJson(Map<String, dynamic> j) => AppSettings(
@@ -98,9 +91,5 @@ class AppSettings {
     // Sauvegarde antérieure à la connexion : on repart de l'accès par défaut.
     username: j['username'] ?? kDefaultUsername,
     passwordSalt: j['passwordSalt'] ?? '', passwordHash: j['passwordHash'] ?? '',
-    // Sauvegarde antérieure à la phase 3 : passer `null` suffit, le
-    // constructeur pose alors les quatre types par défaut.
-    typesProjet: (j['typesProjet'] as List?)
-        ?.map((t) => TypeProjet.fromJson(t)).toList(),
   );
 }

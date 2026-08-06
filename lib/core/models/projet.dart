@@ -1,13 +1,10 @@
-import 'package:flutter/material.dart';
-import 'commun.dart';
-
 /// Façon de mesurer l'avancement PHYSIQUE d'un projet. Le suivi financier,
 /// lui, est identique pour tous les modes : règlements ÷ montant engagé.
 enum ModeAvancement { quantites, jalons, duree, manuel }
 
-/// Libellé et explication d'un mode, affichés dans les Paramètres (choix du
-/// mode d'un type) et à la création d'un projet (comment son avancement
-/// sera mesuré). Centralisés ici pour n'exister qu'une fois.
+/// Libellé et explication d'un mode, affichés à la création d'un projet
+/// (comment son avancement sera mesuré). Centralisés ici pour n'exister
+/// qu'une fois.
 extension ModeAvancementLibelle on ModeAvancement {
   String get libelle => switch (this) {
     ModeAvancement.quantites => 'Quantités livrées',
@@ -26,51 +23,6 @@ extension ModeAvancementLibelle on ModeAvancement {
     ModeAvancement.manuel =>
       'L\'avancement est saisi à la main. Aucun contrôle possible.',
   };
-}
-
-/// Un type de projet, défini par le manager dans les Paramètres.
-///
-/// Le code ne connaît jamais les métiers : il connaît quatre modes
-/// d'avancement. Ajouter « Formation » ou « Infogérance » ne demande donc
-/// aucune ligne de code.
-class TypeProjet {
-  final String id;
-  String libelle;
-  ModeAvancement mode;
-  Color couleur;
-
-  TypeProjet({
-    required this.id, required this.libelle,
-    required this.mode, required this.couleur,
-  });
-
-  Map<String, dynamic> toJson() => {
-    'id': id, 'libelle': libelle, 'mode': mode.name,
-    'couleur': colorToInt(couleur),
-  };
-
-  factory TypeProjet.fromJson(Map<String, dynamic> j) => TypeProjet(
-    id: j['id'], libelle: j['libelle'],
-    // Un mode inconnu (type supprimé, sauvegarde d'une version ultérieure)
-    // ne doit jamais faire planter le chargement.
-    mode: ModeAvancement.values.firstWhere(
-      (m) => m.name == j['mode'],
-      orElse: () => ModeAvancement.quantites,
-    ),
-    couleur: colorFromInt(j['couleur']),
-  );
-
-  /// Types livrés au premier lancement. Tous modifiables et supprimables.
-  static List<TypeProjet> get defauts => [
-    TypeProjet(id: 'fourniture', libelle: 'Fourniture de matériel',
-        mode: ModeAvancement.quantites, couleur: const Color(0xFF2563EB)),
-    TypeProjet(id: 'installation', libelle: 'Installation / déploiement',
-        mode: ModeAvancement.jalons, couleur: const Color(0xFFF59E0B)),
-    TypeProjet(id: 'maintenance', libelle: 'Maintenance / contrat',
-        mode: ModeAvancement.duree, couleur: const Color(0xFF10B981)),
-    TypeProjet(id: 'interne', libelle: 'Projet interne',
-        mode: ModeAvancement.manuel, couleur: const Color(0xFF8B5CF6)),
-  ];
 }
 
 /// Une étape datée d'un projet, pondérée dans l'avancement.
@@ -105,7 +57,15 @@ class Jalon {
 class Projet {
   final int id;
   String nom;
-  String typeId;
+  /// Libellé libre : « Fourniture de matériel », « Voyage employés »…
+  /// L'application n'en tient aucun registre — c'est une étiquette, pas une
+  /// entité. Les suggestions offertes à la saisie se construisent depuis les
+  /// projets déjà enregistrés.
+  String type;
+  /// Comment l'avancement physique de CE projet se mesure. Porté par le
+  /// projet lui-même : c'est la seule chose que l'ancien registre de types
+  /// apportait.
+  ModeAvancement mode;
   int? clientId;      // null = projet interne
   String client;      // nom dénormalisé, comme DocumentItem.client
   DateTime debut;
@@ -115,7 +75,7 @@ class Projet {
   bool annule;
 
   Projet({
-    required this.id, required this.nom, required this.typeId,
+    required this.id, required this.nom, required this.type, required this.mode,
     required this.clientId, required this.client,
     required this.debut, required this.finPrevue,
     List<Jalon>? jalons, this.avancementManuel = 0, this.annule = false,
@@ -127,7 +87,7 @@ class Projet {
   bool get periodeValide => !finPrevue.isBefore(debut);
 
   Map<String, dynamic> toJson() => {
-    'id': id, 'nom': nom, 'typeId': typeId,
+    'id': id, 'nom': nom, 'type': type, 'mode': mode.name,
     'clientId': clientId, 'client': client,
     'debut': debut.toIso8601String(), 'finPrevue': finPrevue.toIso8601String(),
     'jalons': jalons.map((j) => j.toJson()).toList(),
@@ -135,7 +95,13 @@ class Projet {
   };
 
   factory Projet.fromJson(Map<String, dynamic> j) => Projet(
-    id: j['id'], nom: j['nom'], typeId: j['typeId'] ?? 'fourniture',
+    id: j['id'], nom: j['nom'], type: j['type'] ?? '',
+    // Un mode inconnu (sauvegarde d'une version ultérieure, champ corrompu)
+    // ne doit jamais faire planter le chargement.
+    mode: ModeAvancement.values.firstWhere(
+      (m) => m.name == j['mode'],
+      orElse: () => ModeAvancement.quantites,
+    ),
     clientId: j['clientId'], client: j['client'] ?? '',
     debut: DateTime.parse(j['debut']), finPrevue: DateTime.parse(j['finPrevue']),
     jalons: (j['jalons'] as List? ?? []).map((x) => Jalon.fromJson(x)).toList(),

@@ -9,7 +9,8 @@ import 'package:klr_tech_app/screens/gantt_screen.dart';
 import 'support/test_fonts.dart';
 
 Projet _p({int id = 1, String nom = 'Fourniture matériel'}) => Projet(
-      id: id, nom: nom, typeId: 'fourniture',
+      id: id, nom: nom,
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
       clientId: 5, client: 'ACME',
       debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
     );

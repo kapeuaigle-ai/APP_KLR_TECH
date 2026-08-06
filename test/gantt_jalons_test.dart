@@ -16,7 +16,8 @@ void main() {
 
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Câblage siège', typeId: 'installation', clientId: 5,
+      id: 1, nom: 'Câblage siège',
+      type: 'Installation / déploiement', mode: ModeAvancement.jalons, clientId: 5,
       client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
       jalons: [
         Jalon(nom: 'Étude', prevue: DateTime(2026, 3, 20), realisee: DateTime(2026, 3, 22), poids: 1),
@@ -41,7 +42,8 @@ void main() {
 
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-      id: 1, nom: 'Fourniture', typeId: 'fourniture', clientId: 5,
+      id: 1, nom: 'Fourniture',
+      type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
       client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
 
     await tester.pumpWidget(ChangeNotifierProvider.value(

@@ -32,7 +32,7 @@ void main() {
   testWidgets('les projets factices ont disparu de l\'onglet Projets', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-        id: 1, nom: 'Fourniture ACME', typeId: 'fourniture', clientId: 5,
+        id: 1, nom: 'Fourniture ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
         client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
 
     await pumpRapportsProjets(tester, state);
@@ -46,7 +46,7 @@ void main() {
   testWidgets('un vrai projet apparaît avec son statut dérivé', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-        id: 1, nom: 'Fourniture ACME', typeId: 'fourniture', clientId: 5,
+        id: 1, nom: 'Fourniture ACME', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
         client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30)));
 
     await pumpRapportsProjets(tester, state);
@@ -59,7 +59,7 @@ void main() {
   testWidgets('un projet annulé n\'apparaît pas dans la liste', (tester) async {
     final state = AppState()..viderDonnees();
     state.addProjet(Projet(
-        id: 1, nom: 'Projet abandonné', typeId: 'fourniture', clientId: 5,
+        id: 1, nom: 'Projet abandonné', type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: 5,
         client: 'ACME', debut: DateTime(2026, 3, 1), finPrevue: DateTime(2026, 6, 30),
         annule: true));
 
