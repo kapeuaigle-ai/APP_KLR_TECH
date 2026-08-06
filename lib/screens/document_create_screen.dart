@@ -52,10 +52,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   // eux, la réassigner ici décrocherait silencieusement l'argent du physique.
   bool get _projetVerrouille => _statut == 'validee';
 
-  double get _ht      => _lines.fold(0, (s, l) => s + l.total);
-  double get _tvaAmt  => _tvaEnabled ? _ht * 0.05 : 0;
-  double get _ttc     => _ht + _tvaAmt;
-  bool   get _tvaEnabled => context.read<AppState>().settings.tva > 0;
+  double get _montant => _lines.fold(0, (s, l) => s + l.total);
 
   bool _saving = false;
   bool _downloading = false;
@@ -101,7 +98,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
       client: _clientCtrl.text.isNotEmpty ? _clientCtrl.text : 'Client non spécifié',
       clientAddr: _clientAddrCtrl.text,
       objet: _objetCtrl.text.isNotEmpty ? _objetCtrl.text : '—',
-      montant: _ttc,
+      montant: _montant,
       statut: _statut,
       projetId: _projetId,
       lines: _lines
@@ -121,8 +118,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     clientAddr: _clientAddrCtrl.text,
     objet: _objetCtrl.text,
     lines: List.from(_lines),
-    tva: state.settings.tva > 0,
-    ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
+    montant: _montant,
     conditions: state.settings.conditions,
   );
 
@@ -264,8 +260,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     clientAddr: _clientAddrCtrl.text,
     objet: _objetCtrl.text,
     lines: List.from(_lines),
-    tva: _tvaEnabled,
-    ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
+    montant: _montant,
     conditions: state.settings.conditions,
     showToolbar: showToolbar,
     onPrint: () => _print(state),
@@ -280,8 +275,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     lines: _lines,
     onAddLine: _addLine,
     onRemoveLine: _removeLine,
-    ht: _ht, tvaAmt: _tvaAmt, ttc: _ttc,
-    tva: _tvaEnabled,
+    montant: _montant,
     onLineChanged: () => setState(() {}),
     clients: state.clients,
     onClientSelected: (c) {
@@ -458,15 +452,14 @@ class _ApercuPleinEcran extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────
-//  Form Panel  (TVA & conditions removed — managed in Paramètres)
+//  Form Panel  (conditions gérées dans Paramètres)
 // ─────────────────────────────────────────────────────────
 class _FormPanel extends StatelessWidget {
   final TextEditingController clientCtrl, clientAddrCtrl, objetCtrl, dateCtrl;
   final List<LineItem> lines;
   final VoidCallback onAddLine;
   final ValueChanged<int> onRemoveLine;
-  final bool tva;
-  final double ht, tvaAmt, ttc;
+  final double montant;
   final VoidCallback onLineChanged;
   final List<Client> clients;
   final ValueChanged<Client> onClientSelected;
@@ -480,8 +473,7 @@ class _FormPanel extends StatelessWidget {
     required this.clientCtrl, required this.clientAddrCtrl,
     required this.objetCtrl, required this.dateCtrl,
     required this.lines, required this.onAddLine, required this.onRemoveLine,
-    required this.tva,
-    required this.ht, required this.tvaAmt, required this.ttc,
+    required this.montant,
     required this.onLineChanged, required this.clients,
     required this.onClientSelected,
     required this.projets, required this.clientId,
@@ -606,10 +598,7 @@ class _FormPanel extends StatelessWidget {
         const SizedBox(height: 14),
         const Divider(color: AppColors.border),
         const SizedBox(height: 10),
-        _TotalRow(label: 'SOUS-TOTAL HT', value: Fmt.money(ht)),
-        if (tva) ...[const SizedBox(height: 5), _TotalRow(label: 'TVA (5%)', value: Fmt.money(tvaAmt))],
-        const SizedBox(height: 5),
-        _TotalRow(label: 'TOTAL TTC', value: Fmt.money(ttc), bold: true),
+        _TotalRow(label: 'TOTAL', value: Fmt.money(montant), bold: true),
       ])),
     ]);
   }

@@ -13,7 +13,7 @@ void main() {
   AppSettings settings() => AppSettings(
         company: 'KLR TECH SARL', address: 'Abidjan', bp: 'BP 1', rccm: 'R',
         regime: 'TEE', tel: '07', email: 'a@b.ci', prefix: 'KLR',
-        startNum: '01', tva: 5, conditions: 'x',
+        startNum: '01', conditions: 'x',
       );
 
   DocumentItem proforma({String dateAffichee = ''}) => DocumentItem(
@@ -53,7 +53,7 @@ void main() {
         settings: settings(), type: 'facture', numero: 'KLR-F01-25072026',
         date: date, client: 'C', clientAddr: '', objet: 'O',
         lines: [LineItem(ref: '01', designation: 'Article', qte: 1, pu: 1000)],
-        tva: true, ht: 1000, tvaAmt: 50, ttc: 1050, conditions: 'x',
+        montant: 1000, conditions: 'x',
       );
       return String.fromCharCodes(bytes);
     }

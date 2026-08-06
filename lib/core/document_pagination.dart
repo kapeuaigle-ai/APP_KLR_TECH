@@ -17,7 +17,6 @@ class DocumentContext {
   final String warranty; // clause de garantie
   final String footerLine;
   final bool showMontant; // montant en lettres affiché (facture/proforma non nulle)
-  final bool tva;
 
   const DocumentContext({
     required this.typeLabel,
@@ -31,7 +30,6 @@ class DocumentContext {
     required this.warranty,
     required this.footerLine,
     required this.showMontant,
-    required this.tva,
   });
 }
 
@@ -169,11 +167,12 @@ class DocumentPagination {
   // padding vertical 10 + hauteur mesurée de l'en-tête de colonne
   static double _tableHeaderH() => 10 + _h('Réf', 8, weight: FontWeight.w700);
 
-  static double _totalsH(DocumentContext c) {
-    final rows = (c.tva ? 2 : 1) * (4 + _h('0', 8.5));
+  // Un document ne porte plus qu'un seul montant (pas de ligne « Sous-total »
+  // séparée : sans TVA, elle afficherait le même chiffre que TOTAL).
+  static double _totalsH() {
     final total = _h('TOTAL', 9.5, weight: FontWeight.w800);
-    final ttc = _h('0', 11, weight: FontWeight.w900);
-    return 8 + rows + 8 + (total > ttc ? total : ttc); // SizedBox8 + lignes + Divider8 + ligne TOTAL
+    final montant = _h('0', 11, weight: FontWeight.w900);
+    return 8 + 8 + (total > montant ? total : montant); // SizedBox8 + Divider8 + ligne TOTAL
   }
 
   static double _montantH(DocumentContext c) =>
@@ -210,7 +209,7 @@ class DocumentPagination {
     final contentAvail = _pageH - _footerH(context) - _padT - _padB;
     final firstHeader = _firstHeaderH(context);
     final miniHeader = _miniHeaderH(context);
-    final totals = isBl ? 0.0 : _totalsH(context);
+    final totals = isBl ? 0.0 : _totalsH();
     final montant = isBl ? 0.0 : _montantH(context);
     final conditions = _conditionsH(context);
 

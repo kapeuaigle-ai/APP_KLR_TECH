@@ -12,8 +12,8 @@ class SampleData {
     const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
   ];
 
-  // Lignes des documents d'exemple. Les montants ci-dessous sont les totaux
-  // TTC correspondants (HT × 1,05), pour que la liste et l'aperçu concordent.
+  // Lignes des documents d'exemple. Les montants ci-dessous sont la somme de
+  // ces lignes, pour que la liste et l'aperçu concordent.
   static List<LineItem> _linesMaintenance() => [
     LineItem(ref: '01', designation: 'Maintenance préventive parc informatique (40 postes)', qte: 40, pu: 25000),
     LineItem(ref: '02', designation: 'Remplacement disques SSD 512 Go', qte: 12, pu: 45000),
@@ -40,15 +40,15 @@ class SampleData {
 
   static final Map<String, List<DocumentItem>> documents = {
     'proforma': [
-      DocumentItem(id: 1, numero: 'KLR-P03-16022026', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 2010750, statut: 'cours', lines: _linesMaintenance()),
-      DocumentItem(id: 2, numero: 'KLR-P02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
-      DocumentItem(id: 3, numero: 'KLR-P01-05012026', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Audit Sécurité Réseau', montant: 472500, statut: 'annulee', lines: _linesAudit()),
+      DocumentItem(id: 1, numero: 'KLR-P03-16022026', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 1915000, statut: 'cours', lines: _linesMaintenance()),
+      DocumentItem(id: 2, numero: 'KLR-P02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1500000, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 3, numero: 'KLR-P01-05012026', date: '05/01/2026', clientId: 6, client: 'Société Anonyme X', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Audit Sécurité Réseau', montant: 450000, statut: 'annulee', lines: _linesAudit()),
     ],
     // Générées à la validation de leur proforma : numéro apparié (lettre F/B pour
     // le même compteur et la même date), mêmes lignes.
     'facture': [
-      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3927000, statut: 'cours', lines: _linesEquipements()),
-      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1575000, statut: 'validee', lines: _linesDeveloppement()),
+      DocumentItem(id: 1, numero: 'KLR-F04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 3740000, statut: 'cours', lines: _linesEquipements()),
+      DocumentItem(id: 2, numero: 'KLR-F02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1500000, statut: 'validee', lines: _linesDeveloppement()),
     ],
     'bl': [
       DocumentItem(id: 1, numero: 'KLR-B04-24042026', date: '24/04/2026', clientId: 7, client: "Advans Côte d'Ivoire", clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Équipements Réseau', montant: 0, statut: 'cours', lines: _linesEquipements()),
@@ -149,7 +149,7 @@ class SampleData {
   static List<Note> get initialNotes => [
     Note(id: 1, titre: 'Réunion client Advans', contenu: "Points abordés :\n• Budget validé\n• Livraison prévue fin mai\n• Contacter M. Diallo pour suivi", color: AppColors.blue, date: "Aujourd'hui"),
     Note(id: 2, titre: 'Idées refonte dashboard', contenu: "- Ajouter graphe donut CA\n- Bouton export en haut\n- Notifications en temps réel", color: AppColors.orange, date: 'Hier'),
-    Note(id: 3, titre: 'Conditions TVA', contenu: "Rappel : TVA à 5% sur tous les documents. Vérifier avec comptable pour les cas d'exonération.", color: AppColors.emerald, date: '28 Avr'),
+    Note(id: 3, titre: 'Relances clients', contenu: "Rappel : relancer les clients dont l'échéance est dépassée de plus de 15 jours. Vérifier le tableau des créances chaque lundi.", color: AppColors.emerald, date: '28 Avr'),
   ];
 
   // Le fil d'activité démarre vide : il se remplit des vraies actions du

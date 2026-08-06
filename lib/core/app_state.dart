@@ -66,7 +66,6 @@ class AppState extends ChangeNotifier {
       email: 'klr.tech8@gmail.com',
       prefix: 'KLR',
       startNum: '01',
-      tva: 5,
       conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
     );
     tasks = SampleData.initialTasks;
@@ -146,15 +145,23 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
-    'version': 2,
+    'version': 3,
   };
 
   void loadFromJson(Map<String, dynamic> brut) {
-    // Capturé avant conversion : `migrerV1versV2` rend `brut` inchangé s'il
-    // est déjà en v2 (`j['version'] == 2`), donc c'est le seul moment où l'on
-    // peut encore distinguer « rien à migrer » de « migration effectuée ».
-    final migration = brut['version'] != 2;
-    if (migration) {
+    // Capturé avant conversion : `migrerV1versV2`/`migrerV2versV3` rendent
+    // `brut` inchangé s'il est déjà à leur version cible, donc c'est le seul
+    // moment où l'on peut encore distinguer « rien à migrer » de « migration
+    // effectuée ». Une sauvegarde v1 n'a pas de clé `version` du tout.
+    final versionOrigine = brut['version'];
+    final migration = versionOrigine != 3;
+    // Le filet de sécurité (spec § 8) ne couvre que la conversion v1 → v2,
+    // seule à restructurer des données au point de ne plus pouvoir les
+    // reconstituer depuis la sauvegarde migrée (quatre mécanismes d'argent
+    // fondus en Engagement + Reglement). v2 → v3 ne fait que recalculer un
+    // champ dérivé (`montant`) à partir des lignes déjà présentes : rien n'y
+    // est perdu, donc rien à sauvegarder à part.
+    if (versionOrigine != 2 && migration) {
       // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
       // avant toute réécriture, pour que la conversion reste réversible en
       // cas d'anomalie découverte tardivement. Fire-and-forget, comme
@@ -164,7 +171,12 @@ class AppState extends ChangeNotifier {
           .then((_) => _store.writeBackup(jsonEncode(brut)))
           .catchError((_) {});
     }
-    final j = migrerV1versV2(brut);
+    // `migrerV1versV2` ne reconnaît que `version == 2` comme « déjà migrée » —
+    // sur une sauvegarde v3, elle la prendrait pour du v1 brut et la
+    // détruirait (elle réinitialise `projets`, entre autres). On ne l'appelle
+    // donc que si la sauvegarde n'est ni v2 ni v3.
+    final dejaV2OuPlus = versionOrigine == 2 || versionOrigine == 3;
+    final j = migrerV2versV3(dejaV2OuPlus ? brut : migrerV1versV2(brut));
     // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
     // on les retire du JSON — ils ne doivent pas être persistés — et on les
     // journalise pour que le manager puisse les vérifier.
@@ -745,11 +757,18 @@ class AppState extends ChangeNotifier {
         .any((d) => d.numero == factureNum || d.numero == p.numero);
     if (!alreadyGenerated) {
       final now = DateTime.now().millisecondsSinceEpoch;
+      // Montant de la facture ET de l'engagement : volontairement LA MÊME
+      // expression. Les faire diverger (l'un recopiant `p.montant`, l'autre
+      // resommant les lignes) est exactement comment le bug TTC/HT est né —
+      // la facture affichait un montant, la créance en attendait un autre, et
+      // l'écart disparaissait sans trace au premier règlement complet. Ne pas
+      // les re-séparer.
+      final montantHt = p.lines.fold(0.0, (s, l) => s + l.total);
       documents['facture']!.add(DocumentItem(
         id: now, numero: factureNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
-        objet: p.objet, montant: p.montant, statut: 'cours',
+        objet: p.objet, montant: montantHt, statut: 'cours',
         projetId: p.projetId,
         // Copie profonde : chaque document possède ses lignes. Le partage
         // d'instances ne survivrait pas à un rechargement depuis le disque.
@@ -774,7 +793,7 @@ class AppState extends ChangeNotifier {
         clientId: p.clientId,
         tiers: p.client,
         description: p.objet,
-        montant: p.lines.fold(0.0, (s, l) => s + l.total),
+        montant: montantHt,
         echeance: Comptabilite.parseJour(p.date) ?? DateTime.now(),
       ));
       _logActivity('facture', 'Proforma ${p.numero} validée',

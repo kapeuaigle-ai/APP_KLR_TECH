@@ -8,7 +8,7 @@ import 'package:klr_tech_app/core/models.dart';
 void main() {
   AppSettings settings() => AppSettings(
         company: 'KLR TECH SARL', address: '', bp: '', rccm: '', regime: '',
-        tel: '', email: '', prefix: 'KLR', startNum: '01', tva: 5,
+        tel: '', email: '', prefix: 'KLR', startNum: '01',
         conditions: '',
       );
 

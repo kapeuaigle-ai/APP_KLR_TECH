@@ -162,7 +162,7 @@ void main() {
     AppSettings settings() => AppSettings(
           company: 'KLR TECH SARL', address: 'Abidjan', bp: 'BP 1', rccm: 'R',
           regime: 'TEE', tel: '07', email: 'a@b.ci', prefix: 'KLR',
-          startNum: '01', tva: 5, conditions: 'x',
+          startNum: '01', conditions: 'x',
         );
 
     testWidgets('rapport garni : PDF valide', (tester) async {

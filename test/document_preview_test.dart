@@ -21,11 +21,10 @@ void main() {
         email: 'klr.tech8@gmail.com',
         prefix: 'KLR',
         startNum: '01',
-        tva: 5,
         conditions: '100% à la livraison\nDisponibilité immédiate\nGarantie 1 an',
       );
 
-  DocumentContext ctx({bool tva = true}) => DocumentContext(
+  DocumentContext ctx() => DocumentContext(
         typeLabel: 'FACTURE PROFORMA',
         numero: 'KLR-04-220726',
         date: '22 Juillet 2026',
@@ -38,7 +37,6 @@ void main() {
             'vice de fabrication soumise à l\'expertise constructeur, à compter de la date de facturation.',
         footerLine: settings().footerLine,
         showMontant: true,
-        tva: tva,
       );
 
   // 'courte'  : tient sur une rangée
@@ -54,7 +52,7 @@ void main() {
 
   Widget host({required double width, required String type, required int n, required String kind}) {
     final l = lines(n, kind);
-    final ht = l.fold<double>(0, (s, x) => s + x.total);
+    final montant = l.fold<double>(0, (s, x) => s + x.total);
     return MaterialApp(
       home: Scaffold(
         body: SingleChildScrollView(
@@ -68,10 +66,7 @@ void main() {
               clientAddr: '45 Avenue des Champs, Lyon, France',
               objet: 'Matériels informatiques',
               lines: l,
-              tva: true,
-              ht: ht,
-              tvaAmt: ht * 0.05,
-              ttc: ht * 1.05,
+              montant: montant,
               conditions: settings().conditions,
             ),
           ),
@@ -139,12 +134,12 @@ void main() {
       addTearDown(tester.view.reset);
 
       final lines = [for (var i = 1; i <= 6; i++) filled(i), empty(7), empty(8)];
-      final ht = lines.fold<double>(0, (s, x) => s + x.total);
+      final montant = lines.fold<double>(0, (s, x) => s + x.total);
       await tester.pumpWidget(MaterialApp(home: Scaffold(body: SingleChildScrollView(
         child: SizedBox(width: 530, child: DocumentPreview(
           type: 'facture', numero: 'KLR-04-220726', settings: settings(),
           client: 'Global Tech', clientAddr: 'Lyon', objet: 'Objet',
-          lines: lines, tva: true, ht: ht, tvaAmt: ht * 0.05, ttc: ht * 1.05,
+          lines: lines, montant: montant,
           conditions: settings().conditions, showToolbar: false,
         )),
       ))));
