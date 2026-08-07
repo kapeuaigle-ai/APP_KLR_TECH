@@ -422,6 +422,10 @@ Map<String, dynamic> _reglement(int id, DateTime date, double montant) => {
 /// JSON → double, tolérant. Une valeur absente ou d'un type inattendu vaut 0.
 /// Même règle que pour les dates : un champ corrompu doit dégrader
 /// l'enregistrement concerné, jamais empêcher l'ouverture de la sauvegarde.
+///
+/// Volontairement plus tolérant que `toDouble` de `models/commun.dart`, qui
+/// lève sur un type inattendu — voir son commentaire pour la distinction
+/// (lot G, hygiène) : ce n'est pas un doublon accidentel.
 double _double(dynamic v) => v is num ? v.toDouble() : 0.0;
 
 /// 'dd/MM/yyyy' → DateTime, ou null si inexploitable.
