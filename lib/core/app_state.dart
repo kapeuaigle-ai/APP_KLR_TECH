@@ -43,6 +43,17 @@ class AppState extends ChangeNotifier {
   /// File d'écriture : chaînée pour préserver l'ordre et éviter les courses.
   Future<void> _writeChain = Future.value();
 
+  /// Vrai si le dernier `init()` a refusé la sauvegarde sur disque parce
+  /// qu'elle porte une version plus récente que celle que sait lire cette
+  /// version de l'application (voir `SauvegardeVersionRefuseeException`).
+  /// Le fichier sur disque n'a PAS été touché ; l'application continue sur
+  /// son état de démarrage (données d'exemple) plutôt que de deviner. L'UI
+  /// lit ce drapeau pour avertir le manager au lieu de le laisser croire,
+  /// silencieusement, qu'il regarde ses vraies données.
+  bool sauvegardeRefusee = false;
+  /// La version trouvée dans le fichier refusé, pour le message affiché.
+  dynamic versionSauvegardeRefusee;
+
   AppState({Store? store}) : _store = store ?? const NoopStore() {
     _seed();
   }
@@ -89,6 +100,13 @@ class AppState extends ChangeNotifier {
     if (raw != null) {
       try {
         loadFromJson(jsonDecode(raw) as Map<String, dynamic>);
+      } on SauvegardeVersionRefuseeException catch (e) {
+        // Fichier refusé (défaut 1) : ni migré, ni écrit — voir
+        // `sauvegardeRefusee`. On garde le seed déjà en place, et on
+        // surface la situation pour que l'UI avertisse le manager au lieu
+        // de continuer en silence sur des données de démonstration.
+        sauvegardeRefusee = true;
+        versionSauvegardeRefusee = e.versionTrouvee;
       } catch (_) {
         // Sauvegarde illisible : on garde le seed déjà en place.
       }
@@ -145,24 +163,48 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
-    'version': 4,
+    'version': kVersionSauvegarde,
   };
 
   void loadFromJson(Map<String, dynamic> brut) {
-    // Capturé avant conversion : `migrerV1versV2`/`migrerV2versV3`/
-    // `migrerV3versV4` rendent `brut` inchangé s'il est déjà à leur version
-    // cible, donc c'est le seul moment où l'on peut encore distinguer « rien
-    // à migrer » de « migration effectuée ». Une sauvegarde v1 n'a pas de clé
-    // `version` du tout.
+    // Routage par SEUIL, pas par égalité stricte (défaut 1, revue Lot A) :
+    // une sauvegarde à la version v traverse chaque étape à partir de v, donc
+    // < 2 traverse v1→v2→v3→v4, 2 traverse v2→v3→v4, etc. L'égalité stricte
+    // prenait toute version inconnue (une v5 future, une chaîne "4", un champ
+    // corrompu) pour un v1 brut, la détruisait, puis écrivait la destruction
+    // sur le disque via `_persist()` plus bas.
+    //
+    // Absence de clé `version` = v1 : c'est réellement l'allure d'un vrai
+    // fichier v1, jamais autre chose — le seul « inconnu » qu'il est sûr de
+    // deviner. Toute AUTRE valeur qui n'est pas un entier reconnu (chaîne,
+    // map, ou entier supérieur à la version courante) est REFUSÉE : on lève,
+    // on ne migre rien, on n'écrit rien. Voir `SauvegardeVersionRefuseeException`.
     final versionOrigine = brut['version'];
-    final migration = versionOrigine != 4;
+    final int origine;
+    if (versionOrigine == null) {
+      origine = 1;
+    } else if (versionOrigine is int) {
+      if (versionOrigine > kVersionSauvegarde) {
+        throw SauvegardeVersionRefuseeException(versionOrigine);
+      }
+      // Un entier aberrant (0, négatif) reste « en dessous de tout seuil
+      // connu » — même traitement que l'absence de clé, chaîne complète.
+      origine = versionOrigine < 1 ? 1 : versionOrigine;
+    } else {
+      // Un vrai fichier v1 n'a jamais cette clé du tout ; une valeur non
+      // entière ne peut venir que d'une corruption. On ne la prend pas pour
+      // du v1 sous prétexte qu'elle n'est « pas reconnue » — fail closed.
+      throw SauvegardeVersionRefuseeException(versionOrigine);
+    }
+
+    final migration = origine != kVersionSauvegarde;
     // Le filet de sécurité (spec § 8) ne couvre que la conversion v1 → v2,
     // seule à restructurer des données au point de ne plus pouvoir les
     // reconstituer depuis la sauvegarde migrée (quatre mécanismes d'argent
     // fondus en Engagement + Reglement). v2 → v3 et v3 → v4 ne font que
     // recalculer/déplacer des champs à partir de données déjà présentes :
     // rien n'y est perdu, donc rien à sauvegarder à part.
-    if (versionOrigine != 2 && versionOrigine != 3 && migration) {
+    if (origine < 2) {
       // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
       // avant toute réécriture, pour que la conversion reste réversible en
       // cas d'anomalie découverte tardivement. Fire-and-forget, comme
@@ -172,18 +214,14 @@ class AppState extends ChangeNotifier {
           .then((_) => _store.writeBackup(jsonEncode(brut)))
           .catchError((_) {});
     }
-    // `migrerV1versV2` ne reconnaît que `version == 2` comme « déjà migrée » —
-    // sur une sauvegarde v3 ou v4, elle la prendrait pour du v1 brut et la
-    // détruirait (elle réinitialise `projets`, entre autres). On ne l'appelle
-    // donc que si la sauvegarde n'est ni v2, ni v3, ni v4. Même précaution
-    // pour `migrerV2versV3` face à une sauvegarde déjà en v4 : son propre
-    // garde-fou interne (`version == 3`) ne la protège pas contre une v4, qui
-    // la ferait redescendre à `version: 3` en silence.
-    final dejaV2OuPlus = versionOrigine == 2 || versionOrigine == 3 || versionOrigine == 4;
-    final apresV2 = dejaV2OuPlus ? brut : migrerV1versV2(brut);
-    final dejaV3OuPlus = versionOrigine == 3 || versionOrigine == 4;
-    final apresV3 = dejaV3OuPlus ? apresV2 : migrerV2versV3(apresV2);
-    final j = versionOrigine == 4 ? apresV3 : migrerV3versV4(apresV3);
+    // Chaînage à seuils : chaque étape ne s'exécute que si `origine` est
+    // strictement en dessous de sa version cible. `j` garde la même
+    // référence que `brut` si aucune étape ne s'exécute (v4 → round-trip
+    // sans copie, condition du test « zéro écriture »).
+    var j = brut;
+    if (origine < 2) j = migrerV1versV2(j);
+    if (origine < 3) j = migrerV2versV3(j);
+    if (origine < 4) j = migrerV3versV4(j);
     // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
     // on les retire du JSON — ils ne doivent pas être persistés — et on les
     // journalise pour que le manager puisse les vérifier.

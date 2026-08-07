@@ -9,6 +9,32 @@
 /// chaque évolution ultérieure du modèle.
 library;
 
+/// Version courante du format de sauvegarde — SOURCE UNIQUE : `AppState.
+/// toJson()` l'écrit, `AppState.loadFromJson` route dessus. Une 5ᵉ migration
+/// n'a qu'à ajouter sa fonction `migrerV4versV5`, l'appeler depuis le
+/// chaînage à seuils de `loadFromJson`, et incrémenter ce nombre ici — pas de
+/// second endroit à retrouver.
+const kVersionSauvegarde = 4;
+
+/// Levée par `AppState.loadFromJson` quand la version de la sauvegarde n'est
+/// pas un entier reconnu par cette version de l'application : soit un entier
+/// SUPÉRIEUR à [kVersionSauvegarde] (fichier écrit par une version plus
+/// récente de l'app — le migrer serait deviner sa forme), soit une valeur qui
+/// n'est même pas un entier (chaîne, map, corruption) — jamais l'allure d'un
+/// vrai fichier v1, qui n'a simplement AUCUNE clé `version`. Dans les deux
+/// cas, deviner « v1 » referait exactement l'erreur du routage par égalité
+/// stricte que ce chaînage à seuils remplace : un v5 pris pour un v1 voit son
+/// `sens` retourné et ses `reglements` supprimés (défaut 1, revue Lot A).
+/// On refuse, on ne migre rien, on n'écrit rien.
+class SauvegardeVersionRefuseeException implements Exception {
+  final dynamic versionTrouvee;
+  const SauvegardeVersionRefuseeException(this.versionTrouvee);
+  @override
+  String toString() =>
+      'Sauvegarde de version incompatible ($versionTrouvee) — cette version '
+      'de l\'application ne sait lire que jusqu\'à v$kVersionSauvegarde.';
+}
+
 /// Convertit une sauvegarde v1 en v2. Une sauvegarde déjà en v2 est rendue
 /// telle quelle, sans copie.
 Map<String, dynamic> migrerV1versV2(Map<String, dynamic> j) {
