@@ -1060,14 +1060,33 @@ Future<void> _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet
 
 // ── Mode manuel : un curseur, rien d'autre. Aucun contrôle possible sur la
 //    valeur saisie (§ 6.1) — c'est le mode le moins fiable, assumé comme tel.
-class _SectionManuel extends StatelessWidget {
+//
+//    StatefulWidget avec une valeur locale pendant le glissement : depuis
+//    que `AppState._persist` écrit de façon SYNCHRONE (lot G, défaut 1),
+//    persister à chaque `onChanged` — qui tire des dizaines de fois par
+//    seconde pendant qu'on fait glisser le curseur — bloquerait le thread UI
+//    à chaque position (~10-20 ms mesurés sur cette machine, jusqu'à ~180 ms
+//    en pointe pour une sauvegarde de 74 Ko), un vrai à-coup. On ne persiste
+//    qu'au relâchement (`onChangeEnd`), même principe que les champs texte
+//    de cette page qui ne valident qu'à la sortie du champ (voir
+//    `_LigneLivraisonRowState` plus bas).
+class _SectionManuel extends StatefulWidget {
   final Projet projet;
   final AppState state;
   const _SectionManuel({required this.projet, required this.state});
 
   @override
+  State<_SectionManuel> createState() => _SectionManuelState();
+}
+
+class _SectionManuelState extends State<_SectionManuel> {
+  /// Valeur affichée pendant un glissement en cours ; `null` le reste du
+  /// temps, auquel cas on affiche `widget.projet.avancementManuel`.
+  double? _enCours;
+
+  @override
   Widget build(BuildContext context) {
-    final valeur = projet.avancementManuel.clamp(0.0, 1.0);
+    final valeur = _enCours ?? widget.projet.avancementManuel.clamp(0.0, 1.0);
     final pct = (valeur * 100).round();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
@@ -1078,7 +1097,11 @@ class _SectionManuel extends StatelessWidget {
       Slider(
         value: valeur,
         activeColor: AppColors.primary,
-        onChanged: (v) => state.setAvancementManuel(projet.id, v),
+        onChanged: (v) => setState(() => _enCours = v),
+        onChangeEnd: (v) {
+          widget.state.setAvancementManuel(widget.projet.id, v);
+          setState(() => _enCours = null);
+        },
       ),
     ]);
   }

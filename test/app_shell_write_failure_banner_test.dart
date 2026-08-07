@@ -21,7 +21,7 @@ class _FlakyStore implements Store {
   @override
   Future<String?> read() async => data;
   @override
-  Future<void> write(String d) async {
+  void write(String d) {
     if (failNextWrites > 0) {
       failNextWrites--;
       throw Exception('échec d\'écriture simulé');

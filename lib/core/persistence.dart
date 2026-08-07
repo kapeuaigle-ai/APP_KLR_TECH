@@ -4,9 +4,25 @@ import 'package:path_provider/path_provider.dart';
 
 /// Abstraction du stockage : une seule chaîne JSON lue/écrite/effacée.
 /// Le découpage en interface permet d'injecter un store mémoire dans les tests.
+///
+/// `write` est SYNCHRONE (`void`, pas `Future<void>`) — décision du lot G
+/// (défaut 1, revue hygiène) : `AppState._persist()` écrivait auparavant en
+/// fire-and-forget via une file d'attente (`_writeChain`), et rien sur
+/// Windows ne pouvait la drainer avant la fermeture de la fenêtre (voir
+/// l'ancien `AppExitFlusher`, supprimé — `didRequestAppExit` n'est jamais
+/// appelé par `windows/runner/win32_window.cpp`). Plutôt que d'essayer de
+/// vidanger la file à la fermeture, on l'a supprimée : une écriture
+/// synchrone d'environ 74 Ko (la taille réelle de la sauvegarde utilisateur)
+/// prend quelques millisecondes, mesuré sur cette machine — voir le rapport
+/// du lot G — imperceptible pour une mutation déclenchée par un geste
+/// discret (ajouter un client, enregistrer un règlement). Le seul appelant
+/// où c'était sensible (le curseur d'avancement manuel, `Slider.onChanged`,
+/// qui pouvait tirer des dizaines de fois par seconde pendant un
+/// glissement) a été corrigé pour ne persister qu'au relâchement — voir
+/// `_SectionManuel` dans `screens/projets_screen.dart`.
 abstract class Store {
   Future<String?> read();
-  Future<void> write(String data);
+  void write(String data);
   /// Conserve une copie de sauvegarde distincte du fichier principal — voir
   /// [FileStore.writeBackup]. Ne fait rien tant qu'aucun appelant n'en a
   /// besoin (`NoopStore`, ou avant qu'une migration ne l'appelle).
@@ -21,7 +37,7 @@ class NoopStore implements Store {
   @override
   Future<String?> read() async => null;
   @override
-  Future<void> write(String data) async {}
+  void write(String data) {}
   @override
   Future<void> writeBackup(String data) async {}
   @override
@@ -57,9 +73,20 @@ class FileStore implements Store {
   }
 
   @override
-  Future<void> write(String data) async {
-    final f = await _file();
-    await f.writeAsString(data, flush: true);
+  void write(String data) {
+    // Synchrone à dessein — voir le commentaire de `Store`. `_cached` est
+    // déjà résolu ici : `AppState.init()` attend `read()` avant que la
+    // moindre mutation ne soit possible (voir `main.dart`), et `read()`
+    // passe systématiquement par `_file()`, qui le renseigne. S'il ne
+    // l'était pas (mauvais usage du store hors de ce chemin normal), on
+    // échoue franchement — `AppState._persist` transforme ça en bannière,
+    // jamais en écriture silencieusement perdue ou en chemin deviné.
+    final f = _cached;
+    if (f == null) {
+      throw StateError(
+          'FileStore.write appelé avant que read() ait résolu le chemin du fichier.');
+    }
+    f.writeAsStringSync(data, flush: true);
   }
 
   @override
