@@ -361,26 +361,32 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       // gauche, action à droite — une seule ligne au-dessus du tableau, qui
       // s'empile sur téléphone (les deux ensemble réclament 378 px).
       StackingRow(
-        left: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
+        // `StackingRow` donne maintenant à `left` tout l'espace restant
+        // (défaut F1) : sans cet `Align`, la pastille décorée s'étirerait
+        // sur toute cette largeur au lieu de se limiter à ses deux puces.
+        left: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AppFilterChip(
+                label: 'Créances (${creances.length})',
+                active: _estCreance,
+                onTap: () => setState(() => _sens = 'entrant'),
+              ),
+              const SizedBox(width: 4),
+              AppFilterChip(
+                label: 'Dettes (${dettes.length})',
+                active: !_estCreance,
+                onTap: () => setState(() => _sens = 'sortant'),
+              ),
+            ]),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            AppFilterChip(
-              label: 'Créances (${creances.length})',
-              active: _estCreance,
-              onTap: () => setState(() => _sens = 'entrant'),
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: 'Dettes (${dettes.length})',
-              active: !_estCreance,
-              onTap: () => setState(() => _sens = 'sortant'),
-            ),
-          ]),
         ),
         right: PrimaryBtn(
           label: _estCreance ? 'Nouvelle Créance' : 'Nouvelle Dette',

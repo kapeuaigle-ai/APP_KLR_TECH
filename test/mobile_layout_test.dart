@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import 'package:klr_tech_app/main.dart';
 import 'package:klr_tech_app/core/app_state.dart';
 import 'package:klr_tech_app/core/models.dart';
+import 'package:klr_tech_app/core/theme.dart';
 import 'package:klr_tech_app/widgets/sidebar.dart';
 import 'package:klr_tech_app/widgets/app_header.dart';
 import 'package:klr_tech_app/widgets/responsive.dart';
@@ -27,6 +29,20 @@ void main() {
 
   /// Taille de bureau, pour vérifier qu'on n'a rien cassé au-dessus du seuil.
   const desktop = Size(1440, 900);
+
+  /// Les écrans balayés par les deux groupes « aucun débordement »
+  /// (téléphone § ci-dessous, bureau § F2 plus bas) : une seule liste, pour
+  /// que les deux balayages portent exactement sur les mêmes écrans.
+  const screens = <(NavScreen, String)>[
+    (NavScreen.dashboard,  'Tableau de bord'),
+    (NavScreen.documents,  'Documents'),
+    (NavScreen.clients,    'Clients'),
+    (NavScreen.gantt,      'Gantt'),
+    (NavScreen.suivi,      'Suivi'),
+    (NavScreen.activites,  'Activités'),
+    (NavScreen.rapports,   'Rapports'),
+    (NavScreen.parametres, 'Paramètres'),
+  ];
 
   Future<AppState> pumpApp(WidgetTester tester, {
     required Size size,
@@ -176,17 +192,6 @@ void main() {
   // rendu levée pendant le build : si un Row déborde ou si un dialogue est
   // plus large que l'écran, le test échoue ici.
   group('aucun débordement sur 360 x 800', () {
-    const screens = <(NavScreen, String)>[
-      (NavScreen.dashboard,  'Tableau de bord'),
-      (NavScreen.documents,  'Documents'),
-      (NavScreen.clients,    'Clients'),
-      (NavScreen.gantt,      'Gantt'),
-      (NavScreen.suivi,      'Suivi'),
-      (NavScreen.activites,  'Activités'),
-      (NavScreen.rapports,   'Rapports'),
-      (NavScreen.parametres, 'Paramètres'),
-    ];
-
     for (final (screen, label) in screens) {
       testWidgets(label, (tester) async {
         await pumpApp(tester, size: phone, screen: screen);
@@ -213,6 +218,91 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  // ── Balayage bureau (défaut F2, Lot F) ──────────────────
+  //
+  // Les tests « bureau » d'origine se contentaient de vérifier que la
+  // sidebar et l'en-tête existent, sans jamais appeler `takeException()` :
+  // c'est pour ça que F1 (StackingRow) et F3 (sidebar) sont passés inaperçus
+  // à des largeurs de bureau tout à fait courantes. Ce groupe rejoue le même
+  // balayage écran par écran que le groupe téléphone, mais à 1000, 1152,
+  // 1280, 1366 et 1440 px — le minimum demandé plus les deux largeurs déjà
+  // citées dans le défaut F1 lui-même.
+  group('aucun débordement à des largeurs de bureau courantes', () {
+    const largeursBureau = [1000.0, 1152.0, 1280.0, 1366.0, 1440.0];
+
+    for (final largeur in largeursBureau) {
+      final taille = Size(largeur, 900);
+      for (final (screen, label) in screens) {
+        testWidgets('${largeur.toInt()}px · $label', (tester) async {
+          await pumpApp(tester, size: taille, screen: screen);
+          expect(tester.takeException(), isNull);
+        });
+      }
+
+      testWidgets('${largeur.toInt()}px · Création de proforma', (tester) async {
+        final state = await pumpApp(tester, size: taille);
+        state.setCreating(true);
+        await tester.pumpAndSettle();
+        expect(tester.takeException(), isNull);
+      });
+    }
+  });
+
+  // ── Régressions F1 et F3 : débordements structurels ─────
+  //
+  // Avec la police de substitution des tests (Roboto — § `test_fonts.dart`),
+  // le balayage ci-dessus ne reproduit pas les débordements F1/F3 tels que
+  // décrits (403 px à 1000 px de large pour F1, 1,5 px pour F3) : les
+  // libellés réels sont trop courts pour déborder avec CES métriques-là. Les
+  // deux défauts sont pourtant réels — `StackingRow` ne bornait pas `left`,
+  // `_NavItem` ne bornait pas son libellé — et se reproduisent dès qu'on
+  // pousse le contenu ou l'échelle de texte au-delà de ce que les libellés
+  // actuels couvrent. Ces deux tests le prouvent directement, sans dépendre
+  // de la police exacte.
+  group('régressions F1 et F3', () {
+    testWidgets('StackingRow (bureau) : un « left » plus long que l\'espace ne déborde pas',
+        (tester) async {
+      // MediaQuery en largeur « bureau » (> kPhoneBreakpoint) pour prendre la
+      // branche desktop de StackingRow, mais l'espace réellement disponible
+      // (SizedBox 340 px) est bien plus étroit qu'un texte de démonstration
+      // volontairement long — exactement la situation de ParametresScreen
+      // une fois la sidebar et le padding déduits d'une fenêtre resserrée.
+      await tester.pumpWidget(MediaQuery(
+        data: const MediaQueryData(size: Size(1440, 900)),
+        child: MaterialApp(home: Scaffold(body: Center(child: SizedBox(
+          width: 340,
+          child: StackingRow(
+            left: Text(
+              'Un intitulé de démonstration bien trop long pour tenir à côté '
+              'du bouton sans qu\'il ne soit borné par un Expanded.',
+              style: GoogleFonts.dmSans(fontSize: 13.5),
+            ),
+            right: Container(width: 120, height: 32, color: AppColors.primary),
+          ),
+        )))),
+      ));
+      expect(tester.takeException(), isNull);
+    });
+
+    testWidgets('sidebar : un texte agrandi (accessibilité, 180%) ne déborde pas',
+        (tester) async {
+      // Un utilisateur Windows qui grossit le texte système reste un usage
+      // légitime — c'est un moyen déterministe de reproduire, indépendamment
+      // de la police, l'écart de 1,5 px signalé sur `_NavItem` (sidebar.dart:130)
+      // à 210 px. `Sidebar` est pompée seule plutôt que via l'app entière :
+      // au-delà de 180 %, d'autres écrans développent leurs propres
+      // débordements sous un texte deux fois plus grand que prévu — hors
+      // périmètre de ce défaut précis, à traiter séparément.
+      tester.platformDispatcher.textScaleFactorTestValue = 1.8;
+      addTearDown(tester.platformDispatcher.clearTextScaleFactorTestValue);
+      await tester.pumpWidget(ChangeNotifierProvider(
+        create: (_) => AppState(),
+        child: const MaterialApp(home: Scaffold(body: Sidebar())),
+      ));
       expect(tester.takeException(), isNull);
     });
   });

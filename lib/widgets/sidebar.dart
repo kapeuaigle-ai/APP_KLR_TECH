@@ -145,11 +145,18 @@ class _NavItemState extends State<_NavItem> {
               Icon(widget.icon, size: 16, color: widget.active ? Colors.white : const Color(0xFF8B92A5)),
               if (!widget.compact) ...[
                 const SizedBox(width: 10),
-                Text(widget.label, style: GoogleFonts.dmSans(
-                  color: widget.active ? Colors.white : const Color(0xFF8B92A5),
-                  fontSize: 13.5,
-                  fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
-                )),
+                // `Expanded` + ellipsis (défaut F3, Lot F) : à 210 px de large,
+                // la barre d'accent + l'icône + les libellés les plus longs
+                // débordaient de 1,5 px, reproduit à une fenêtre de 1280 px.
+                Expanded(
+                  child: Text(widget.label, maxLines: 1, overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.dmSans(
+                      color: widget.active ? Colors.white : const Color(0xFF8B92A5),
+                      fontSize: 13.5,
+                      fontWeight: widget.active ? FontWeight.w600 : FontWeight.w400,
+                    ),
+                  ),
+                ),
               ],
             ],
           ),

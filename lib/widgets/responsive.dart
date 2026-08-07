@@ -81,7 +81,17 @@ class StackingRow extends StatelessWidget {
         SizedBox(width: double.infinity, child: right),
       ]);
     }
-    return Row(children: [left, const Spacer(), right]);
+    // `left` doit réclamer TOUT l'espace restant (comme `SectionHeader`),
+    // pas juste sa part d'un `Spacer` à égalité : sans `Expanded`, `left`
+    // reçoit une largeur non bornée et un contenu large (ex. le sous-titre
+    // de ParametresScreen) déborde plutôt que de s'enrouler — reproduit à
+    // 1000-1440 px (défaut F1, Lot F). `right` garde sa taille naturelle et
+    // se retrouve poussé à l'extrémité droite, exactement comme avant.
+    return Row(children: [
+      Expanded(child: left),
+      SizedBox(width: spacing),
+      right,
+    ]);
   }
 }
 
