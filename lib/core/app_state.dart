@@ -80,10 +80,14 @@ class AppState extends ChangeNotifier {
   /// vide. Réutilisé tel quel par la réinitialisation.
   void _seed() {
     clients = List.from(SampleData.clients);
+    // Un seul accès au getter : il reconstruit les trois listes à chaque
+    // appel (voir son commentaire) — les relire séparément reconstruirait
+    // tout deux fois de plus pour ne garder qu'un tiers du résultat.
+    final docs = SampleData.documents;
     documents = {
-      'proforma': List.from(SampleData.documents['proforma']!),
-      'facture': List.from(SampleData.documents['facture']!),
-      'bl': List.from(SampleData.documents['bl']!),
+      'proforma': List.from(docs['proforma']!),
+      'facture': List.from(docs['facture']!),
+      'bl': List.from(docs['bl']!),
     };
     settings = AppSettings(
       company: 'KLR TECH SARL',
@@ -490,9 +494,13 @@ class AppState extends ChangeNotifier {
 
   /// Supprime un client et délie tout ce qui le désignait : `clientId` est
   /// un `int?` (« null = aucun »), même convention que `projetId` — voir
-  /// `deleteProjet`. Le nom dénormalisé (`Projet.client`, `Engagement.tiers`)
-  /// reste : il enregistre qui était la contrepartie, l'id seul ne pointe
-  /// plus vers rien.
+  /// `deleteProjet`. Couvre les projets, les engagements ET les documents
+  /// (`DocumentItem.clientId`, lot G défaut 2 — le champ était `final`
+  /// jusqu'ici, ce commentaire promettait « tout ce qui le désignait » sans
+  /// pouvoir tenir sur les documents). Le nom dénormalisé (`Projet.client`,
+  /// `Engagement.tiers`, `DocumentItem.client`) reste partout : il enregistre
+  /// qui était la contrepartie — une facture déjà émise doit continuer à dire
+  /// à qui, même quand l'id ne pointe plus vers personne.
   void deleteClient(int id) {
     final match = clients.where((x) => x.id == id);
     final nom = match.isNotEmpty ? match.first.name : '—';
@@ -502,6 +510,11 @@ class AppState extends ChangeNotifier {
     }
     for (final e in engagements) {
       if (e.clientId == id) e.clientId = null;
+    }
+    for (final liste in documents.values) {
+      for (final d in liste) {
+        if (d.clientId == id) d.clientId = null;
+      }
     }
     _logActivity('client', 'Client supprimé — $nom', '', AppColors.text3);
     _emit();

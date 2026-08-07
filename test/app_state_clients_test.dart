@@ -20,6 +20,12 @@ Engagement _engagement(int id, int? clientId) => Engagement(
       montant: 1000, echeance: DateTime(2026, 6, 1),
     );
 
+DocumentItem _proforma(int id, int? clientId) => DocumentItem(
+      id: id, numero: 'KLR-P01-01032026', date: '01/03/2026',
+      clientId: clientId, client: 'ACME', objet: 'Fourniture', montant: 1000,
+      statut: 'cours',
+    );
+
 void main() {
   // Défaut 3 : Projet.clientId et Engagement.clientId sont des int? avec la
   // même convention « null = aucun » que Projet.projetId sur les documents
@@ -49,6 +55,22 @@ void main() {
     // `client` (le nom) enregistre qui était la contrepartie : il reste,
     // seul l'id qui ne pointe plus vers rien est nettoyé.
     expect(s.projets.first.client, 'ACME');
+  });
+
+  // Défaut 2 (revue lot G) : `DocumentItem.clientId` était `final`, donc
+  // `deleteClient` ne pouvait pas le délier malgré ce que promettait son
+  // commentaire — une facture continuait à pointer vers un client disparu.
+  test('supprimer un client délie aussi les documents qui le désignaient', () {
+    final s = AppState()..viderDonnees();
+    s.addClient(_client());
+    s.saveOrUpdateProforma(_proforma(1, 5));
+
+    s.deleteClient(5);
+
+    expect(s.documents['proforma']!.first.clientId, isNull);
+    // Le nom, lui, reste : la proforma continue de dire à qui elle a été
+    // adressée, même quand l'id ne pointe plus vers personne.
+    expect(s.documents['proforma']!.first.client, 'ACME');
   });
 
   test('supprimer un client n\'affecte pas les projets et engagements d\'un autre client', () {
