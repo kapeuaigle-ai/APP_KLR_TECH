@@ -24,8 +24,6 @@ class MemoryStore implements Store {
   }
   @override
   Future<void> writeBackup(String d) async {}
-  @override
-  Future<void> clear() async { data = null; }
 }
 
 void main() {

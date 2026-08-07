@@ -2,8 +2,12 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 
-/// Abstraction du stockage : une seule chaîne JSON lue/écrite/effacée.
-/// Le découpage en interface permet d'injecter un store mémoire dans les tests.
+/// Abstraction du stockage : une seule chaîne JSON lue et écrite. Le
+/// découpage en interface permet d'injecter un store mémoire dans les tests.
+/// (Pas de méthode « effacer » : `AppState.resetData()` réinitialise en
+/// mémoire puis écrit l'état vide — voir son commentaire — plutôt que de
+/// supprimer le fichier ; un `Store.clear()` avait existé pour ça mais
+/// n'était jamais appelé, lot G défaut 4.)
 ///
 /// `write` est SYNCHRONE (`void`, pas `Future<void>`) — décision du lot G
 /// (défaut 1, revue hygiène) : `AppState._persist()` écrivait auparavant en
@@ -27,7 +31,6 @@ abstract class Store {
   /// [FileStore.writeBackup]. Ne fait rien tant qu'aucun appelant n'en a
   /// besoin (`NoopStore`, ou avant qu'une migration ne l'appelle).
   Future<void> writeBackup(String data);
-  Future<void> clear();
 }
 
 /// Store neutre : ne persiste rien. Utilisé tant que l'app n'est pas
@@ -40,8 +43,6 @@ class NoopStore implements Store {
   void write(String data) {}
   @override
   Future<void> writeBackup(String data) async {}
-  @override
-  Future<void> clear() async {}
 }
 
 /// Persistance disque : un fichier JSON dans le dossier applicatif de l'OS
@@ -102,14 +103,6 @@ class FileStore implements Store {
       // Le filet de sécurité ne doit jamais empêcher l'application de
       // démarrer — même règle que `read()` ci-dessus.
     }
-  }
-
-  @override
-  Future<void> clear() async {
-    try {
-      final f = await _file();
-      if (await f.exists()) await f.delete();
-    } catch (_) {}
   }
 }
 

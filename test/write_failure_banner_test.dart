@@ -25,8 +25,6 @@ class _FlakyStore implements Store {
   }
   @override
   Future<void> writeBackup(String d) async {}
-  @override
-  Future<void> clear() async { data = null; }
 }
 
 Client _client(int id) => Client(id: id, initials: 'ZZ',

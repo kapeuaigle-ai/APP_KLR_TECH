@@ -936,6 +936,16 @@ class AppState extends ChangeNotifier {
   }
 
   // ── Documents ──────────────────────────────────────────
+  /// Ajoute un document brut, quel que soit son type. Aucun écran ne
+  /// l'appelle : la création/édition d'une proforma passe par
+  /// `saveOrUpdateProforma` (qui, en plus, met à jour un id existant plutôt
+  /// que de dupliquer), et la facture/le BL générés à la validation sont
+  /// écrits directement dans leurs listes par `validateProforma`. Conservé
+  /// (lot G, défaut 4 — candidat au code mort) parce que c'est le seul
+  /// moyen direct de semer un document 'facture' ou 'bl' isolément dans un
+  /// test, sans repasser par tout le circuit de validation d'une proforma ;
+  /// `saveOrUpdateProforma` ne cible que la liste 'proforma'. Une bonne
+  /// partie de la suite de tests en dépend.
   void addDocument(String type, DocumentItem doc) {
     documents[type]?.add(doc);
     if (type == 'proforma') {
