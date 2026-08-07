@@ -33,7 +33,11 @@ class PdfGenerator {
   // Le découpage vient de DocumentPagination, partagé avec DocumentPreview :
   // le PDF a donc toujours le même nombre de pages et la même répartition des
   // lignes que ce qui est affiché à l'écran. Les hauteurs sont mesurées sur la
-  // géométrie de l'aperçu (plus petite que l'A4), donc sûres pour le PDF.
+  // géométrie A4 elle-même (`DocumentPagination.pageW`/`pageH`), pas sur une
+  // page d'aperçu réduite : l'aperçu compose désormais à cette même taille
+  // avant de la mettre à l'échelle pour l'écran (lot G — ce commentaire
+  // décrivait encore une géométrie d'aperçu « plus petite que l'A4 », d'avant
+  // cette unification ; voir `DocumentPagination` pour le détail).
   static List<List<LineItem>> _paginate(
     List<LineItem> lines,
     bool isBl,

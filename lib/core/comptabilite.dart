@@ -4,7 +4,12 @@ import 'models.dart';
 /// décaissées comptent. Il n'y a plus de distinction HT/TTC — l'application ne
 /// gère aucune taxe, un document vaut la somme de ses lignes.
 class ComptaTotaux {
-  final double revenu; // factures encaissées uniquement
+  // Somme de TOUS les règlements entrants (`Engagement.estEntrant`), pas
+  // seulement ceux rattachés à une facture — une créance saisie à la main,
+  // sans document, compte pareillement dès qu'elle est réglée. Voir `_flux`
+  // et `totaux` ci-dessous (lot G, comment obsolète corrigé : ce champ disait
+  // encore « factures encaissées uniquement »).
+  final double revenu;
   final double depenses; // toutes les dépenses
   final double benefice; // revenu - depenses
   final double dime;     // somme des dîmes mensuelles
