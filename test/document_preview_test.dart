@@ -114,6 +114,40 @@ void main() {
     }
   });
 
+  // Défaut F4 (Lot F) : `DocumentPagination.rowsFor` budgète au plus 6 lignes
+  // par rangée (clamp), mais le `Text` rendu n'avait pas de `maxLines` — une
+  // désignation démesurément longue déborde alors le cadre mesuré sur ce
+  // même budget. Le texte rendu doit désormais respecter le même plafond.
+  group('désignation démesurée', () {
+    testWidgets('une désignation de 2900 caractères ne fait pas déborder la page', (tester) async {
+      final ligne = LineItem(
+        ref: '01',
+        designation: List.generate(2900, (i) => 'x').join(),
+        qte: 1, pu: 35000,
+      );
+      await expectNoOverflow(tester, MaterialApp(
+        home: Scaffold(
+          body: SingleChildScrollView(
+            child: SizedBox(
+              width: 530,
+              child: DocumentPreview(
+                type: 'facture',
+                numero: 'KLR-04-200726',
+                settings: settings(),
+                client: 'Global Tech',
+                clientAddr: '45 Avenue des Champs, Lyon, France',
+                objet: 'Matériels informatiques',
+                lines: [ligne],
+                montant: ligne.total,
+                conditions: settings().conditions,
+              ),
+            ),
+          ),
+        ),
+      ));
+    });
+  });
+
   // Une rangée laissée vide dans le formulaire ne fait pas partie du document :
   // elle ne doit ni s'afficher ni compter dans la pagination, sinon « Ajouter
   // une ligne » provoquerait un saut de page prématuré.

@@ -109,4 +109,12 @@ class NumberToWords {
     if (r > 0) s += _hundred(r);
     return s.trim();
   }
+
+  /// La phrase « montant en lettres » telle qu'affichée en bas d'une facture
+  /// ou d'une proforma non nulle. Source unique — recopiée verbatim à quatre
+  /// endroits entre l'aperçu et le PDF avant cette factorisation (Lot F,
+  /// F10) : un changement de formulation ne peut plus désynchroniser l'un
+  /// des deux de l'autre.
+  static String montantEnLettres(double montant) =>
+      'Arrêté la présente facture à la somme de : ${convert(montant)} FRANCS CFA.';
 }
