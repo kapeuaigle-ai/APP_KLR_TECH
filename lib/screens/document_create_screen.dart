@@ -78,7 +78,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   void _lockNumero(AppState state) {
     if (_committedNumero != null) return;
     final now = DateTime.now();
-    _docId = now.millisecondsSinceEpoch;
+    _docId = state.nextId();
     _committedDate = Fmt.jour(now);
     _committedNumero =
         DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], now);

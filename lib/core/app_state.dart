@@ -29,11 +29,16 @@ class AppState extends ChangeNotifier {
   String _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
   /// Les activités générées par l'app se numérotent au-dessus des ids métier.
   int _nextActivityId = 1000;
-  /// Compteur pour les ids de règlement : une horloge de départ, ensuite
-  /// simplement incrémentée. Un nouvel horodatage à chaque appel collisionne
-  /// dès que deux règlements sont ajoutés coup sur coup, la résolution de
-  /// l'horloge n'étant pas garantie à la microseconde près.
-  int _nextReglementId = DateTime.now().microsecondsSinceEpoch;
+  /// Compteur UNIQUE pour tous les ids métier de l'application (engagements,
+  /// règlements, clients, documents, projets, tâches, notes) — voir
+  /// `nextId()`. Un simple entier croissant, jamais dérivé de l'horloge :
+  /// `DateTime.now().millisecondsSinceEpoch` collisionne dès que plusieurs
+  /// ids sont mintés dans la même milliseconde, ce qui arrive en pratique
+  /// (résolution de l'horloge non garantie, boucles de saisie rapide) —
+  /// défaut 2 de la revue Lot A. Valeur de secours ; `_seed()` et
+  /// `loadFromJson` l'amènent tous deux au-dessus de tout id déjà en usage
+  /// avant que quiconque puisse en réclamer un.
+  int _nextId = 1;
 
   // ── Persistance ────────────────────────────────────────
   final Store _store;
@@ -91,6 +96,7 @@ class AppState extends ChangeNotifier {
     _dimePaidDates.clear();
     _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
     _nextActivityId = 1000;
+    _seedNextId();
   }
 
   /// Charge la sauvegarde si elle existe, puis rattrape les clôtures des mois
@@ -112,6 +118,58 @@ class AppState extends ChangeNotifier {
       }
     }
     verifierCloture();
+  }
+
+  /// Prochain id métier, jamais réutilisé (voir `_nextId`).
+  int nextId() => _nextId++;
+
+  /// Amène `_nextId` au-dessus de tout id déjà présent dans l'état courant.
+  ///
+  /// [compteurPersiste] est le compteur déjà persisté (0 si aucun) : un
+  /// fichier hérité peut avoir un compteur en avance sur le plus grand id
+  /// visible (des enregistrements ont pu être supprimés depuis) — dans ce
+  /// cas, c'est LUI qui fait foi, pas le maximum recalculé. Mais l'inverse
+  /// compte plus : un fichier corrigé à la main ou fusionné dont les ids
+  /// dépassent le compteur stocké ne doit JAMAIS faire redistribuer un id
+  /// déjà pris — c'est ce recalcul par balayage qui le garantit,
+  /// indépendamment de ce que dit le fichier.
+  void _seedNextId([int compteurPersiste = 0]) {
+    var maxId = compteurPersiste;
+    void considerer(int id) {
+      if (id > maxId) maxId = id;
+    }
+    for (final c in clients) {
+      considerer(c.id);
+    }
+    for (final liste in documents.values) {
+      for (final d in liste) {
+        considerer(d.id);
+      }
+    }
+    for (final e in engagements) {
+      considerer(e.id);
+      for (final r in e.reglements) {
+        considerer(r.id);
+      }
+    }
+    for (final p in projets) {
+      considerer(p.id);
+    }
+    for (final t in tasks) {
+      considerer(t.id);
+    }
+    for (final n in notes) {
+      considerer(n.id);
+    }
+    // Les activités ont leur propre compteur (`_nextActivityId`, déjà
+    // persisté correctement) — mais leurs ids partagent le même espace de
+    // noms que tout le reste si jamais ils sont comparés ou affichés
+    // ensemble ; on les inclut ici par prudence, même si `nextId()` ne leur
+    // en distribue jamais.
+    for (final a in activities) {
+      considerer(a.id);
+    }
+    _nextId = maxId + 1;
   }
 
   /// Vide toutes les données métier — clients, documents, engagements,
@@ -163,6 +221,7 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
+    'nextId': _nextId,
     'version': kVersionSauvegarde,
   };
 
@@ -253,6 +312,11 @@ class AppState extends ChangeNotifier {
       ..addAll((j['dimePaidDates'] as Map).cast<String, String>());
     _moisCourant = j['moisCourant'] ?? _moisCourant;
     _nextActivityId = j['nextActivityId'] ?? _nextActivityId;
+    // Recalculé par balayage, jamais simplement recopié : voir `_seedNextId`
+    // — le compteur restauré ne suffit pas seul, une sauvegarde corrigée à
+    // la main ou fusionnée peut porter des ids au-dessus de lui.
+    final compteurPersiste = j['nextId'];
+    _seedNextId(compteurPersiste is int ? compteurPersiste : 0);
     _restoring = false;
 
     for (final a in ambigus) {
@@ -390,8 +454,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  int _prochainId() => _nextReglementId++;
-
   Engagement? _engagement(int id) {
     final m = engagements.where((e) => e.id == id);
     return m.isEmpty ? null : m.first;
@@ -409,7 +471,7 @@ class AppState extends ChangeNotifier {
 
     final effectif = montant > e.reste ? e.reste : montant;
     e.reglements.add(Reglement(
-      id: _prochainId(), date: date, montant: effectif, moyen: moyen));
+      id: nextId(), date: date, montant: effectif, moyen: moyen));
 
     _logActivity(
       'paiement',
@@ -787,7 +849,13 @@ class AppState extends ChangeNotifier {
     final alreadyGenerated = documents['facture']!
         .any((d) => d.numero == factureNum || d.numero == p.numero);
     if (!alreadyGenerated) {
-      final now = DateTime.now().millisecondsSinceEpoch;
+      // Trois ids distincts du compteur partagé (défaut 2, revue Lot A) : les
+      // minter depuis l'horloge (`DateTime.now().millisecondsSinceEpoch`)
+      // collisionnait dès que plusieurs proformas étaient validées dans la
+      // même milliseconde — reproduit en validant 500 proformas en boucle,
+      // seulement 498 ids distincts obtenus. Deux engagements partageant un
+      // id, `deleteEngagement`/`ajouterReglement` ne pouvaient plus les
+      // distinguer et agissaient sur les deux à la fois.
       // Montant de la facture ET de l'engagement : volontairement LA MÊME
       // expression. Les faire diverger (l'un recopiant `p.montant`, l'autre
       // resommant les lignes) est exactement comment le bug TTC/HT est né —
@@ -796,7 +864,7 @@ class AppState extends ChangeNotifier {
       // les re-séparer.
       final montantHt = p.lines.fold(0.0, (s, l) => s + l.total);
       documents['facture']!.add(DocumentItem(
-        id: now, numero: factureNum, date: p.date,
+        id: nextId(), numero: factureNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: montantHt, statut: 'cours',
@@ -807,7 +875,7 @@ class AppState extends ChangeNotifier {
       ));
       // Le BL ne porte aucun montant.
       documents['bl']!.add(DocumentItem(
-        id: now + 1, numero: blNum, date: p.date,
+        id: nextId(), numero: blNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: 0, statut: 'cours',
@@ -817,7 +885,7 @@ class AppState extends ChangeNotifier {
       // La facture EST une créance sur le client : l'engagement naît du même
       // geste, pour qu'aucune saisie manuelle ne puisse le dédoubler.
       engagements.insert(0, Engagement(
-        id: now + 2,
+        id: nextId(),
         sens: 'entrant',
         projetId: p.projetId,
         documentNumero: factureNum,

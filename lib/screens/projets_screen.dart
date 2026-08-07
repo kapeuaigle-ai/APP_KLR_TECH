@@ -588,7 +588,7 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
             final type = typeCtrl.text.trim();
             if (existing == null) {
               state.addProjet(Projet(
-                id: DateTime.now().millisecondsSinceEpoch,
+                id: state.nextId(),
                 nom: nom, type: type, mode: mode, clientId: clientId, client: client,
                 debut: debut, finPrevue: finPrevue,
               ));
