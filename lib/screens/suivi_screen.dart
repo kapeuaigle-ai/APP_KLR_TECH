@@ -1369,6 +1369,11 @@ class _ComptaTabState extends State<_ComptaTab> {
   /// crée un (montant = somme des lignes de la facture) avant d'y porter le règlement — la
   /// génération automatique à la validation de la proforma est une évolution
   /// de phase 2, hors de ce lot.
+  ///
+  /// Retirer l'encaissement (`v == false`) supprime TOUS les règlements de
+  /// l'engagement, pas seulement celui du mois affiché — un geste radical
+  /// qui doit se confirmer et dire concrètement ce qui disparaît (défaut 1,
+  /// revue Lot C), à l'image de `_confirmerSuppressionEngagement`.
   Future<void> _toggleEncaissement(
       AppState state, List<Engagement> engagements, DocumentItem f, Engagement? eng, bool v) async {
     if (v) {
@@ -1386,11 +1391,56 @@ class _ComptaTabState extends State<_ComptaTab> {
         cible = state.engagements.firstWhere((e) => e.id == id);
       }
       state.ajouterReglement(cible.id, cible.reste, d);
-    } else if (eng != null) {
+    } else if (eng != null && eng.reglements.isNotEmpty) {
+      final n = eng.reglements.length;
+      final total = eng.reglements.fold<double>(0, (s, r) => s + r.montant);
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (dctx) => AlertDialog(
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          title: Text('Retirer l\'encaissement ?', style: GoogleFonts.dmSans(
+              fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+          content: Text(
+            '$n ${n > 1 ? 'règlements' : 'règlement'} totalisant ${Fmt.money(total)} '
+            '${n > 1 ? 'seront retirés' : 'sera retiré'} de ${eng.tiers}. '
+            'Cette action est irréversible.',
+            style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(false),
+              child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(dctx).pop(true),
+              child: Text('Retirer', style: GoogleFonts.dmSans(
+                  fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
       for (final r in List.of(eng.reglements)) {
         state.supprimerReglement(eng.id, r.id);
       }
     }
+  }
+
+  /// Interrupteur Encaissée, désactivé et expliqué en infobulle sur un mois
+  /// clôturé : la comptabilité d'un mois passé — dont la dîme est peut-être
+  /// déjà versée — ne doit plus bouger d'un simple tap (défaut 1, Lot C).
+  /// Corriger une erreur passée reste possible, mais depuis l'onglet
+  /// Engagements, jamais gelé, où le geste est délibéré.
+  Widget _switchEncaissement(bool encaissee, bool bloque, ValueChanged<bool> onChanged) {
+    final sw = Switch(
+      value: encaissee,
+      activeThumbColor: AppColors.green,
+      onChanged: bloque ? null : onChanged,
+    );
+    return bloque
+        ? Tooltip(message: 'Mois clôturé — modifiez depuis l\'onglet Engagements', child: sw)
+        : sw;
   }
 
   @override
@@ -1492,14 +1542,12 @@ class _ComptaTabState extends State<_ComptaTab> {
               ('DÉPENSES', CardValue(Fmt.money(dep))),
               ('BÉNÉFICE', CardValue(Fmt.money(benef), bold: true,
                   color: benef < 0 ? AppColors.red : AppColors.text1)),
-              // L'interrupteur d'encaissement reste accessible : c'est
-              // l'action principale de cette liste.
+              // L'interrupteur d'encaissement reste accessible sur le mois en
+              // cours — c'est l'action principale de cette liste — mais gelé
+              // sur un mois clôturé (défaut 1, Lot C).
               ('ENCAISSÉE', Row(children: [
-                Switch(
-                  value: encaissee,
-                  activeThumbColor: AppColors.green,
-                  onChanged: (v) => _toggleEncaissement(state, engagements, f, eng, v),
-                ),
+                _switchEncaissement(encaissee, !estMoisCourant,
+                    (v) => _toggleEncaissement(state, engagements, f, eng, v)),
                 Expanded(child: Text(
                   encaissee ? _dateTexte(derniere) : 'en attente',
                   style: GoogleFonts.dmSans(fontSize: 11.5,
@@ -1523,7 +1571,7 @@ class _ComptaTabState extends State<_ComptaTab> {
           if (facturesMois.isEmpty)
             const EmptyHint('Aucune facture sur ce mois')
           else
-            ...facturesMois.map((f) => _factureRow(state, engagements, f)),
+            ...facturesMois.map((f) => _factureRow(state, engagements, f, bloque: !estMoisCourant)),
         ])),
       ),
       const SizedBox(height: 20),
@@ -1536,7 +1584,7 @@ class _ComptaTabState extends State<_ComptaTab> {
         sousTitre: 'Réglés ce mois-ci : créances encaissées, dettes payées, et dépenses ponctuelles non rattachées à une facture.',
         vide: reglementsMois.isEmpty,
         messageVide: 'Aucun règlement sur ce mois',
-        cartes: reglementsMois.map((e) => _reglementCard(state, e)).toList(),
+        cartes: reglementsMois.map((e) => _reglementCard(state, e, bloque: !estMoisCourant)).toList(),
         tableau: HScrollTable(minWidth: 760, child: Column(children: [
           Container(color: AppColors.bg, child: const Row(children: [
             Expanded(flex: 2, child: ThCell('TYPE')),
@@ -1551,7 +1599,7 @@ class _ComptaTabState extends State<_ComptaTab> {
           if (reglementsMois.isEmpty)
             const EmptyHint('Aucun règlement sur ce mois')
           else
-            ...reglementsMois.map((e) => _reglementRow(state, e)),
+            ...reglementsMois.map((e) => _reglementRow(state, e, bloque: !estMoisCourant)),
         ])),
       ),
     ]);
@@ -1589,7 +1637,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     ]),
   );
 
-  Widget _factureRow(AppState state, List<Engagement> engagements, DocumentItem f) {
+  Widget _factureRow(AppState state, List<Engagement> engagements, DocumentItem f, {required bool bloque}) {
     final ht = Comptabilite.montantFacture(f);
     final dep = Comptabilite.depensesFacture(f.numero, engagements);
     final benef = ht - dep;
@@ -1610,11 +1658,8 @@ class _ComptaTabState extends State<_ComptaTab> {
         Expanded(flex: 3, child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           child: Row(children: [
-            Switch(
-              value: encaissee,
-              activeThumbColor: AppColors.green,
-              onChanged: (v) => _toggleEncaissement(state, engagements, f, eng, v),
-            ),
+            _switchEncaissement(encaissee, bloque,
+                (v) => _toggleEncaissement(state, engagements, f, eng, v)),
             Expanded(child: Text(
               encaissee ? _dateTexte(derniere) : 'en attente',
               style: GoogleFonts.dmSans(fontSize: 11.5, color: encaissee ? AppColors.green : AppColors.text3),
@@ -1626,19 +1671,28 @@ class _ComptaTabState extends State<_ComptaTab> {
     );
   }
 
-  Widget _reglementCard(AppState state, Engagement e) => ListCard(
+  /// Icône de suppression de la section « Dettes & créances réglées »,
+  /// gelée sur un mois clôturé (défaut 1, Lot C) : le geste reste possible,
+  /// mais uniquement depuis l'onglet Engagements, jamais par mégarde en
+  /// consultant un mois passé.
+  Widget _boutonSupprimerReglement(AppState state, Engagement e, bool bloque, double iconSize,
+          {BoxConstraints? constraints}) =>
+      IconButton(
+        tooltip: bloque ? 'Mois clôturé — modifiez depuis l\'onglet Engagements' : 'Supprimer',
+        icon: Icon(Icons.delete_outline, size: iconSize, color: AppColors.red),
+        constraints: constraints,
+        onPressed: bloque ? null : () => _confirmerSuppressionEngagement(context, state, e),
+      );
+
+  Widget _reglementCard(AppState state, Engagement e, {required bool bloque}) => ListCard(
     accent: e.estEntrant ? AppColors.green : AppColors.red,
     title: Text(e.tiers.isEmpty ? '—' : e.tiers, style: GoogleFonts.dmSans(
       fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1),
       maxLines: 1, overflow: TextOverflow.ellipsis),
     subtitle: Text('${e.estEntrant ? 'Créance' : 'Dette'} · ${e.documentNumero ?? '—'}',
         style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.primary)),
-    trailing: IconButton(
-      tooltip: 'Supprimer',
-      icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.red),
-      constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      onPressed: () => _confirmerSuppressionEngagement(context, state, e),
-    ),
+    trailing: _boutonSupprimerReglement(state, e, bloque, 18,
+        constraints: const BoxConstraints(minWidth: 40, minHeight: 40)),
     fields: [
       ('CATÉGORIE', CardValue(e.categorie)),
       ('MONTANT', CardValue('${e.estEntrant ? '+' : '−'} ${Fmt.money(e.montant)}',
@@ -1647,7 +1701,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     ],
   );
 
-  Widget _reglementRow(AppState state, Engagement e) => Container(
+  Widget _reglementRow(AppState state, Engagement e, {required bool bloque}) => Container(
     decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: AppColors.border))),
     child: Row(children: [
       Expanded(flex: 2, child: Padding(
@@ -1665,11 +1719,7 @@ class _ComptaTabState extends State<_ComptaTab> {
       _cell('${e.estEntrant ? '+' : '−'} ${Fmt.money(e.montant)}', flex: 3, bold: true,
           color: e.estEntrant ? AppColors.green : AppColors.red),
       _cell(_dateTexte(_dernierReglement(e)), flex: 2, color: AppColors.text2),
-      SizedBox(width: 48, child: IconButton(
-        tooltip: 'Supprimer',
-        icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
-        onPressed: () => _confirmerSuppressionEngagement(context, state, e),
-      )),
+      SizedBox(width: 48, child: _boutonSupprimerReglement(state, e, bloque, 16)),
     ]),
   );
 
