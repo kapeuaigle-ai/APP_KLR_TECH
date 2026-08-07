@@ -831,9 +831,12 @@ Future<void> _gererReglements(
                       icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-                      onPressed: () {
-                        state.supprimerReglement(c.id, r.id);
-                        setLocal(() {});
+                      onPressed: () async {
+                        final ok = await _confirmerSuppressionReglement(ctx, r);
+                        if (ok) {
+                          state.supprimerReglement(c.id, r.id);
+                          setLocal(() {});
+                        }
                       },
                     ),
                   ]),
@@ -867,6 +870,40 @@ Future<void> _gererReglements(
       },
     ),
   );
+}
+
+/// Confirmation avant de retirer un règlement isolé, depuis « Gérer les
+/// règlements ». Ce dialogue est accessible depuis l'onglet Engagements quel
+/// que soit le mois de comptabilité affiché : jamais gelé par la
+/// consultation seule d'un mois clôturé (voir la note sur l'accessibilité en
+/// tête du défaut 1, revue Lot C). Même cérémonie que `_confirmDeleteNote`.
+Future<bool> _confirmerSuppressionReglement(BuildContext context, Reglement r) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer ce règlement ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        'Le règlement du ${Fmt.jour(r.date)} pour ${Fmt.money(r.montant)} '
+        'sera retiré de la comptabilité.',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(false),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(true),
+          child: Text('Supprimer', style: GoogleFonts.dmSans(
+              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
+  return ok == true;
 }
 
 /// Rattache (ou change) le projet d'un engagement déjà créé — le cas d'un
@@ -1048,7 +1085,7 @@ Widget _engagementMenu(
         case 'reactiver':
           state.reactiverEngagement(e.id);
         case 'supprimer':
-          state.deleteEngagement(e.id);
+          _confirmerSuppressionEngagement(context, state, e);
       }
     },
     itemBuilder: (ctx) => [
@@ -1077,10 +1114,60 @@ Widget _engagementMenu(
       else
         compactMenuItem(value: 'reactiver', icon: Icons.undo, iconColor: AppColors.text3,
             label: 'Réactiver'),
+      // Séparée du reste par un filet : « Supprimer » est irréversible et
+      // emporte tout l'historique de règlements, contrairement à « Annuler »
+      // juste au-dessus, qui les garde (défaut 2, revue Lot C).
+      const PopupMenuDivider(),
       compactMenuItem(value: 'supprimer', icon: Icons.delete_outline, iconColor: AppColors.red,
           label: 'Supprimer'),
     ],
   );
+}
+
+/// Confirmation avant suppression d'un engagement : nomme concrètement ce qui
+/// disparaît — le tiers, le montant, et le nombre et le total des règlements
+/// déjà passés, une comptabilité réelle qu'aucune autre suppression de
+/// l'app ne fait disparaître en silence. Même cérémonie que
+/// `_confirmerSuppressionProjet` dans projets_screen.dart.
+Future<void> _confirmerSuppressionEngagement(
+    BuildContext context, AppState state, Engagement e) async {
+  final n = e.reglements.length;
+  final total = e.reglements.fold<double>(0, (s, r) => s + r.montant);
+  final nature = e.estEntrant ? 'La créance' : 'La dette';
+
+  final String message;
+  if (n == 0) {
+    message = '$nature envers ${e.tiers} (${Fmt.money(e.montant)}) sera '
+        'supprimée. Aucun règlement n\'y est encore rattaché.';
+  } else {
+    final soldee = e.solde ? ' — déjà soldée' : '';
+    message = '$nature envers ${e.tiers} (${Fmt.money(e.montant)}$soldee) sera '
+        'supprimée, avec $n ${n > 1 ? 'règlements' : 'règlement'} déjà '
+        'enregistré${n > 1 ? 's' : ''} totalisant ${Fmt.money(total)}.';
+  }
+
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer cet engagement ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(message, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(false),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(true),
+          child: Text('Supprimer', style: GoogleFonts.dmSans(
+              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
+  if (ok == true) state.deleteEngagement(e.id);
 }
 
 // ── Comptabilité Tab ──────────────────────────────────────
@@ -1550,7 +1637,7 @@ class _ComptaTabState extends State<_ComptaTab> {
       tooltip: 'Supprimer',
       icon: const Icon(Icons.delete_outline, size: 18, color: AppColors.red),
       constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
-      onPressed: () => state.deleteEngagement(e.id),
+      onPressed: () => _confirmerSuppressionEngagement(context, state, e),
     ),
     fields: [
       ('CATÉGORIE', CardValue(e.categorie)),
@@ -1581,7 +1668,7 @@ class _ComptaTabState extends State<_ComptaTab> {
       SizedBox(width: 48, child: IconButton(
         tooltip: 'Supprimer',
         icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
-        onPressed: () => state.deleteEngagement(e.id),
+        onPressed: () => _confirmerSuppressionEngagement(context, state, e),
       )),
     ]),
   );
