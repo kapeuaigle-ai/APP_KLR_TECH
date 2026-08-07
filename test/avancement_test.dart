@@ -119,15 +119,67 @@ void main() {
       expect(a.financier, 0);
     });
 
-    test('un engagement annulé est ignoré', () {
-      final annule = _entrant(1, 5000, [])..annule = true;
+    // Défaut 2 (CRITIQUE, revue Lot B) : un engagement annulé disparaissait
+    // ENTIÈREMENT du calcul, y compris ses règlements déjà encaissés — alors
+    // qu'en base caisse une somme reçue le reste (même principe que
+    // `Comptabilite._flux`, voir son commentaire). L'engagement annulé
+    // ci-dessous a réellement reçu 2000 avant d'être annulé : ce montant doit
+    // rester dans `montantEncaisse`, seul `montantAttendu` (ce qui restait à
+    // venir) doit l'exclure.
+    test('un engagement annulé est écarté de l\'attendu, mais son '
+        'encaissement déjà réalisé reste compté (défaut 2, revue Lot B)', () {
+      final annule = _entrant(1, 5000, [_r(2000, DateTime(2026, 4, 1))])..annule = true;
       final a = Avancement.calculer(
         projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
         engagements: [annule, _entrant(1, 1000, [_r(500, DateTime(2026, 4, 1))])],
         now: DateTime(2026, 4, 1),
       );
-      expect(a.montantAttendu, 1000);
-      expect(a.financier, closeTo(0.5, 0.0001));
+      expect(a.montantAttendu, 1000); // le montant annulé ne compte plus
+      expect(a.financier, closeTo(0.5, 0.0001)); // basé sur l'attendu actif seul
+      expect(a.montantEncaisse, 2500); // 2000 (annulé mais réellement reçu) + 500
+    });
+
+    // Reproduction exacte de la revue : un engagement entrant de 1000 a reçu
+    // 300 avant d'être annulé, et 200 de dépense sans rapport a eu lieu.
+    // `Comptabilite` rapporte 300 de revenu (§ `_flux`) ; la fiche projet
+    // doit donc afficher le même encaissement, et une marge de +100, jamais
+    // 0 encaissé et -200 de marge.
+    test('projet avec un engagement annulé partiellement réglé : marge '
+        'réelle de +100, pas -200 (défaut 2, revue Lot B)', () {
+      final annulePartiellementRegle =
+          _entrant(1, 1000, [_r(300, DateTime(2026, 4, 1))])..annule = true;
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [
+          annulePartiellementRegle,
+          _sortant(1, 200, [_r(200, DateTime(2026, 4, 2))]),
+        ],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.montantEncaisse, 300);
+      expect(a.montantDepense, 200);
+      expect(a.marge, 100);
+      expect(a.montantAttendu, 0); // annulé : plus rien n'est attendu
+      expect(a.montantRestant, 0);
+    });
+
+    // Cas limite : le SEUL engagement du projet est l'annulé. Sans le
+    // correctif, le projet retombait à zéro sur toute la ligne alors que de
+    // l'argent a réellement circulé.
+    test('seul engagement du projet, annulé après un règlement partiel : '
+        'l\'encaissement réel survit malgré tout (défaut 2, revue Lot B)', () {
+      final seulEngagement =
+          _entrant(1, 800, [_r(500, DateTime(2026, 4, 1))])..annule = true;
+      final a = Avancement.calculer(
+        projet: _projet(), mode: ModeAvancement.quantites, proformas: const [],
+        engagements: [seulEngagement],
+        now: DateTime(2026, 4, 1),
+      );
+      expect(a.montantEncaisse, 500);
+      expect(a.montantAttendu, 0);
+      expect(a.montantRestant, 0);
+      expect(a.financier, 0); // rien d'actif à diviser : voir la règle attendu==0
+      expect(a.marge, 500);
     });
 
     // Régression : Phase 1 a déjà corrigé ce résidu flottant sur
