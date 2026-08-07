@@ -58,8 +58,14 @@ class GanttScreen extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SectionHeader(
             title: 'Gantt',
+            // « si une rentrée est attendue » : un projet interne, sans
+            // client ni engagement entrant, n'affiche qu'une barre (§
+            // `sansArgent` de `_GanttRow`) — la légende doit rester exacte
+            // pour ces lignes-là aussi, pas seulement pour celles qui ont
+            // de l'argent en jeu (défaut 2, revue finitions).
             subtitle: 'Vue chronologique des projets. '
-                'Barre pleine = réalisé, barre claire = encaissé.',
+                'Barre pleine = réalisé, barre claire = encaissé '
+                '(si une rentrée est attendue).',
             actions: [
               if (!isPhone(context))
                 SecondaryBtn(label: 'Kanban', icon: Icons.view_kanban_outlined,
@@ -136,6 +142,14 @@ class _GanttRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final pctPhysique = (avancement.physique * 100).round();
     final pctFinancier = (avancement.financier * 100).round();
+    // Aucun engagement entrant actif : `financier` reste bloqué à 0 pour
+    // toujours (voir `Avancement.calculer`), et une barre « Encaissé » à 0 %
+    // se lirait comme « un paiement est attendu et rien n'est arrivé » — faux
+    // pour un projet interne où rien n'a jamais été dû (défaut 2, revue
+    // finitions). Différent d'une créance réelle pas encore réglée
+    // (`montantAttendu > 0`), qui doit garder sa barre à 0 % : c'est une
+    // information réelle, pas un artefact d'affichage.
+    final sansArgent = avancement.montantAttendu == 0;
 
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SizedBox(width: 220, child: Row(children: [
@@ -169,14 +183,17 @@ class _GanttRow extends StatelessWidget {
             child: Container(color: AppColors.border),
           )),
 
-          // Barre physique (réalisé) — pleine couleur, en haut.
+          // Barre physique (réalisé) — pleine couleur. Centrée verticalement
+          // sur toute la ligne quand il n'y a pas de barre financière en
+          // dessous (§ `sansArgent` ci-dessus), sinon calée en haut comme
+          // avant pour laisser sa place à la barre encaissé.
           //
           // Chaque barre porte son propre survol : les dates exactes ne se
           // lisent pas sur un axe gradué au mois, et le survol dit aussi ce
           // que la barre mesure — il n'y a alors plus de code couleur à
           // retenir. Même procédé que les repères de jalons.
           Positioned(
-            left: barLeft + 2, top: 2,
+            left: barLeft + 2, top: sansArgent ? 12 : 2,
             width: barWidth, height: 15,
             child: Tooltip(
               key: ValueKey('barre-physique-${projet.id}'),
@@ -192,24 +209,27 @@ class _GanttRow extends StatelessWidget {
             ),
           ),
 
-          // Barre financière (encaissé) — teinte claire, en dessous.
-          Positioned(
-            left: barLeft + 2, top: 21,
-            width: barWidth, height: 15,
-            child: Tooltip(
-              key: ValueKey('barre-financiere-${projet.id}'),
-              message: 'Encaissé — $pctFinancier %\n'
-                  '${Fmt.money(avancement.montantEncaisse)} '
-                  'sur ${Fmt.money(avancement.montantAttendu)}\n'
-                  'Du ${Fmt.jour(projet.debut)} au ${Fmt.jour(projet.finPrevue)}',
-              child: _Barre(
-                pct: pctFinancier,
-                couleurFond: AppColors.blue.withValues(alpha: 0.12),
-                couleurRemplissage: AppColors.blue.withValues(alpha: 0.55),
-                label: pctFinancier > 0 ? '$pctFinancier %' : '',
+          // Barre financière (encaissé) — teinte claire, en dessous. Absente
+          // quand aucun engagement entrant n'est rattaché au projet : voir
+          // `sansArgent` ci-dessus.
+          if (!sansArgent)
+            Positioned(
+              left: barLeft + 2, top: 21,
+              width: barWidth, height: 15,
+              child: Tooltip(
+                key: ValueKey('barre-financiere-${projet.id}'),
+                message: 'Encaissé — $pctFinancier %\n'
+                    '${Fmt.money(avancement.montantEncaisse)} '
+                    'sur ${Fmt.money(avancement.montantAttendu)}\n'
+                    'Du ${Fmt.jour(projet.debut)} au ${Fmt.jour(projet.finPrevue)}',
+                child: _Barre(
+                  pct: pctFinancier,
+                  couleurFond: AppColors.blue.withValues(alpha: 0.12),
+                  couleurRemplissage: AppColors.blue.withValues(alpha: 0.55),
+                  label: pctFinancier > 0 ? '$pctFinancier %' : '',
+                ),
               ),
             ),
-          ),
 
           // Repères de jalons : losange plein si réalisé, creux sinon. Ne
           // s'affichent que pour le mode jalons — sur les autres modes, un

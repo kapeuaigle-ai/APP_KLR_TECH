@@ -21,14 +21,19 @@ AppState _avecNeufProjetsEnCours() {
   return s;
 }
 
-// Trente, pas neuf : la liste des annulés est un `Wrap` sur toute la largeur
-// de l'écran (1600 px), donc cinq à six cartes tiennent par rangée — neuf
-// cartes n'auraient occupé que deux rangées, largement dans les 800 px de
-// haut. Il en faut assez pour que la dernière rangée soit garantie hors
-// champ, quel que soit le nombre de colonnes que le Wrap choisit.
-AppState _avecTrenteProjetsAnnules() {
+// Soixante, pas neuf : la liste des annulés est un `Wrap` sur toute la
+// largeur de l'écran (1600 px), donc cinq à six cartes tiennent par rangée —
+// neuf cartes n'auraient occupé que deux rangées, largement dans les 800 px
+// de haut. Il en faut assez pour que la dernière rangée soit garantie hors
+// champ, quel que soit le nombre de colonnes que le Wrap choisit. Porté de
+// 30 à 60 quand la carte d'un projet sans argent a perdu ses lignes
+// Encaissé/Attendu/Reste dû (défaut 2, revue finitions) : plus basse, elle
+// ne poussait plus la dernière rangée sous les 800 px avec seulement 30
+// cartes — la marge est volontairement large pour ne pas redépendre d'un
+// calcul de pixels précis.
+AppState _avecSoixanteProjetsAnnules() {
   final s = AppState()..viderDonnees();
-  for (var i = 1; i <= 30; i++) {
+  for (var i = 1; i <= 60; i++) {
     s.addProjet(Projet(
       id: i, nom: 'Projet annulé $i', type: 'Projet interne', mode: ModeAvancement.manuel, clientId: null,
       client: '', debut: DateTime(2026, 1, 1), finPrevue: DateTime(2035, 1, 1)));
@@ -116,9 +121,9 @@ void main() {
   });
 
   testWidgets(
-      'trente projets annulés : aucune exception, et le dernier devient atteignable en défilant',
+      'soixante projets annulés : aucune exception, et le dernier devient atteignable en défilant',
       (tester) async {
-    final state = _avecTrenteProjetsAnnules();
+    final state = _avecSoixanteProjetsAnnules();
     await _pumpEcranEtroit(tester, state);
     expect(tester.takeException(), isNull);
 
