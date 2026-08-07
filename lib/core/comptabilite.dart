@@ -242,10 +242,17 @@ class Comptabilite {
         .where((e) => e.estEntrant && !e.annule && !e.solde)
         .fold(0.0, (s, e) => s + e.reste);
 
+    // La dîme de la période est la SOMME des dîmes mensuelles déjà calculées
+    // par `bilanMensuel` (un mois en perte y est écrêté à 0), jamais 10 % du
+    // bénéfice NETTÉ sur toute la période : ce netting compenserait un mois
+    // en perte contre un mois profitable et sous-estimerait toujours la
+    // dîme due (défaut 1, revue Lot B — voir le commentaire de `bilanMensuel`).
+    final dime = mois.fold(0.0, (s, r) => s + r.dime);
+
     return RapportPeriode(
       debut: debut, fin: fin,
       revenu: revenu, depenses: depenses, benefice: benefice,
-      dime: benefice > 0 ? benefice * 0.10 : 0,
+      dime: dime,
       mois: mois, mouvements: mouvements,
       depensesParCategorie: parCategorie,
       creancesEnCours: creancesEnCours,
