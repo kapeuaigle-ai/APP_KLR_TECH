@@ -52,6 +52,17 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   // eux, la réassigner ici décrocherait silencieusement l'argent du physique.
   bool get _projetVerrouille => _statut == 'validee';
 
+  // Toute la fiche est figée pour une proforma déjà validée (défaut critique,
+  // revue Lot D), pas seulement son projet : sa facture, son BL et son
+  // engagement ont été générés depuis CE contenu (client, lignes, montant...)
+  // et restent figés dessus — le modifier ici les désynchroniserait sans que
+  // rien ne le signale. En pratique cet écran ne devrait jamais s'ouvrir sur
+  // un tel document : « Modifier » explique pourquoi au lieu d'y naviguer
+  // (voir documents_list_screen.dart). Ce verrou visuel est la dernière ligne
+  // de défense ; `AppState.saveOrUpdateProforma` refuse de toute façon
+  // d'enregistrer quoi que ce soit dans ce cas.
+  bool get _verrouillee => _statut == 'validee';
+
   double get _montant => _lines.fold(0, (s, l) => s + l.total);
 
   bool _saving = false;
@@ -342,25 +353,58 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
                 PrimaryBtn(
                   label: _saving ? 'Enregistrement...' : 'Enregistrer',
                   icon: Icons.save_outlined,
-                  onTap: _saving ? null : () => _saveDocument(state),
+                  onTap: (_saving || _verrouillee) ? null : () => _saveDocument(state),
                 ),
               ],
             ]),
+            if (_verrouillee) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.4)),
+                ),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Icon(Icons.lock_outline, size: 16, color: AppColors.orange),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(
+                    'Proforma validée : lecture seule. La facture et le bon de '
+                    'livraison sont déjà émis, et la créance figure en '
+                    'comptabilité — les modifier ici les désynchroniserait. '
+                    'Utilisez « Dévalider » depuis la liste des documents '
+                    '(tant qu\'aucun règlement n\'est enregistré) pour corriger '
+                    'cette proforma.',
+                    style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text2, height: 1.4),
+                  )),
+                ]),
+              ),
+            ],
             const SizedBox(height: 24),
 
-            if (phone)
-              // Formulaire seul : l'aperçu s'ouvre à la demande.
-              _formPanel(state)
-            else
-              // L'aperçu reste à droite et rétrécit avec l'écran (l'A4 est en
-              // AspectRatio) ; il ne passe dessous que sur écran étroit.
-              LayoutBuilder(builder: (context, constraints) => ResponsiveSplit(
-                sideWidth: math.min(530, constraints.maxWidth * 0.44),
-                breakpoint: 700,
-                spacing: 20,
-                main: _formPanel(state),
-                side: _preview(state),
-              )),
+            // Une proforma validée est figée : IgnorePointer bloque toute
+            // saisie (client, lignes, dates...) même si l'écran est atteint
+            // par une autre voie que « Modifier » — voir `_verrouillee`.
+            IgnorePointer(
+              ignoring: _verrouillee,
+              child: Opacity(
+                opacity: _verrouillee ? 0.6 : 1,
+                child: phone
+                    // Formulaire seul : l'aperçu s'ouvre à la demande.
+                    ? _formPanel(state)
+                    // L'aperçu reste à droite et rétrécit avec l'écran (l'A4
+                    // est en AspectRatio) ; il ne passe dessous que sur écran
+                    // étroit.
+                    : LayoutBuilder(builder: (context, constraints) => ResponsiveSplit(
+                        sideWidth: math.min(530, constraints.maxWidth * 0.44),
+                        breakpoint: 700,
+                        spacing: 20,
+                        main: _formPanel(state),
+                        side: _preview(state),
+                      )),
+              ),
+            ),
           ],
         ),
       ),
@@ -388,7 +432,7 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
           Expanded(child: PrimaryBtn(
             label: _saving ? 'Enregistrement...' : 'Enregistrer',
             icon: Icons.save_outlined,
-            onTap: _saving ? null : () => _saveDocument(state),
+            onTap: (_saving || _verrouillee) ? null : () => _saveDocument(state),
           )),
         ]),
       ),
