@@ -810,7 +810,10 @@ Future<void> _gererReglements(
         return AlertDialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          title: Text('Règlements', style: GoogleFonts.dmSans(
+          // Même distinction que l'entrée de menu qui ouvre cette boîte
+          // (défaut G4, Lot G) : le titre ne doit pas promettre une gestion
+          // encore ouverte quand l'engagement est déjà soldé.
+          title: Text(c.solde ? 'Corriger un règlement' : 'Règlements', style: GoogleFonts.dmSans(
               fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
           content: SizedBox(
             width: 380,
@@ -1104,22 +1107,31 @@ Widget _engagementMenu(
             iconColor: AppColors.green,
             label: e.estEntrant ? 'Encaissée' : 'Marquer payée'),
       // Accessible tant que l'engagement peut porter des règlements, et en
-      // consultation seule une fois soldé.
+      // correction seule une fois soldé — le libellé le dit explicitement
+      // (défaut G4, Lot G) : « Gérer » laisserait croire que l'encours est
+      // toujours ouvert, alors que seule la suppression d'un règlement mal
+      // saisi (`AppState.supprimerReglement`) reste possible depuis là.
       compactMenuItem(value: 'reglements', icon: Icons.savings_outlined,
           iconColor: AppColors.blue,
-          label: e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement'),
+          label: e.solde
+              ? 'Corriger un règlement'
+              : (e.regle > 0 ? 'Gérer les règlements' : 'Enregistrer un règlement')),
       // N'apparaît que s'il existe au moins un projet à proposer — un
       // engagement créé avant que son projet n'existe reste rattachable
       // depuis ici.
       if (state.projets.isNotEmpty)
         compactMenuItem(value: 'projet', icon: Icons.link, iconColor: AppColors.blue,
             label: e.projetId == null ? 'Rattacher à un projet' : 'Changer de projet'),
-      if (!e.annule)
-        compactMenuItem(value: 'annuler', icon: Icons.block, iconColor: AppColors.text3,
-            label: 'Annuler l\'engagement')
-      else
+      // « Annuler » exprime « je n'attends plus le reste » : sur un
+      // engagement déjà soldé, il n'y a plus de reste à ne plus attendre —
+      // l'action ne change alors aucune figure visible (défaut G1, Lot G),
+      // donc elle disparaît plutôt que de rester un geste sans effet.
+      if (e.annule)
         compactMenuItem(value: 'reactiver', icon: Icons.undo, iconColor: AppColors.text3,
-            label: 'Réactiver'),
+            label: 'Réactiver')
+      else if (!e.solde)
+        compactMenuItem(value: 'annuler', icon: Icons.block, iconColor: AppColors.text3,
+            label: 'Annuler l\'engagement'),
       // Séparée du reste par un filet : « Supprimer » est irréversible et
       // emporte tout l'historique de règlements, contrairement à « Annuler »
       // juste au-dessus, qui les garde (défaut 2, revue Lot C).
