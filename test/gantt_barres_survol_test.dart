@@ -83,6 +83,13 @@ void main() {
       id: 1, nom: 'Fourniture',
       type: 'Fourniture de matériel', mode: ModeAvancement.quantites, clientId: null, client: '',
       debut: DateTime(2026, 1, 5), finPrevue: DateTime(2026, 2, 20)));
+    // Un engagement entrant, pour que la barre financière existe : sans
+    // engagement, `montantAttendu` est nul et cette barre ne se dessine plus
+    // du tout (§ défaut 2, revue finitions) — ce test porte justement sur le
+    // contenu de son survol, pas sur sa présence.
+    s.addEngagement(Engagement(
+      id: 9, sens: 'entrant', tiers: 'Client', montant: 500,
+      echeance: DateTime(2026, 2, 20), projetId: 1));
 
     await _pump(tester, s);
 

@@ -4,11 +4,13 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'core/models.dart';
 import 'core/app_state.dart';
+import 'core/app_lifecycle.dart';
 import 'core/persistence.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/app_header.dart';
 import 'widgets/mobile_shell.dart';
 import 'widgets/responsive.dart';
+import 'widgets/write_failure_banner.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/documents_list_screen.dart';
@@ -27,6 +29,10 @@ void main() async {
   // Charge la sauvegarde disque avant d'afficher l'UI (fichier local, OS).
   final state = AppState(store: defaultStore());
   await state.init();
+  // Attend les écritures en attente avant de laisser la fenêtre se fermer
+  // (défaut 1, revue finitions) — voir `AppExitFlusher` pour la portée
+  // réelle de ce hook sur Windows.
+  WidgetsBinding.instance.addObserver(AppExitFlusher(state));
   runApp(
     ChangeNotifierProvider.value(
       value: state,
@@ -46,9 +52,18 @@ class KlrTechApp extends StatelessWidget {
       theme: AppTheme.theme,
       // Porte d'entrée : tant que le manager n'est pas connecté, l'app n'est
       // pas montée. La connexion est redemandée à chaque démarrage.
+      //
+      // La bannière d'échec d'écriture (défaut 1, revue finitions) est
+      // montée ici, au-dessus de `AppShell` — un seul endroit couvre à la
+      // fois la coquille de bureau et la coquille téléphone (`_PhoneShell`),
+      // sans dupliquer le branchement dans les deux.
       home: Consumer<AppState>(
-        builder: (context, state, _) =>
-            state.authenticated ? const AppShell() : const LoginScreen(),
+        builder: (context, state, _) => state.authenticated
+            ? const Column(children: [
+                WriteFailureBanner(),
+                Expanded(child: AppShell()),
+              ])
+            : const LoginScreen(),
       ),
     );
   }

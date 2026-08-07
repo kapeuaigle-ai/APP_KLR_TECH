@@ -322,23 +322,33 @@ class _ProjetCard extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
-          const SizedBox(height: 8),
-          _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
-          const SizedBox(height: 12),
-          Row(children: [
-            Text('Attendu', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
-            const Spacer(),
-            Text(Fmt.money(avancement.montantAttendu),
-                style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-          ]),
-          const SizedBox(height: 4),
-          Row(children: [
-            Text('Reste dû', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
-            const Spacer(),
-            Text(Fmt.money(avancement.montantRestant),
-                style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700,
-                    color: avancement.enRetardPaiement ? AppColors.red : AppColors.text1)),
-          ]),
+          // Aucun engagement entrant actif : `montantAttendu` est nul et
+          // `financier` reste bloqué à 0 pour toujours (voir
+          // `Avancement.calculer`). Montrer « Encaissé » à 0 % et « Attendu /
+          // Reste dû » à 0 FCFA se lirait comme un paiement dû et jamais
+          // arrivé, alors que rien n'a jamais été dû sur ce projet (défaut 2,
+          // revue finitions). Une créance réelle pas encore réglée
+          // (`montantAttendu > 0`) garde, elle, ses trois lignes : c'est une
+          // vraie information, pas un artefact d'affichage.
+          if (avancement.montantAttendu > 0) ...[
+            const SizedBox(height: 8),
+            _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
+            const SizedBox(height: 12),
+            Row(children: [
+              Text('Attendu', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+              const Spacer(),
+              Text(Fmt.money(avancement.montantAttendu),
+                  style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+            ]),
+            const SizedBox(height: 4),
+            Row(children: [
+              Text('Reste dû', style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+              const Spacer(),
+              Text(Fmt.money(avancement.montantRestant),
+                  style: GoogleFonts.dmSans(fontSize: 11.5, fontWeight: FontWeight.w700,
+                      color: avancement.enRetardPaiement ? AppColors.red : AppColors.text1)),
+            ]),
+          ],
         ]),
       ),
     );
@@ -700,12 +710,33 @@ void _ouvrirFicheProjet(BuildContext context, Projet projet) {
                 ),
                 const SizedBox(height: 16),
                 _LigneAvancement(label: 'Réalisé', fraction: avancement.physique, couleur: AppColors.primary),
-                const SizedBox(height: 12),
-                _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
-                const SizedBox(height: 16),
-                _ligneMontant('Montant attendu', avancement.montantAttendu),
-                _ligneMontant('Encaissé', avancement.montantEncaisse),
-                _ligneMontant('Reste dû', avancement.montantRestant),
+                // Aucun engagement entrant actif rattaché à ce projet :
+                // `montantAttendu` est nul et `financier` reste bloqué à 0
+                // pour toujours. « Montant attendu : 0, Encaissé : 0, Reste
+                // dû : 0 » est une précision fictive pour un projet où rien
+                // n'a jamais été dû — une phrase le dit plus honnêtement que
+                // trois zéros (défaut 2, revue finitions). Une créance réelle
+                // pas encore réglée garde, elle, ses trois lignes.
+                if (avancement.montantAttendu > 0) ...[
+                  const SizedBox(height: 12),
+                  _LigneAvancement(label: 'Encaissé', fraction: avancement.financier, couleur: AppColors.blue),
+                  const SizedBox(height: 16),
+                  _ligneMontant('Montant attendu', avancement.montantAttendu),
+                  _ligneMontant('Encaissé', avancement.montantEncaisse),
+                  _ligneMontant('Reste dû', avancement.montantRestant),
+                ] else ...[
+                  const SizedBox(height: 12),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Text('Aucun montant attendu pour ce projet.',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                  ),
+                ],
+                // Décaissé et marge restent indépendamment de ce qui précède
+                // : un projet interne peut très bien avoir coûté de l'argent
+                // (matériel, prestataire) sans qu'aucune rentrée ne soit
+                // attendue en retour — les cacher dissimulerait une dépense
+                // réelle.
                 _ligneMontant('Décaissé', avancement.montantDepense),
                 _LigneMarge(marge: avancement.marge),
 

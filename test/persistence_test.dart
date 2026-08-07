@@ -8,10 +8,20 @@ import 'package:klr_tech_app/core/persistence.dart';
 class MemoryStore implements Store {
   String? data;
   int writes = 0;
+  /// Nombre de prochains appels à `write` qui doivent échouer, avant de
+  /// revenir à un comportement normal — simule une panne transitoire
+  /// (verrou antivirus, disque plein) pour les tests du défaut 1.
+  int failNextWrites = 0;
   @override
   Future<String?> read() async => data;
   @override
-  Future<void> write(String d) async { data = d; writes++; }
+  Future<void> write(String d) async {
+    if (failNextWrites > 0) {
+      failNextWrites--;
+      throw Exception('échec d\'écriture simulé');
+    }
+    data = d; writes++;
+  }
   @override
   Future<void> writeBackup(String d) async {}
   @override
@@ -152,5 +162,91 @@ void main() {
     expect(a.documents['proforma']!.length, avant + 1);            // pas de doublon
     expect(a.documents['proforma']!.firstWhere((d) => d.id == 999).client, 'Client modifié');
     expect(a.activities.where((x) => x.titre.contains('KLR-P01-25072026')).length, 1); // pas re-journalisé
+  });
+
+  // ── Défaut 1 (revue finitions) : écriture qui échoue rendue visible ──
+  //
+  // `AppState._persist` avalait toute erreur d'écriture (`catchError((_) {})`
+  // sans rien d'autre) : un disque plein ou un verrou antivirus disparaissait
+  // en silence, alors que `notifyListeners()` avait déjà dit à l'interface
+  // que la mutation avait réussi. Le manager continuait de travailler en
+  // croyant, à tort, que tout était sauvegardé.
+  group('échec d\'écriture rendu visible (défaut 1, revue finitions)', () {
+    Client client(int id) => Client(id: id, initials: 'ZZ',
+        color: const Color(0xFF123456), name: 'Client $id', contact: '',
+        email: '', phone: '');
+
+    test('l\'app reste utilisable après un échec, et le signal passe à vrai', () async {
+      final store = MemoryStore()..failNextWrites = 1;
+      final a = AppState(store: store);
+      expect(a.derniereEcritureEnEchec, isFalse);
+
+      a.addClient(client(900));
+      await a.flush();
+
+      expect(a.derniereEcritureEnEchec, isTrue);
+      // La mutation en mémoire a bien eu lieu : l'app reste utilisable, ce
+      // n'est que la sauvegarde sur disque qui a échoué.
+      expect(a.clients.any((c) => c.id == 900), isTrue);
+    });
+
+    test('l\'échec déclenche notifyListeners (c\'est ce qui fait apparaître la bannière)', () async {
+      final store = MemoryStore()..failNextWrites = 1;
+      final a = AppState(store: store);
+      var notifs = 0;
+      a.addListener(() => notifs++);
+
+      a.addClient(client(900));
+      await a.flush();
+
+      expect(notifs, greaterThan(0));
+    });
+
+    test('une écriture réussie qui suit efface le signal (panne transitoire)', () async {
+      final store = MemoryStore()..failNextWrites = 1;
+      final a = AppState(store: store);
+      a.addClient(client(900));
+      await a.flush();
+      expect(a.derniereEcritureEnEchec, isTrue);
+
+      // Nouvelle mutation, cette fois sans panne : le signal doit disparaître
+      // de lui-même — une bannière qui reste affichée après que tout est
+      // rentré dans l'ordre ferait plus peur qu'elle n'informe.
+      a.addClient(client(901));
+      await a.flush();
+
+      expect(a.derniereEcritureEnEchec, isFalse);
+    });
+
+    test('retryPersist relance l\'écriture et efface le signal si elle réussit', () async {
+      final store = MemoryStore()..failNextWrites = 1;
+      final a = AppState(store: store);
+      a.addClient(client(900));
+      await a.flush();
+      expect(a.derniereEcritureEnEchec, isTrue);
+      final ecrituresAvant = store.writes;
+
+      a.retryPersist();
+      await a.flush();
+
+      expect(a.derniereEcritureEnEchec, isFalse);
+      expect(store.writes, ecrituresAvant + 1);
+    });
+
+    test('deux échecs consécutifs laissent le signal à vrai jusqu\'au succès', () async {
+      final store = MemoryStore()..failNextWrites = 2;
+      final a = AppState(store: store);
+      a.addClient(client(900));
+      await a.flush();
+      expect(a.derniereEcritureEnEchec, isTrue);
+
+      a.retryPersist(); // deuxième échec programmé
+      await a.flush();
+      expect(a.derniereEcritureEnEchec, isTrue);
+
+      a.retryPersist(); // plus d'échec programmé : réussit
+      await a.flush();
+      expect(a.derniereEcritureEnEchec, isFalse);
+    });
   });
 }

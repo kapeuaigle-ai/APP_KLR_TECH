@@ -59,6 +59,20 @@ class AppState extends ChangeNotifier {
   /// La version trouvée dans le fichier refusé, pour le message affiché.
   dynamic versionSauvegardeRefusee;
 
+  /// Vrai si la dernière écriture programmée par `_persist` a échoué (disque
+  /// plein, verrou antivirus, droits refusés — défaut 1, revue finitions).
+  ///
+  /// `_persist` reste fire-and-forget : une écriture ne doit jamais bloquer
+  /// une mutation. Mais avaler l'erreur sans rien dire (l'ancien
+  /// comportement) laissait le manager croire, à tort, que tout était
+  /// sauvegardé — `notifyListeners()` avait déjà confirmé la mutation avant
+  /// que l'écriture n'échoue. L'UI lit ce drapeau pour afficher une bannière
+  /// (voir `widgets/write_failure_banner.dart`) ; il s'efface tout seul dès
+  /// qu'une écriture suivante réussit, pour qu'une panne transitoire ne
+  /// laisse pas un avertissement alarmant affiché indéfiniment.
+  bool get derniereEcritureEnEchec => _derniereEcritureEnEchec;
+  bool _derniereEcritureEnEchec = false;
+
   AppState({Store? store}) : _store = store ?? const NoopStore() {
     _seed();
   }
@@ -339,13 +353,35 @@ class AppState extends ChangeNotifier {
 
   /// Écrit l'état courant sur le store. Fire-and-forget, mais chaîné : la
   /// dernière écriture programmée porte l'état le plus récent.
+  ///
+  /// Une écriture qui échoue (disque plein, verrou antivirus, droits
+  /// refusés) met `derniereEcritureEnEchec` à vrai et le signale via
+  /// `notifyListeners()` — c'est ce qui fait apparaître la bannière (voir
+  /// `widgets/write_failure_banner.dart`). Une écriture qui réussit efface
+  /// le drapeau s'il était levé, pour qu'une panne transitoire ne laisse pas
+  /// un avertissement affiché après que tout est rentré dans l'ordre.
   void _persist() {
     if (_restoring) return;
     final data = jsonEncode(toJson());
-    _writeChain = _writeChain.then((_) => _store.write(data)).catchError((_) {});
+    _writeChain = _writeChain.then((_) => _store.write(data)).then((_) {
+      if (_derniereEcritureEnEchec) {
+        _derniereEcritureEnEchec = false;
+        notifyListeners();
+      }
+    }).catchError((_) {
+      _derniereEcritureEnEchec = true;
+      notifyListeners();
+    });
   }
 
-  /// Attend la fin des écritures en attente (utilisé par les tests).
+  /// Relance une écriture — utilisé par le bouton « Réessayer » de la
+  /// bannière d'échec. Rejoue simplement l'état courant ; si la panne était
+  /// transitoire (verrou levé, espace libéré), le drapeau s'efface tout
+  /// seul via `_persist()`.
+  void retryPersist() => _persist();
+
+  /// Attend la fin des écritures en attente (utilisé par les tests, et par
+  /// le hook de fermeture pour ne pas perdre la dernière mutation).
   Future<void> flush() => _writeChain;
 
   /// Notifie l'UI ET persiste : à utiliser pour toute mutation de données.
