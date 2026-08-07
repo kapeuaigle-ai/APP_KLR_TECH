@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
 import 'klr_logo.dart';
 
 // ─────────────────────────────────────────────────────────
@@ -106,18 +107,19 @@ class _MobileAppBar extends StatelessWidget implements PreferredSizeWidget {
   }
 }
 
-/// Cloche de notifications : mêmes alertes que l'en-tête de bureau, mais
+/// Cloche de notifications : mêmes alertes que l'en-tête de bureau (même
+/// dérivation, `Avancement.alertesPaiement` — § `app_header.dart`), mais
 /// dans une feuille basse plutôt qu'un menu contextuel (plus lisible et
 /// plus facile à viser au pouce).
 class _NotificationsAction extends StatelessWidget {
-  static const _alerts = [
-    ('Groupe SAMA', 'Retard critique — facture #4389 (J+15)', Icons.error_outline_rounded, AppColors.red),
-    ('AFRI TECH', 'Échéance dépassée — facture #4412 (J+3)', Icons.warning_amber_rounded, AppColors.orange),
-    ('Dîme Juin 2026', 'Versement en attente (1 800 000 FCFA)', Icons.volunteer_activism_outlined, AppColors.blue),
-  ];
+  const _NotificationsAction();
 
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final now = DateTime.now();
+    final alertes = Avancement.alertesPaiement(state.engagements, now: now).take(5).toList();
+
     return Stack(clipBehavior: Clip.none, children: [
       IconButton(
         tooltip: 'Notifications',
@@ -139,35 +141,48 @@ class _NotificationsAction extends StatelessWidget {
                 ]),
               ),
               const Divider(height: 1, color: AppColors.border),
-              ..._alerts.map((a) => ListTile(
-                leading: Icon(a.$3, size: 20, color: a.$4),
-                title: Text(a.$1, style: GoogleFonts.dmSans(
-                  fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                subtitle: Text(a.$2, style: GoogleFonts.dmSans(
-                  fontSize: 12.5, color: AppColors.text3)),
-                onTap: () {
-                  Navigator.of(ctx).pop();
-                  context.read<AppState>().navigate(NavScreen.suivi);
-                },
-              )),
+              if (alertes.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 24),
+                  child: Center(child: Text('Aucune alerte de paiement',
+                      style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text3))),
+                )
+              else
+                ...alertes.map((al) {
+                  final jours = al.joursRetard(now);
+                  final couleur = jours >= 7 ? AppColors.red : AppColors.orange;
+                  return ListTile(
+                    leading: Icon(jours >= 7 ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                        size: 20, color: couleur),
+                    title: Text(al.tiers, style: GoogleFonts.dmSans(
+                      fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                    subtitle: Text('Échéance dépassée — ${al.documentNumero ?? 'engagement'} (J+$jours)',
+                        style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
+                    onTap: () {
+                      Navigator.of(ctx).pop();
+                      context.read<AppState>().navigate(NavScreen.suivi);
+                    },
+                  );
+                }),
               const SizedBox(height: 8),
             ]),
           ),
         ),
       ),
-      Positioned(
-        right: 10, top: 10,
-        child: IgnorePointer(
-          child: Container(
-            width: 7, height: 7,
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.surface, width: 1.5),
+      if (alertes.isNotEmpty)
+        Positioned(
+          right: 10, top: 10,
+          child: IgnorePointer(
+            child: Container(
+              width: 7, height: 7,
+              decoration: BoxDecoration(
+                color: AppColors.primary,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.surface, width: 1.5),
+              ),
             ),
           ),
         ),
-      ),
     ]);
   }
 }

@@ -30,6 +30,15 @@ class EcheanceAttendue {
     required this.echeance, required this.montant, required this.tiers,
     required this.documentNumero, required this.enRetard,
   });
+
+  /// Jours écoulés depuis l'échéance, à la date `now`. Même troncature au
+  /// jour que `Engagement.enRetard`, pour que le « J+N » affiché corresponde
+  /// exactement à la règle qui a classé l'échéance en retard.
+  int joursRetard(DateTime now) {
+    final jour = DateTime(now.year, now.month, now.day);
+    final ech = DateTime(echeance.year, echeance.month, echeance.day);
+    return jour.difference(ech).inDays;
+  }
 }
 
 /// Résultat complet du calcul d'un projet. Aucun de ces chiffres n'est stocké.
@@ -193,6 +202,22 @@ class Avancement {
         .toList();
     res.sort((a, b) => a.echeance.compareTo(b.echeance));
     return res;
+  }
+
+  /// Alertes de paiement : les échéances entrantes déjà dépassées, triées de
+  /// la plus ancienne à la plus récente — donc la plus critique en tête,
+  /// puisque `tresoreriePrevisionnelle` trie déjà par échéance croissante.
+  ///
+  /// Dérivée UNE SEULE fois ici et consommée par le dashboard, l'en-tête
+  /// bureau et la feuille de notifications mobile : les trois affichaient
+  /// auparavant la même paire de clients fictifs, recopiée telle quelle dans
+  /// chaque fichier (Lot E, défaut E2). Une seule définition de « alerte »
+  /// évite qu'elles redivergent.
+  static List<EcheanceAttendue> alertesPaiement(
+      List<Engagement> engagements, {required DateTime now}) {
+    return tresoreriePrevisionnelle(engagements, now: now)
+        .where((e) => e.enRetard)
+        .toList();
   }
 
   /// Les règles sont évaluées dans l'ordre : la première qui correspond

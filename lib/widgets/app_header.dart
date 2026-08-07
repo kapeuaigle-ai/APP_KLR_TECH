@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/avancement.dart';
 import 'responsive.dart';
 
 class AppHeader extends StatelessWidget {
@@ -69,17 +70,20 @@ class _SearchBar extends StatelessWidget {
 }
 
 // ── Notifications : alertes de paiement ───────────────────
+/// Dérivées de `Avancement.alertesPaiement` — jamais de clients ni de
+/// montants inventés. Même dérivation que le dashboard et la feuille de
+/// notifications mobile (§ `mobile_shell.dart`) : les trois portaient
+/// auparavant la même paire de clients fictifs, recopiée telle quelle dans
+/// chaque fichier (Lot E, défaut E2).
 class _NotificationsBtn extends StatelessWidget {
   const _NotificationsBtn();
 
-  static const _alerts = [
-    ('Groupe SAMA', 'Retard critique — facture #4389 (J+15)', Icons.error_outline_rounded, AppColors.red),
-    ('AFRI TECH', 'Échéance dépassée — facture #4412 (J+3)', Icons.warning_amber_rounded, AppColors.orange),
-    ('Dîme Juin 2026', 'Versement en attente (1 800 000 FCFA)', Icons.volunteer_activism_outlined, AppColors.blue),
-  ];
-
   @override
   Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final now = DateTime.now();
+    final alertes = Avancement.alertesPaiement(state.engagements, now: now).take(5).toList();
+
     return Stack(
       clipBehavior: Clip.none,
       children: [
@@ -98,32 +102,47 @@ class _NotificationsBtn extends StatelessWidget {
               child: Text('Notifications', style: GoogleFonts.dmSans(
                 fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1)),
             ),
-            ..._alerts.asMap().entries.map((e) => PopupMenuItem<int>(
-              value: e.key,
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Icon(e.value.$3, size: 16, color: e.value.$4),
-                const SizedBox(width: 10),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text(e.value.$1, style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
-                  Text(e.value.$2, style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
-                ])),
-              ]),
-            )),
+            if (alertes.isEmpty)
+              PopupMenuItem<int>(
+                enabled: false,
+                child: Text('Aucune alerte de paiement', style: GoogleFonts.dmSans(
+                    fontSize: 12.5, color: AppColors.text3)),
+              )
+            else
+              ...alertes.asMap().entries.map((e) {
+                final al = e.value;
+                final jours = al.joursRetard(now);
+                final couleur = jours >= 7 ? AppColors.red : AppColors.orange;
+                return PopupMenuItem<int>(
+                  value: e.key,
+                  child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Icon(jours >= 7 ? Icons.error_outline_rounded : Icons.warning_amber_rounded,
+                        size: 16, color: couleur),
+                    const SizedBox(width: 10),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(al.tiers, style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                      Text('Échéance dépassée — ${al.documentNumero ?? 'engagement'} (J+$jours)',
+                          style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3)),
+                    ])),
+                  ]),
+                );
+              }),
           ],
         ),
-        Positioned(
-          right: 8, top: 8,
-          child: IgnorePointer(
-            child: Container(
-              width: 7, height: 7,
-              decoration: BoxDecoration(
-                color: AppColors.primary,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 1.5),
+        if (alertes.isNotEmpty)
+          Positioned(
+            right: 8, top: 8,
+            child: IgnorePointer(
+              child: Container(
+                width: 7, height: 7,
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 1.5),
+                ),
               ),
             ),
           ),
-        ),
       ],
     );
   }
