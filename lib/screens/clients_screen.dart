@@ -148,7 +148,7 @@ void showClientDialog(BuildContext context, {Client? existing}) {
             if (name.isEmpty) return;
             final state = context.read<AppState>();
             final client = Client(
-              id: existing?.id ?? DateTime.now().millisecondsSinceEpoch,
+              id: existing?.id ?? state.nextId(),
               initials: initialsFor(name),
               color: existing?.color ?? colors[state.clients.length % colors.length],
               name: name,

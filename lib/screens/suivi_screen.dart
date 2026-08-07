@@ -111,7 +111,7 @@ class _EngagementsTabState extends State<_EngagementsTab> {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
     if (_tiersCtrl.text.trim().isEmpty || montant <= 0) return false;
     final ref = _numCtrl.text.trim();
-    final id = DateTime.now().microsecondsSinceEpoch;
+    final id = state.nextId();
     state.addEngagement(Engagement(
       id: id,
       sens: _sens,
@@ -1127,7 +1127,7 @@ class _ComptaTabState extends State<_ComptaTab> {
     final montant = double.tryParse(_montantCtrl.text.replaceAll(' ', '')) ?? 0;
     final libelle = _labelCtrl.text.trim();
     if (libelle.isEmpty || montant <= 0) return false;
-    final id = DateTime.now().microsecondsSinceEpoch;
+    final id = state.nextId();
     state.addEngagement(Engagement(
       id: id, sens: 'sortant', tiers: libelle, montant: montant,
       echeance: _date, categorie: _categorie, documentNumero: _factureNumero,
@@ -1289,7 +1289,7 @@ class _ComptaTabState extends State<_ComptaTab> {
       if (d == null || !mounted) return;
       var cible = eng;
       if (cible == null) {
-        final id = DateTime.now().microsecondsSinceEpoch;
+        final id = state.nextId();
         state.addEngagement(Engagement(
           id: id, sens: 'entrant', tiers: f.client, clientId: f.clientId,
           montant: Comptabilite.montantFacture(f),
@@ -1866,8 +1866,9 @@ class _TachesTabState extends State<_TachesTab> {
           label: 'Ajouter la tâche',
           onTap: () {
             if (_ctrl.text.trim().isNotEmpty) {
-              context.read<AppState>().addTask(Task(
-                id: DateTime.now().millisecondsSinceEpoch,
+              final state = context.read<AppState>();
+              state.addTask(Task(
+                id: state.nextId(),
                 texte: _ctrl.text.trim(),
                 titre: _titreCtrl.text.trim(),
                 priorite: _priorite,
@@ -1991,7 +1992,7 @@ class _NotesTabState extends State<_NotesTab> {
           width: 240,
           height: 180,
           child: _AddNoteCard(onTap: () => setState(() => _editing = Note(
-            id: DateTime.now().millisecondsSinceEpoch,
+            id: context.read<AppState>().nextId(),
             titre: '', contenu: '', color: AppColors.blue, date: "Aujourd'hui",
           ))),
         ),

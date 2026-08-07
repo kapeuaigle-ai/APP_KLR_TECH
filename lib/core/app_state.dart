@@ -29,11 +29,16 @@ class AppState extends ChangeNotifier {
   String _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
   /// Les activités générées par l'app se numérotent au-dessus des ids métier.
   int _nextActivityId = 1000;
-  /// Compteur pour les ids de règlement : une horloge de départ, ensuite
-  /// simplement incrémentée. Un nouvel horodatage à chaque appel collisionne
-  /// dès que deux règlements sont ajoutés coup sur coup, la résolution de
-  /// l'horloge n'étant pas garantie à la microseconde près.
-  int _nextReglementId = DateTime.now().microsecondsSinceEpoch;
+  /// Compteur UNIQUE pour tous les ids métier de l'application (engagements,
+  /// règlements, clients, documents, projets, tâches, notes) — voir
+  /// `nextId()`. Un simple entier croissant, jamais dérivé de l'horloge :
+  /// `DateTime.now().millisecondsSinceEpoch` collisionne dès que plusieurs
+  /// ids sont mintés dans la même milliseconde, ce qui arrive en pratique
+  /// (résolution de l'horloge non garantie, boucles de saisie rapide) —
+  /// défaut 2 de la revue Lot A. Valeur de secours ; `_seed()` et
+  /// `loadFromJson` l'amènent tous deux au-dessus de tout id déjà en usage
+  /// avant que quiconque puisse en réclamer un.
+  int _nextId = 1;
 
   // ── Persistance ────────────────────────────────────────
   final Store _store;
@@ -42,6 +47,17 @@ class AppState extends ChangeNotifier {
   bool _restoring = false;
   /// File d'écriture : chaînée pour préserver l'ordre et éviter les courses.
   Future<void> _writeChain = Future.value();
+
+  /// Vrai si le dernier `init()` a refusé la sauvegarde sur disque parce
+  /// qu'elle porte une version plus récente que celle que sait lire cette
+  /// version de l'application (voir `SauvegardeVersionRefuseeException`).
+  /// Le fichier sur disque n'a PAS été touché ; l'application continue sur
+  /// son état de démarrage (données d'exemple) plutôt que de deviner. L'UI
+  /// lit ce drapeau pour avertir le manager au lieu de le laisser croire,
+  /// silencieusement, qu'il regarde ses vraies données.
+  bool sauvegardeRefusee = false;
+  /// La version trouvée dans le fichier refusé, pour le message affiché.
+  dynamic versionSauvegardeRefusee;
 
   AppState({Store? store}) : _store = store ?? const NoopStore() {
     _seed();
@@ -80,6 +96,7 @@ class AppState extends ChangeNotifier {
     _dimePaidDates.clear();
     _moisCourant = Comptabilite.monthKeyFromDate(DateTime.now());
     _nextActivityId = 1000;
+    _seedNextId();
   }
 
   /// Charge la sauvegarde si elle existe, puis rattrape les clôtures des mois
@@ -89,11 +106,70 @@ class AppState extends ChangeNotifier {
     if (raw != null) {
       try {
         loadFromJson(jsonDecode(raw) as Map<String, dynamic>);
+      } on SauvegardeVersionRefuseeException catch (e) {
+        // Fichier refusé (défaut 1) : ni migré, ni écrit — voir
+        // `sauvegardeRefusee`. On garde le seed déjà en place, et on
+        // surface la situation pour que l'UI avertisse le manager au lieu
+        // de continuer en silence sur des données de démonstration.
+        sauvegardeRefusee = true;
+        versionSauvegardeRefusee = e.versionTrouvee;
       } catch (_) {
         // Sauvegarde illisible : on garde le seed déjà en place.
       }
     }
     verifierCloture();
+  }
+
+  /// Prochain id métier, jamais réutilisé (voir `_nextId`).
+  int nextId() => _nextId++;
+
+  /// Amène `_nextId` au-dessus de tout id déjà présent dans l'état courant.
+  ///
+  /// [compteurPersiste] est le compteur déjà persisté (0 si aucun) : un
+  /// fichier hérité peut avoir un compteur en avance sur le plus grand id
+  /// visible (des enregistrements ont pu être supprimés depuis) — dans ce
+  /// cas, c'est LUI qui fait foi, pas le maximum recalculé. Mais l'inverse
+  /// compte plus : un fichier corrigé à la main ou fusionné dont les ids
+  /// dépassent le compteur stocké ne doit JAMAIS faire redistribuer un id
+  /// déjà pris — c'est ce recalcul par balayage qui le garantit,
+  /// indépendamment de ce que dit le fichier.
+  void _seedNextId([int compteurPersiste = 0]) {
+    var maxId = compteurPersiste;
+    void considerer(int id) {
+      if (id > maxId) maxId = id;
+    }
+    for (final c in clients) {
+      considerer(c.id);
+    }
+    for (final liste in documents.values) {
+      for (final d in liste) {
+        considerer(d.id);
+      }
+    }
+    for (final e in engagements) {
+      considerer(e.id);
+      for (final r in e.reglements) {
+        considerer(r.id);
+      }
+    }
+    for (final p in projets) {
+      considerer(p.id);
+    }
+    for (final t in tasks) {
+      considerer(t.id);
+    }
+    for (final n in notes) {
+      considerer(n.id);
+    }
+    // Les activités ont leur propre compteur (`_nextActivityId`, déjà
+    // persisté correctement) — mais leurs ids partagent le même espace de
+    // noms que tout le reste si jamais ils sont comparés ou affichés
+    // ensemble ; on les inclut ici par prudence, même si `nextId()` ne leur
+    // en distribue jamais.
+    for (final a in activities) {
+      considerer(a.id);
+    }
+    _nextId = maxId + 1;
   }
 
   /// Vide toutes les données métier — clients, documents, engagements,
@@ -145,24 +221,49 @@ class AppState extends ChangeNotifier {
     'dimePaidDates': _dimePaidDates,
     'moisCourant': _moisCourant,
     'nextActivityId': _nextActivityId,
-    'version': 4,
+    'nextId': _nextId,
+    'version': kVersionSauvegarde,
   };
 
   void loadFromJson(Map<String, dynamic> brut) {
-    // Capturé avant conversion : `migrerV1versV2`/`migrerV2versV3`/
-    // `migrerV3versV4` rendent `brut` inchangé s'il est déjà à leur version
-    // cible, donc c'est le seul moment où l'on peut encore distinguer « rien
-    // à migrer » de « migration effectuée ». Une sauvegarde v1 n'a pas de clé
-    // `version` du tout.
+    // Routage par SEUIL, pas par égalité stricte (défaut 1, revue Lot A) :
+    // une sauvegarde à la version v traverse chaque étape à partir de v, donc
+    // < 2 traverse v1→v2→v3→v4, 2 traverse v2→v3→v4, etc. L'égalité stricte
+    // prenait toute version inconnue (une v5 future, une chaîne "4", un champ
+    // corrompu) pour un v1 brut, la détruisait, puis écrivait la destruction
+    // sur le disque via `_persist()` plus bas.
+    //
+    // Absence de clé `version` = v1 : c'est réellement l'allure d'un vrai
+    // fichier v1, jamais autre chose — le seul « inconnu » qu'il est sûr de
+    // deviner. Toute AUTRE valeur qui n'est pas un entier reconnu (chaîne,
+    // map, ou entier supérieur à la version courante) est REFUSÉE : on lève,
+    // on ne migre rien, on n'écrit rien. Voir `SauvegardeVersionRefuseeException`.
     final versionOrigine = brut['version'];
-    final migration = versionOrigine != 4;
+    final int origine;
+    if (versionOrigine == null) {
+      origine = 1;
+    } else if (versionOrigine is int) {
+      if (versionOrigine > kVersionSauvegarde) {
+        throw SauvegardeVersionRefuseeException(versionOrigine);
+      }
+      // Un entier aberrant (0, négatif) reste « en dessous de tout seuil
+      // connu » — même traitement que l'absence de clé, chaîne complète.
+      origine = versionOrigine < 1 ? 1 : versionOrigine;
+    } else {
+      // Un vrai fichier v1 n'a jamais cette clé du tout ; une valeur non
+      // entière ne peut venir que d'une corruption. On ne la prend pas pour
+      // du v1 sous prétexte qu'elle n'est « pas reconnue » — fail closed.
+      throw SauvegardeVersionRefuseeException(versionOrigine);
+    }
+
+    final migration = origine != kVersionSauvegarde;
     // Le filet de sécurité (spec § 8) ne couvre que la conversion v1 → v2,
     // seule à restructurer des données au point de ne plus pouvoir les
     // reconstituer depuis la sauvegarde migrée (quatre mécanismes d'argent
     // fondus en Engagement + Reglement). v2 → v3 et v3 → v4 ne font que
     // recalculer/déplacer des champs à partir de données déjà présentes :
     // rien n'y est perdu, donc rien à sauvegarder à part.
-    if (versionOrigine != 2 && versionOrigine != 3 && migration) {
+    if (origine < 2) {
       // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
       // avant toute réécriture, pour que la conversion reste réversible en
       // cas d'anomalie découverte tardivement. Fire-and-forget, comme
@@ -172,18 +273,14 @@ class AppState extends ChangeNotifier {
           .then((_) => _store.writeBackup(jsonEncode(brut)))
           .catchError((_) {});
     }
-    // `migrerV1versV2` ne reconnaît que `version == 2` comme « déjà migrée » —
-    // sur une sauvegarde v3 ou v4, elle la prendrait pour du v1 brut et la
-    // détruirait (elle réinitialise `projets`, entre autres). On ne l'appelle
-    // donc que si la sauvegarde n'est ni v2, ni v3, ni v4. Même précaution
-    // pour `migrerV2versV3` face à une sauvegarde déjà en v4 : son propre
-    // garde-fou interne (`version == 3`) ne la protège pas contre une v4, qui
-    // la ferait redescendre à `version: 3` en silence.
-    final dejaV2OuPlus = versionOrigine == 2 || versionOrigine == 3 || versionOrigine == 4;
-    final apresV2 = dejaV2OuPlus ? brut : migrerV1versV2(brut);
-    final dejaV3OuPlus = versionOrigine == 3 || versionOrigine == 4;
-    final apresV3 = dejaV3OuPlus ? apresV2 : migrerV2versV3(apresV2);
-    final j = versionOrigine == 4 ? apresV3 : migrerV3versV4(apresV3);
+    // Chaînage à seuils : chaque étape ne s'exécute que si `origine` est
+    // strictement en dessous de sa version cible. `j` garde la même
+    // référence que `brut` si aucune étape ne s'exécute (v4 → round-trip
+    // sans copie, condition du test « zéro écriture »).
+    var j = brut;
+    if (origine < 2) j = migrerV1versV2(j);
+    if (origine < 3) j = migrerV2versV3(j);
+    if (origine < 4) j = migrerV3versV4(j);
     // La migration marque les rapprochements incertains (§ 8.1 de la spec) :
     // on les retire du JSON — ils ne doivent pas être persistés — et on les
     // journalise pour que le manager puisse les vérifier.
@@ -215,6 +312,11 @@ class AppState extends ChangeNotifier {
       ..addAll((j['dimePaidDates'] as Map).cast<String, String>());
     _moisCourant = j['moisCourant'] ?? _moisCourant;
     _nextActivityId = j['nextActivityId'] ?? _nextActivityId;
+    // Recalculé par balayage, jamais simplement recopié : voir `_seedNextId`
+    // — le compteur restauré ne suffit pas seul, une sauvegarde corrigée à
+    // la main ou fusionnée peut porter des ids au-dessus de lui.
+    final compteurPersiste = j['nextId'];
+    _seedNextId(compteurPersiste is int ? compteurPersiste : 0);
     _restoring = false;
 
     for (final a in ambigus) {
@@ -352,8 +454,6 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  int _prochainId() => _nextReglementId++;
-
   Engagement? _engagement(int id) {
     final m = engagements.where((e) => e.id == id);
     return m.isEmpty ? null : m.first;
@@ -371,7 +471,7 @@ class AppState extends ChangeNotifier {
 
     final effectif = montant > e.reste ? e.reste : montant;
     e.reglements.add(Reglement(
-      id: _prochainId(), date: date, montant: effectif, moyen: moyen));
+      id: nextId(), date: date, montant: effectif, moyen: moyen));
 
     _logActivity(
       'paiement',
@@ -749,7 +849,13 @@ class AppState extends ChangeNotifier {
     final alreadyGenerated = documents['facture']!
         .any((d) => d.numero == factureNum || d.numero == p.numero);
     if (!alreadyGenerated) {
-      final now = DateTime.now().millisecondsSinceEpoch;
+      // Trois ids distincts du compteur partagé (défaut 2, revue Lot A) : les
+      // minter depuis l'horloge (`DateTime.now().millisecondsSinceEpoch`)
+      // collisionnait dès que plusieurs proformas étaient validées dans la
+      // même milliseconde — reproduit en validant 500 proformas en boucle,
+      // seulement 498 ids distincts obtenus. Deux engagements partageant un
+      // id, `deleteEngagement`/`ajouterReglement` ne pouvaient plus les
+      // distinguer et agissaient sur les deux à la fois.
       // Montant de la facture ET de l'engagement : volontairement LA MÊME
       // expression. Les faire diverger (l'un recopiant `p.montant`, l'autre
       // resommant les lignes) est exactement comment le bug TTC/HT est né —
@@ -758,7 +864,7 @@ class AppState extends ChangeNotifier {
       // les re-séparer.
       final montantHt = p.lines.fold(0.0, (s, l) => s + l.total);
       documents['facture']!.add(DocumentItem(
-        id: now, numero: factureNum, date: p.date,
+        id: nextId(), numero: factureNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: montantHt, statut: 'cours',
@@ -769,7 +875,7 @@ class AppState extends ChangeNotifier {
       ));
       // Le BL ne porte aucun montant.
       documents['bl']!.add(DocumentItem(
-        id: now + 1, numero: blNum, date: p.date,
+        id: nextId(), numero: blNum, date: p.date,
         dateAffichee: p.dateAffichee,
         clientId: p.clientId, client: p.client, clientAddr: p.clientAddr,
         objet: p.objet, montant: 0, statut: 'cours',
@@ -779,7 +885,7 @@ class AppState extends ChangeNotifier {
       // La facture EST une créance sur le client : l'engagement naît du même
       // geste, pour qu'aucune saisie manuelle ne puisse le dédoubler.
       engagements.insert(0, Engagement(
-        id: now + 2,
+        id: nextId(),
         sens: 'entrant',
         projetId: p.projetId,
         documentNumero: factureNum,
