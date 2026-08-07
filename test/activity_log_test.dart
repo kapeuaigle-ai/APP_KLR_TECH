@@ -56,4 +56,68 @@ void main() {
     s.deleteClient(999);
     expect(s.activities.first.titre, contains('supprimé'));
   });
+
+  // ── Défaut 3 (Lot C) ────────────────────────────────────
+  // `deleteEngagement` et `supprimerReglement` mutaient l'état sans jamais
+  // appeler `_logActivity`, contrairement à toute autre mutation touchant de
+  // l'argent réel : un engagement soldé pouvait disparaître sans laisser de
+  // trace dans le fil d'Activités, l'unique piste d'audit de l'app.
+  test('supprimer un engagement journalise une activité nommant tiers, montant et réglé', () {
+    final s = AppState()..viderDonnees();
+    s.addEngagement(Engagement(id: 1, sens: 'sortant', tiers: 'Fournisseur Ancien',
+        montant: 100000, echeance: DateTime(2026, 3, 1)));
+    s.ajouterReglement(1, 60000, DateTime(2026, 3, 3));
+    final avant = s.activities.length;
+
+    s.deleteEngagement(1);
+
+    expect(s.activities.length, avant + 1);
+    final a = s.activities.first;
+    expect(a.titre, contains('Fournisseur Ancien'));
+    expect(a.desc, contains('100'), reason: 'le montant attendu doit être reconstituable');
+    expect(a.desc, contains('60'), reason: 'ce qui avait déjà été réglé doit être reconstituable');
+  });
+
+  test('supprimer un engagement sans règlement journalise quand même une activité', () {
+    final s = AppState()..viderDonnees();
+    s.addEngagement(Engagement(id: 1, sens: 'entrant', tiers: 'Client Vide',
+        montant: 5000, echeance: DateTime(2026, 3, 1)));
+    final avant = s.activities.length;
+
+    s.deleteEngagement(1);
+
+    expect(s.activities.length, avant + 1);
+    expect(s.activities.first.titre, contains('Client Vide'));
+  });
+
+  test('supprimer un engagement inexistant ne journalise rien', () {
+    final s = AppState()..viderDonnees();
+    final avant = s.activities.length;
+    s.deleteEngagement(999);
+    expect(s.activities.length, avant);
+  });
+
+  test('supprimer un règlement journalise une activité nommant sa date et son montant', () {
+    final s = AppState()..viderDonnees();
+    s.addEngagement(Engagement(id: 1, sens: 'entrant', tiers: 'ACME',
+        montant: 1000, echeance: DateTime(2026, 6, 30)));
+    s.ajouterReglement(1, 400, DateTime(2026, 3, 3));
+    s.ajouterReglement(1, 200, DateTime(2026, 4, 3));
+    final cible = s.engagements.first.reglements.first.id;
+    final avant = s.activities.length;
+
+    s.supprimerReglement(1, cible);
+
+    expect(s.activities.length, avant + 1);
+    expect(s.activities.first.desc, contains('400'));
+  });
+
+  test('supprimer un règlement inexistant ne journalise rien', () {
+    final s = AppState()..viderDonnees();
+    s.addEngagement(Engagement(id: 1, sens: 'entrant', tiers: 'ACME',
+        montant: 1000, echeance: DateTime(2026, 6, 30)));
+    final avant = s.activities.length;
+    s.supprimerReglement(1, 999);
+    expect(s.activities.length, avant);
+  });
 }

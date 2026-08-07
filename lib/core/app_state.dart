@@ -468,8 +468,25 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Supprime un engagement — tiers, montant ET tout l'historique de
+  /// règlements déjà passés partent avec lui. Contrairement à `annulerEngagement`
+  /// (réversible, garde tout), ce geste est définitif : on journalise donc ce
+  /// qu'il faut pour reconstituer ce qui a disparu (défaut 3, revue Lot C) —
+  /// sens, tiers, montant attendu et ce qui avait déjà été réglé. La
+  /// confirmation qui doit précéder cet appel (voir suivi_screen.dart) est la
+  /// responsabilité de l'appelant, pas de `AppState`.
   void deleteEngagement(int id) {
-    engagements.removeWhere((e) => e.id == id);
+    final e = _engagement(id);
+    if (e == null) return;
+    engagements.removeWhere((x) => x.id == id);
+    _logActivity(
+      'paiement',
+      e.estEntrant ? 'Créance supprimée — ${e.tiers}' : 'Dette supprimée — ${e.tiers}',
+      e.regle > 0
+          ? 'Montant ${Fmt.money(e.montant)} · dont ${Fmt.money(e.regle)} déjà réglé'
+          : 'Montant ${Fmt.money(e.montant)}, aucun règlement enregistré',
+      AppColors.red,
+    );
     _emit();
   }
 
@@ -515,11 +532,24 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
-  /// Retire un règlement : la somme ressort de la comptabilité.
+  /// Retire un règlement : la somme ressort de la comptabilité. Journalisé
+  /// comme toute autre mutation d'argent réel (défaut 3, revue Lot C) — sans
+  /// quoi un mouvement encaissé pouvait disparaître sans laisser de trace
+  /// dans le fil d'Activités, y compris quand la somme reste sur l'engagement
+  /// lui-même (voir `deleteEngagement` pour le cas où l'engagement entier part).
   void supprimerReglement(int engagementId, int reglementId) {
     final e = _engagement(engagementId);
     if (e == null) return;
-    e.reglements.removeWhere((r) => r.id == reglementId);
+    final match = e.reglements.where((r) => r.id == reglementId);
+    if (match.isEmpty) return;
+    final r = match.first;
+    e.reglements.removeWhere((x) => x.id == reglementId);
+    _logActivity(
+      'paiement',
+      'Règlement supprimé — ${e.tiers}',
+      '${Fmt.money(r.montant)} du ${Fmt.jour(r.date)} retiré de la comptabilité',
+      AppColors.red,
+    );
     _emit();
   }
 
