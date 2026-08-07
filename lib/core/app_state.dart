@@ -436,6 +436,32 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Chiffre d'affaires d'un client : la somme des règlements
+  /// (`Engagement.regle`) de ses engagements entrants, JAMAIS un total
+  /// stocké — remplace l'ancien `Client.totalFacture`, écrit une seule fois
+  /// par le seed de démonstration et jamais recalculé (défaut 3, revue Lot B).
+  ///
+  /// Source choisie : `Engagement.clientId`, pas `DocumentItem.clientId`.
+  /// C'est l'engagement qui porte les règlements (`regle`), la seule vraie
+  /// mesure d'argent reçu ; un document n'en porte aucun. `AppState.
+  /// validateProforma` propage déjà `p.clientId` à l'engagement qu'il génère
+  /// à la validation, donc toute facture réelle a un chemin jusqu'ici.
+  ///
+  /// Comme `Comptabilite._flux` — et par la même règle que la marge d'un
+  /// projet (`Avancement.calculer`, défaut 2 de cette même revue) — un
+  /// engagement annulé N'EST PAS écarté : ses règlements ont réellement eu
+  /// lieu, une somme encaissée en base caisse le reste. Sans cette règle, ce
+  /// chiffre contredirait ce que Comptabilité rapporte pour les mêmes
+  /// engagements.
+  ///
+  /// Un engagement sans client rattaché (créance saisie à la main, ou
+  /// `clientId: 0` hérité d'une proforma créée avant le correctif du défaut
+  /// « clientId 0 ») ne matche l'id d'aucun client réel (`nextId()` démarre
+  /// à 1) : il ne s'attribue simplement à personne, sans planter.
+  double chiffreAffairesClient(int clientId) => engagements
+      .where((e) => e.estEntrant && e.clientId == clientId)
+      .fold(0.0, (s, e) => s + e.regle);
+
   // ── Engagements : dettes & créances ────────────────────
   void addEngagement(Engagement e) {
     engagements.insert(0, e);

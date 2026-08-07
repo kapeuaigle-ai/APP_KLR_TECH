@@ -17,7 +17,7 @@ void main() {
     final state = AppState()..viderDonnees();
     state.addClient(const Client(
         id: 5, initials: 'AC', color: Colors.blue, name: 'ACME',
-        contact: 'Jean', email: 'j@acme.cm', phone: '600', totalFacture: 0));
+        contact: 'Jean', email: 'j@acme.cm', phone: '600'));
     state.addProjet(Projet(
         id: 1, nom: 'Fourniture matériel', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
         clientId: 5, client: 'ACME',
@@ -59,7 +59,7 @@ void main() {
       final state = AppState()..viderDonnees();
       state.addClient(const Client(
           id: 5, initials: 'AC', color: Colors.blue, name: 'ACME',
-          contact: 'Jean', email: 'j@acme.cm', phone: '600', totalFacture: 0));
+          contact: 'Jean', email: 'j@acme.cm', phone: '600'));
       state.addProjet(Projet(
           id: 1, nom: 'Projet A', type: 'Fourniture de matériel', mode: ModeAvancement.quantites,
           clientId: 5, client: 'ACME',

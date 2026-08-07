@@ -5,7 +5,7 @@ import 'package:klr_tech_app/core/models.dart';
 
 Client _client({int id = 5}) => Client(
       id: id, initials: 'AC', color: Colors.blue, name: 'ACME',
-      contact: 'Jean', email: 'j@acme.cm', phone: '600', totalFacture: 0,
+      contact: 'Jean', email: 'j@acme.cm', phone: '600',
     );
 
 Projet _projet(int id, int? clientId) => Projet(
