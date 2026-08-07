@@ -73,16 +73,23 @@ class _Logo extends StatelessWidget {
         children: [
           const KlrLogo(height: 32, markOnly: true),
           const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('KLR TECH', style: GoogleFonts.dmSans(
-                color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.4,
-              )),
-              Text('Gestion', style: GoogleFonts.dmSans(
-                color: AppColors.text2, fontSize: 10, letterSpacing: 1.2,
-              )),
-            ],
+          // `Expanded` + ellipse sur chaque ligne : sans lui, une échelle de
+          // texte système agrandie (accessibilité, 200 %) pousse la colonne
+          // au-delà des 170 px disponibles (210 de largeur de sidebar moins
+          // le padding horizontal de 20 des deux côtés) au lieu de céder la
+          // place (lot G, sweep H).
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('KLR TECH', style: GoogleFonts.dmSans(
+                  color: Colors.white, fontSize: 14, fontWeight: FontWeight.w700, letterSpacing: 0.4,
+                ), overflow: TextOverflow.ellipsis),
+                Text('Gestion', style: GoogleFonts.dmSans(
+                  color: AppColors.text2, fontSize: 10, letterSpacing: 1.2,
+                ), overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         ],
       ),

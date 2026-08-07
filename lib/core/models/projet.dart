@@ -84,7 +84,15 @@ class Projet {
   /// Faux si `finPrevue` est antérieure à `debut` : une durée négative rend
   /// tout ce qui se construit sur la période (Gantt, retards) incohérent.
   /// Un projet d'un seul jour (`finPrevue == debut`) reste valide.
-  bool get periodeValide => !finPrevue.isBefore(debut);
+  bool get periodeValide => periodeEstValide(debut, finPrevue);
+
+  /// Même règle que [periodeValide], utilisable AVANT qu'un `Projet` existe —
+  /// le formulaire de création/édition (`projets_screen.dart`) valide deux
+  /// dates encore en variables locales, pas encore assemblées en `Projet`.
+  /// Un seul endroit encode la règle (lot G, hygiène) : la comparaison ne
+  /// vivait auparavant qu'ici, dupliquée en ligne dans le formulaire.
+  static bool periodeEstValide(DateTime debut, DateTime finPrevue) =>
+      !finPrevue.isBefore(debut);
 
   Map<String, dynamic> toJson() => {
     'id': id, 'nom': nom, 'type': type, 'mode': mode.name,

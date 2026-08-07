@@ -19,11 +19,9 @@ class MemoryStore implements Store {
   @override
   Future<String?> read() async => data;
   @override
-  Future<void> write(String d) async { data = d; writes++; }
+  void write(String d) { data = d; writes++; }
   @override
   Future<void> writeBackup(String d) async { backup = d; backupWrites++; }
-  @override
-  Future<void> clear() async { data = null; }
 }
 
 Map<String, dynamic> _v1Minimal() => {

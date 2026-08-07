@@ -15,7 +15,7 @@ class MemoryStore implements Store {
   @override
   Future<String?> read() async => data;
   @override
-  Future<void> write(String d) async {
+  void write(String d) {
     if (failNextWrites > 0) {
       failNextWrites--;
       throw Exception('échec d\'écriture simulé');
@@ -24,8 +24,6 @@ class MemoryStore implements Store {
   }
   @override
   Future<void> writeBackup(String d) async {}
-  @override
-  Future<void> clear() async { data = null; }
 }
 
 void main() {
@@ -247,6 +245,59 @@ void main() {
       a.retryPersist(); // plus d'échec programmé : réussit
       await a.flush();
       expect(a.derniereEcritureEnEchec, isFalse);
+    });
+  });
+
+  // ── Écriture synchrone (lot G, défaut 1) ────────────────────────────
+  //
+  // `AppState._persist` écrivait auparavant en fire-and-forget via une file
+  // chaînée (`_writeChain`) : rien ne garantissait qu'une mutation avait
+  // atteint le disque au moment où l'appel qui l'a déclenchée rendait la
+  // main — un risque réel de perte si la fenêtre se fermait juste après (le
+  // hook `AppExitFlusher` censé combler ça ne se déclenchait jamais sur
+  // Windows). `Store.write` est maintenant synchrone : ces tests vérifient
+  // qu'il n'y a plus jamais rien « en attente » — sans le moindre `await`.
+  group('écriture synchrone : rien en attente après une mutation (lot G, défaut 1)', () {
+    Client client(int id) => Client(id: id, initials: 'ZZ',
+        color: const Color(0xFF123456), name: 'Client $id', contact: '',
+        email: '', phone: '');
+
+    test('une mutation est déjà sur le store juste après l\'appel, sans await ni flush', () {
+      final store = MemoryStore();
+      final a = AppState(store: store);
+
+      a.addClient(client(900)); // synchrone, aucun `await` ici
+
+      // Si l'écriture était encore fire-and-forget, `store.data` serait
+      // encore celui d'avant la mutation (ou null) à cet instant précis.
+      expect(store.data, isNotNull);
+      expect(store.data!.contains('Client 900'), isTrue);
+      expect(store.writes, 1);
+    });
+
+    test('plusieurs mutations synchrones successives sont toutes déjà sur le store', () {
+      final store = MemoryStore();
+      final a = AppState(store: store);
+
+      a.addClient(client(900));
+      a.addClient(client(901));
+      a.addClient(client(902));
+
+      expect(store.writes, 3);
+      expect(store.data!.contains('Client 900'), isTrue);
+      expect(store.data!.contains('Client 901'), isTrue);
+      expect(store.data!.contains('Client 902'), isTrue);
+    });
+
+    test('une écriture qui échoue lève synchronement et la bannière est signalée sans await', () {
+      final store = MemoryStore()..failNextWrites = 1;
+      final a = AppState(store: store);
+
+      a.addClient(client(900)); // l'exception de `write` est déjà avalée par `_persist`
+
+      expect(a.derniereEcritureEnEchec, isTrue);
+      // La mutation en mémoire n'en dépend pas : l'app reste utilisable.
+      expect(a.clients.any((c) => c.id == 900), isTrue);
     });
   });
 }

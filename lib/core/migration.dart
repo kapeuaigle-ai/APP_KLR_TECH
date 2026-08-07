@@ -407,9 +407,16 @@ double _montantFacture(Map<String, dynamic> f) => (f['lines'] as List? ?? [])
 // ── Outils ────────────────────────────────────────────────
 
 class _Ids {
-  // Microsecondes, et non millisecondes : le reste de l'application mint ses
-  // identifiants en millisecondes, et le compteur prend ici de l'avance d'une
-  // unité par enregistrement converti.
+  // Sert uniquement à distinguer les enregistrements que CETTE migration
+  // crée les uns des autres (des règlements issus de la fusion v1 → v2, par
+  // exemple) — pas à s'insérer sans collision dans l'espace d'ids de l'app.
+  // Cette dernière garantie vient d'ailleurs : `AppState._seedNextId`
+  // balaie tout l'état déjà migré après coup et fait démarrer son compteur
+  // au-dessus du plus grand id trouvé, y compris ceux mintés ici. (Commentaire
+  // corrigé, lot G — il justifiait encore ce choix par une distinction
+  // millisecondes/microsecondes avec « le reste de l'application », qui mint
+  // ses ids depuis un compteur séquentiel persisté, `AppState.nextId()`, et
+  // plus depuis l'horloge — voir son commentaire, défaut 2 de la revue Lot A.)
   int _n = DateTime.now().microsecondsSinceEpoch;
   int suivant() => _n++;
 }
@@ -422,6 +429,10 @@ Map<String, dynamic> _reglement(int id, DateTime date, double montant) => {
 /// JSON → double, tolérant. Une valeur absente ou d'un type inattendu vaut 0.
 /// Même règle que pour les dates : un champ corrompu doit dégrader
 /// l'enregistrement concerné, jamais empêcher l'ouverture de la sauvegarde.
+///
+/// Volontairement plus tolérant que `toDouble` de `models/commun.dart`, qui
+/// lève sur un type inattendu — voir son commentaire pour la distinction
+/// (lot G, hygiène) : ce n'est pas un doublon accidentel.
 double _double(dynamic v) => v is num ? v.toDouble() : 0.0;
 
 /// 'dd/MM/yyyy' → DateTime, ou null si inexploitable.

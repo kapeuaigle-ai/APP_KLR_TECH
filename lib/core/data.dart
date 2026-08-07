@@ -38,7 +38,18 @@ class SampleData {
     LineItem(ref: '04', designation: 'Câblage et mise en service', qte: 1, pu: 200000),
   ];
 
-  static final Map<String, List<DocumentItem>> documents = {
+  // Getter — pas un champ `static final` — pour la même raison que
+  // `initialEngagements`, `initialTasks` et `initialNotes` plus bas : un
+  // champ figé au chargement de la classe serait construit UNE fois et
+  // partagé, par référence, entre toutes les instances d'`AppState` créées
+  // ensuite (`_seed()` fait `List.from(...)`, qui copie la liste mais pas
+  // les `DocumentItem`/`LineItem` qu'elle contient). Sans danger dans l'app
+  // livrée, qui ne construit jamais qu'un seul `AppState` — mais une mine
+  // pour les tests : muter `qteLivree` d'une proforma semée sur une
+  // instance le ferait apparaître déjà présent sur une instance neuve
+  // suivante (lot G, défaut 3). Un getter réexécute tous les constructeurs
+  // à chaque accès, donc chaque appelant reçoit un graphe d'objets à lui.
+  static Map<String, List<DocumentItem>> get documents => {
     'proforma': [
       DocumentItem(id: 1, numero: 'KLR-P03-16022026', date: '16/02/2026', clientId: 5, client: 'Université Jean Lorougon Guédé', clientAddr: 'Daloa, Côte d\'Ivoire', objet: 'Maintenance parc informatique', montant: 1915000, statut: 'cours', lines: _linesMaintenance()),
       DocumentItem(id: 2, numero: 'KLR-P02-10012026', date: '10/01/2026', clientId: 2, client: 'Client B', clientAddr: 'Abidjan, Côte d\'Ivoire', objet: 'Développement Application', montant: 1500000, statut: 'validee', lines: _linesDeveloppement()),

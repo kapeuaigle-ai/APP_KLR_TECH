@@ -266,7 +266,15 @@ class PrimaryBtn extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[Icon(icon, size: 14), const SizedBox(width: 6)],
-          Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600)),
+          // `Flexible` + ellipse : sans lui, un bouton étroit (§ barre
+          // d'actions basse de DocumentCreateScreen, deux boutons à égalité
+          // dans un `Row`) déborde plutôt que de céder la place quand
+          // l'échelle de texte système grossit le libellé (accessibilité,
+          // 200 % — lot G, sweep H). `Flexible`, pas `Expanded` : le bouton
+          // doit garder sa taille naturelle (`mainAxisSize: min`) tant que
+          // tout tient, et ne céder que si la place manque vraiment.
+          Flexible(child: Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600),
+              overflow: TextOverflow.ellipsis)),
         ],
       ),
     );
@@ -308,7 +316,10 @@ class SecondaryBtn extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (icon != null) ...[Icon(icon, size: 14, color: fg), const SizedBox(width: 6)],
-          Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
+          // Même correctif que `PrimaryBtn` ci-dessus (lot G, sweep H) :
+          // `Flexible` + ellipse plutôt qu'un débordement à 200 %.
+          Flexible(child: Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: fg),
+              overflow: TextOverflow.ellipsis)),
         ],
       ),
     );

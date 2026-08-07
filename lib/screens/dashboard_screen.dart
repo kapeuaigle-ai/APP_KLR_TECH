@@ -374,7 +374,12 @@ class _AlertsCard extends StatelessWidget {
           Row(children: [
             const Icon(Icons.warning_amber_rounded, size: 16, color: AppColors.orange),
             const SizedBox(width: 8),
-            Text('Alertes de paiement', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
+            // `Expanded` + ellipse : sans lui, une échelle de texte système
+            // agrandie (accessibilité, 200 %) pousse le libellé au-delà de la
+            // carte au lieu de le laisser céder la place (lot G, sweep H).
+            Expanded(child: Text('Alertes de paiement',
+                style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1),
+                overflow: TextOverflow.ellipsis)),
           ]),
           const SizedBox(height: 16),
           if (alertes.isEmpty)

@@ -44,10 +44,14 @@ class DocumentContext {
 /// calcul est donc juste quel que soit l'environnement — DM Sans en production,
 /// police de repli dans les tests — puisque mesure et rendu partagent la police.
 ///
-/// La géométrie de référence est la page de composition de l'aperçu
-/// (530 × 749,6, ratio A4). La page PDF (A4, 595 × 842 pt) est plus grande à
-/// tailles de police identiques : ce qui tient dans l'aperçu tient donc a
-/// fortiori dans le PDF.
+/// La géométrie de référence est directement celle de la page A4
+/// (595,28 × 841,89 pt — voir `pageW`/`pageH` ci-dessous) : l'aperçu compose
+/// à ces mêmes dimensions puis les met à l'échelle pour l'écran
+/// (`FittedBox` dans `widgets/document_preview.dart`), il ne compose plus à
+/// une taille réduite qui lui serait propre. Aperçu et PDF partagent donc
+/// une géométrie identique au point près, pas seulement proche (commentaire
+/// corrigé, lot G — il décrivait encore une page d'aperçu à 530 × 749,6,
+/// plus petite que le PDF, d'avant cette unification).
 class DocumentPagination {
   // ── Géométrie partagée aperçu ⇔ PDF ───────────────────
   // Dimensions A4 en points : l'aperçu compose à ces mêmes dimensions puis les

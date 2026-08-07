@@ -8,7 +8,13 @@ class DocumentItem {
   /// null = aucun client identifié (saisie libre du nom sans sélection dans
   /// l'autocomplete). Même convention que `Engagement.clientId` et
   /// `Projet.clientId` : « inconnu » se dit `null`, jamais un id inventé.
-  final int? clientId;
+  ///
+  /// Mutable — pas `final` — pour la même raison que `projetId` juste en
+  /// dessous : `AppState.deleteClient` doit pouvoir le délier quand le
+  /// client disparaît (voir son commentaire). Le nom dénormalisé [client]
+  /// reste, lui, intact : une facture déjà émise doit continuer à dire à qui
+  /// elle a été adressée, même si l'id ne pointe plus vers personne.
+  int? clientId;
   final String client;
   final String clientAddr;
   final String objet;

@@ -45,8 +45,6 @@ class AppState extends ChangeNotifier {
   /// Vrai pendant le chargement/réinitialisation : bloque les écritures pour
   /// ne pas réécrire ce qu'on vient juste de lire.
   bool _restoring = false;
-  /// File d'écriture : chaînée pour préserver l'ordre et éviter les courses.
-  Future<void> _writeChain = Future.value();
 
   /// Vrai si le dernier `init()` a refusé la sauvegarde sur disque parce
   /// qu'elle porte une version plus récente que celle que sait lire cette
@@ -62,14 +60,15 @@ class AppState extends ChangeNotifier {
   /// Vrai si la dernière écriture programmée par `_persist` a échoué (disque
   /// plein, verrou antivirus, droits refusés — défaut 1, revue finitions).
   ///
-  /// `_persist` reste fire-and-forget : une écriture ne doit jamais bloquer
-  /// une mutation. Mais avaler l'erreur sans rien dire (l'ancien
-  /// comportement) laissait le manager croire, à tort, que tout était
-  /// sauvegardé — `notifyListeners()` avait déjà confirmé la mutation avant
-  /// que l'écriture n'échoue. L'UI lit ce drapeau pour afficher une bannière
-  /// (voir `widgets/write_failure_banner.dart`) ; il s'efface tout seul dès
-  /// qu'une écriture suivante réussit, pour qu'une panne transitoire ne
-  /// laisse pas un avertissement alarmant affiché indéfiniment.
+  /// `_persist` écrit maintenant de façon synchrone (lot G) : avaler
+  /// l'erreur sans rien dire (l'ancien comportement, hérité de l'époque où
+  /// l'écriture était fire-and-forget) laissait le manager croire, à tort,
+  /// que tout était sauvegardé — `notifyListeners()` avait déjà confirmé la
+  /// mutation avant que l'écriture n'échoue. L'UI lit ce drapeau pour
+  /// afficher une bannière (voir `widgets/write_failure_banner.dart`) ; il
+  /// s'efface tout seul dès qu'une écriture suivante réussit, pour qu'une
+  /// panne transitoire ne laisse pas un avertissement alarmant affiché
+  /// indéfiniment.
   bool get derniereEcritureEnEchec => _derniereEcritureEnEchec;
   bool _derniereEcritureEnEchec = false;
 
@@ -81,10 +80,14 @@ class AppState extends ChangeNotifier {
   /// vide. Réutilisé tel quel par la réinitialisation.
   void _seed() {
     clients = List.from(SampleData.clients);
+    // Un seul accès au getter : il reconstruit les trois listes à chaque
+    // appel (voir son commentaire) — les relire séparément reconstruirait
+    // tout deux fois de plus pour ne garder qu'un tiers du résultat.
+    final docs = SampleData.documents;
     documents = {
-      'proforma': List.from(SampleData.documents['proforma']!),
-      'facture': List.from(SampleData.documents['facture']!),
-      'bl': List.from(SampleData.documents['bl']!),
+      'proforma': List.from(docs['proforma']!),
+      'facture': List.from(docs['facture']!),
+      'bl': List.from(docs['bl']!),
     };
     settings = AppSettings(
       company: 'KLR TECH SARL',
@@ -211,12 +214,15 @@ class AppState extends ChangeNotifier {
   ///
   /// L'état vide est ÉCRIT sur le disque (et non simplement effacé) : sans
   /// cela, le prochain démarrage ne trouverait pas de sauvegarde et
-  /// réafficherait les données d'exemple semées au constructeur.
+  /// réafficherait les données d'exemple semées au constructeur. `_persist`
+  /// écrit désormais de façon SYNCHRONE (lot G) : plus besoin d'attendre
+  /// quoi que ce soit après — reste `async` uniquement pour ne pas casser
+  /// la signature `Future<void>` qu'utilisent déjà ses appelants (`await
+  /// state.resetData()`).
   Future<void> resetData() async {
     _clearData();
     notifyListeners();
     _persist();
-    await flush();
   }
 
   // ── Sérialisation ──────────────────────────────────────
@@ -280,12 +286,14 @@ class AppState extends ChangeNotifier {
     if (origine < 2) {
       // Filet de sécurité (spec § 8) : la sauvegarde v1 brute est conservée
       // avant toute réécriture, pour que la conversion reste réversible en
-      // cas d'anomalie découverte tardivement. Fire-and-forget, comme
-      // `_persist` : une erreur d'écriture ne doit jamais empêcher
-      // l'application de démarrer.
-      _writeChain = _writeChain
-          .then((_) => _store.writeBackup(jsonEncode(brut)))
-          .catchError((_) {});
+      // cas d'anomalie découverte tardivement. Fire-and-forget — et,
+      // contrairement à `_persist` (lot G : devenu synchrone), reste
+      // volontairement asynchrone : ce n'est pas la dernière mutation du
+      // manager qui est en jeu ici, seulement une copie de secours de ce qui
+      // vient d'être lu, best-effort, comme `writeBackup` le documente déjà.
+      // Une erreur d'écriture ne doit jamais empêcher l'application de
+      // démarrer.
+      _store.writeBackup(jsonEncode(brut)).catchError((_) {});
     }
     // Chaînage à seuils : chaque étape ne s'exécute que si `origine` est
     // strictement en dessous de sa version cible. `j` garde la même
@@ -351,8 +359,24 @@ class AppState extends ChangeNotifier {
     if (migration) _persist();
   }
 
-  /// Écrit l'état courant sur le store. Fire-and-forget, mais chaîné : la
-  /// dernière écriture programmée porte l'état le plus récent.
+  /// Écrit l'état courant sur le store — SYNCHRONE (lot G, défaut 1) : plus
+  /// de file d'attente à chaîner, plus rien « en vol » quand cet appel rend
+  /// la main.
+  ///
+  /// Avant ce correctif, `_persist` était fire-and-forget via `_writeChain`
+  /// (écriture asynchrone chaînée), et rien ne garantissait qu'une écriture
+  /// programmée juste avant la fermeture de la fenêtre avait le temps
+  /// d'aboutir — un `AppExitFlusher` avait été ajouté pour ça, mais
+  /// `didRequestAppExit` n'est jamais appelé sur Windows (`win32_window.cpp`
+  /// ferme la fenêtre via `DefWindowProc`, sans passer par le message de
+  /// plateforme que Flutter écoute). Plutôt que de patcher le runner natif
+  /// pour bloquer la boucle de messages Win32 sur un aller-retour Dart
+  /// asynchrone (risque réel d'interblocage), la file a été supprimée :
+  /// `Store.write` est maintenant synchrone (~74 Ko, quelques millisecondes
+  /// mesurées sur cette machine — voir le rapport du lot G), donc une
+  /// mutation est sur le disque avant même que cette fonction ne rende la
+  /// main. `AppExitFlusher` a été retiré avec la file qu'il existait pour
+  /// drainer.
   ///
   /// Une écriture qui échoue (disque plein, verrou antivirus, droits
   /// refusés) met `derniereEcritureEnEchec` à vrai et le signale via
@@ -363,15 +387,16 @@ class AppState extends ChangeNotifier {
   void _persist() {
     if (_restoring) return;
     final data = jsonEncode(toJson());
-    _writeChain = _writeChain.then((_) => _store.write(data)).then((_) {
+    try {
+      _store.write(data);
       if (_derniereEcritureEnEchec) {
         _derniereEcritureEnEchec = false;
         notifyListeners();
       }
-    }).catchError((_) {
+    } catch (_) {
       _derniereEcritureEnEchec = true;
       notifyListeners();
-    });
+    }
   }
 
   /// Relance une écriture — utilisé par le bouton « Réessayer » de la
@@ -380,9 +405,13 @@ class AppState extends ChangeNotifier {
   /// seul via `_persist()`.
   void retryPersist() => _persist();
 
-  /// Attend la fin des écritures en attente (utilisé par les tests, et par
-  /// le hook de fermeture pour ne pas perdre la dernière mutation).
-  Future<void> flush() => _writeChain;
+  /// Ne fait plus rien : `_persist` est désormais synchrone, donc il n'y a
+  /// plus jamais d'écriture « en attente » à drainer — l'appel a déjà
+  /// terminé quand `_persist()` rend la main. Conservée uniquement pour ne
+  /// pas casser la signature `await state.flush()` utilisée par la
+  /// suite de tests existante (`persistence_test.dart` et consorts) ;
+  /// retirer chacun de ces appels pour un gain nul n'en valait pas la peine.
+  Future<void> flush() => Future.value();
 
   /// Notifie l'UI ET persiste : à utiliser pour toute mutation de données.
   void _emit() {
@@ -465,9 +494,13 @@ class AppState extends ChangeNotifier {
 
   /// Supprime un client et délie tout ce qui le désignait : `clientId` est
   /// un `int?` (« null = aucun »), même convention que `projetId` — voir
-  /// `deleteProjet`. Le nom dénormalisé (`Projet.client`, `Engagement.tiers`)
-  /// reste : il enregistre qui était la contrepartie, l'id seul ne pointe
-  /// plus vers rien.
+  /// `deleteProjet`. Couvre les projets, les engagements ET les documents
+  /// (`DocumentItem.clientId`, lot G défaut 2 — le champ était `final`
+  /// jusqu'ici, ce commentaire promettait « tout ce qui le désignait » sans
+  /// pouvoir tenir sur les documents). Le nom dénormalisé (`Projet.client`,
+  /// `Engagement.tiers`, `DocumentItem.client`) reste partout : il enregistre
+  /// qui était la contrepartie — une facture déjà émise doit continuer à dire
+  /// à qui, même quand l'id ne pointe plus vers personne.
   void deleteClient(int id) {
     final match = clients.where((x) => x.id == id);
     final nom = match.isNotEmpty ? match.first.name : '—';
@@ -477,6 +510,11 @@ class AppState extends ChangeNotifier {
     }
     for (final e in engagements) {
       if (e.clientId == id) e.clientId = null;
+    }
+    for (final liste in documents.values) {
+      for (final d in liste) {
+        if (d.clientId == id) d.clientId = null;
+      }
     }
     _logActivity('client', 'Client supprimé — $nom', '', AppColors.text3);
     _emit();
@@ -898,6 +936,16 @@ class AppState extends ChangeNotifier {
   }
 
   // ── Documents ──────────────────────────────────────────
+  /// Ajoute un document brut, quel que soit son type. Aucun écran ne
+  /// l'appelle : la création/édition d'une proforma passe par
+  /// `saveOrUpdateProforma` (qui, en plus, met à jour un id existant plutôt
+  /// que de dupliquer), et la facture/le BL générés à la validation sont
+  /// écrits directement dans leurs listes par `validateProforma`. Conservé
+  /// (lot G, défaut 4 — candidat au code mort) parce que c'est le seul
+  /// moyen direct de semer un document 'facture' ou 'bl' isolément dans un
+  /// test, sans repasser par tout le circuit de validation d'une proforma ;
+  /// `saveOrUpdateProforma` ne cible que la liste 'proforma'. Une bonne
+  /// partie de la suite de tests en dépend.
   void addDocument(String type, DocumentItem doc) {
     documents[type]?.add(doc);
     if (type == 'proforma') {

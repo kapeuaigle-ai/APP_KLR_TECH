@@ -4,7 +4,6 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'core/theme.dart';
 import 'core/models.dart';
 import 'core/app_state.dart';
-import 'core/app_lifecycle.dart';
 import 'core/persistence.dart';
 import 'widgets/sidebar.dart';
 import 'widgets/app_header.dart';
@@ -29,10 +28,12 @@ void main() async {
   // Charge la sauvegarde disque avant d'afficher l'UI (fichier local, OS).
   final state = AppState(store: defaultStore());
   await state.init();
-  // Attend les écritures en attente avant de laisser la fenêtre se fermer
-  // (défaut 1, revue finitions) — voir `AppExitFlusher` pour la portée
-  // réelle de ce hook sur Windows.
-  WidgetsBinding.instance.addObserver(AppExitFlusher(state));
+  // Pas de hook de fermeture à brancher ici : `AppState._persist` écrit
+  // désormais de façon SYNCHRONE (lot G, défaut 1) — une mutation est sur le
+  // disque avant même que l'appel qui l'a déclenchée ne rende la main, donc
+  // il n'y a plus jamais rien « en vol » à sauver quand la fenêtre se ferme.
+  // Un `AppExitFlusher` existait ici pour ça ; il a été retiré avec la file
+  // d'écriture qu'il existait pour drainer — voir `AppState._persist`.
   runApp(
     ChangeNotifierProvider.value(
       value: state,

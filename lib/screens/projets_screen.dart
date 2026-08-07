@@ -227,8 +227,14 @@ class _ProjetCard extends StatelessWidget {
     // créance est elle-même échue alors que le projet, lui, tient encore ses
     // délais. Un projet Terminé a tout encaissé (`resteAPercevoir` est
     // faux) : il ne doit jamais proposer de relance.
-    final resteAPercevoir = state.engagementsDuProjet(projet.id)
-        .any((e) => e.estEntrant && !e.annule && !e.solde);
+    //
+    // `avancement.montantRestant` EST déjà cette somme (`Avancement.calculer`
+    // additionne `e.reste`, toujours ≥ 0, sur les mêmes engagements entrants
+    // actifs) : redériver le booléen ici en reparcourant les engagements
+    // dupliquait la règle avec les mêmes conditions (lot G, hygiène). Somme
+    // de termes ≥ 0, donc `> 0` équivaut exactement à « au moins un non
+    // soldé » — pas d'approximation introduite par le remplacement.
+    final resteAPercevoir = avancement.montantRestant > 0;
     final aRelancer = resteAPercevoir &&
         (avancement.finDepassee || avancement.enRetardPaiement);
 
@@ -592,9 +598,10 @@ Future<void> _ouvrirFormulaireProjet(BuildContext context, AppState state, {Proj
           onTap: () {
             final nom = nomCtrl.text.trim();
             if (nom.isEmpty) { setLocal(() => erreur = true); return; }
-            // Même règle que Projet.periodeValide (§ défaut 4) : une durée
-            // négative rendrait le Gantt et tous les retards incohérents.
-            if (finPrevue.isBefore(debut)) { setLocal(() => erreurDates = true); return; }
+            // Même règle que Projet.periodeValide (§ défaut 4), via le
+            // helper statique qui la porte désormais : une durée négative
+            // rendrait le Gantt et tous les retards incohérents.
+            if (!Projet.periodeEstValide(debut, finPrevue)) { setLocal(() => erreurDates = true); return; }
             final type = typeCtrl.text.trim();
             if (existing == null) {
               state.addProjet(Projet(
@@ -985,11 +992,52 @@ class _JalonRow extends StatelessWidget {
         IconButton(
           tooltip: 'Supprimer',
           icon: const Icon(Icons.delete_outline, size: 17, color: AppColors.text3),
-          onPressed: () => state.supprimerJalon(projet.id, index),
+          onPressed: () => _confirmerSuppressionJalon(context, state, projet.id, index, jalon),
         ),
       ]),
     );
   }
+}
+
+/// Un jalon n'est qu'un repère d'avancement, pas de l'argent — rien de
+/// comparable à un engagement, un règlement ou un client supprimés. Mais
+/// laisser sa suppression seule sans confirmation, alors que toute autre
+/// action destructrice de l'app en demande une (voir `_confirmerSuppressionProjet`
+/// ici, ou `_confirmerSuppressionReglement`/`_confirmerSuppressionEngagement`
+/// dans suivi_screen.dart), crée un geste à part qui surprend d'autant plus
+/// qu'il tranche avec le reste — un clic malheureux sur la mauvaise ligne
+/// perd un jalon sans rattrapage possible. Cérémonie allégée par rapport aux
+/// autres (pas de récapitulatif de conséquences : il n'y en a pas d'autre
+/// que « ce jalon disparaît »), mais confirmation quand même (lot G, hygiène).
+void _confirmerSuppressionJalon(
+    BuildContext context, AppState state, int projetId, int index, Jalon jalon) {
+  showDialog<void>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Supprimer ce jalon ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(
+        '« ${jalon.nom} » sera retiré du projet.',
+        style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            state.supprimerJalon(projetId, index);
+            Navigator.of(dctx).pop();
+          },
+          child: Text('Supprimer', style: GoogleFonts.dmSans(
+              fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
 }
 
 Future<void> _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet projet) async {
@@ -1060,14 +1108,33 @@ Future<void> _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet
 
 // ── Mode manuel : un curseur, rien d'autre. Aucun contrôle possible sur la
 //    valeur saisie (§ 6.1) — c'est le mode le moins fiable, assumé comme tel.
-class _SectionManuel extends StatelessWidget {
+//
+//    StatefulWidget avec une valeur locale pendant le glissement : depuis
+//    que `AppState._persist` écrit de façon SYNCHRONE (lot G, défaut 1),
+//    persister à chaque `onChanged` — qui tire des dizaines de fois par
+//    seconde pendant qu'on fait glisser le curseur — bloquerait le thread UI
+//    à chaque position (~10-20 ms mesurés sur cette machine, jusqu'à ~180 ms
+//    en pointe pour une sauvegarde de 74 Ko), un vrai à-coup. On ne persiste
+//    qu'au relâchement (`onChangeEnd`), même principe que les champs texte
+//    de cette page qui ne valident qu'à la sortie du champ (voir
+//    `_LigneLivraisonRowState` plus bas).
+class _SectionManuel extends StatefulWidget {
   final Projet projet;
   final AppState state;
   const _SectionManuel({required this.projet, required this.state});
 
   @override
+  State<_SectionManuel> createState() => _SectionManuelState();
+}
+
+class _SectionManuelState extends State<_SectionManuel> {
+  /// Valeur affichée pendant un glissement en cours ; `null` le reste du
+  /// temps, auquel cas on affiche `widget.projet.avancementManuel`.
+  double? _enCours;
+
+  @override
   Widget build(BuildContext context) {
-    final valeur = projet.avancementManuel.clamp(0.0, 1.0);
+    final valeur = _enCours ?? widget.projet.avancementManuel.clamp(0.0, 1.0);
     final pct = (valeur * 100).round();
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
       Row(children: [
@@ -1078,7 +1145,11 @@ class _SectionManuel extends StatelessWidget {
       Slider(
         value: valeur,
         activeColor: AppColors.primary,
-        onChanged: (v) => state.setAvancementManuel(projet.id, v),
+        onChanged: (v) => setState(() => _enCours = v),
+        onChangeEnd: (v) {
+          widget.state.setAvancementManuel(widget.projet.id, v);
+          setState(() => _enCours = null);
+        },
       ),
     ]);
   }
