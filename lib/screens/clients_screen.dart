@@ -20,7 +20,8 @@ class _ClientsScreenState extends State<ClientsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final clients = context.watch<AppState>().clients;
+    final state = context.watch<AppState>();
+    final clients = state.clients;
     final filtered = clients.where((c) =>
       _search.isEmpty ||
       c.name.toLowerCase().contains(_search.toLowerCase()) ||
@@ -62,7 +63,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
               if (filtered.isEmpty)
                 const CardBox(padding: EdgeInsets.zero, child: EmptyHint('Aucun client trouvé'))
               else
-                ...filtered.map((c) => _ClientCard(client: c))
+                ...filtered.map((c) => _ClientCard(client: c, ca: state.chiffreAffairesClient(c.id)))
             else
               CardBox(
                 padding: EdgeInsets.zero,
@@ -82,7 +83,11 @@ class _ClientsScreenState extends State<ClientsScreen> {
                         ]),
                       ),
                       const Divider(height: 1, color: AppColors.border),
-                      ...filtered.asMap().entries.map((e) => _ClientRow(client: e.value, isLast: e.key == filtered.length - 1)),
+                      ...filtered.asMap().entries.map((e) => _ClientRow(
+                        client: e.value,
+                        ca: state.chiffreAffairesClient(e.value.id),
+                        isLast: e.key == filtered.length - 1,
+                      )),
                     ]),
                   ),
                   if (filtered.isEmpty) const EmptyHint('Aucun client trouvé'),
@@ -155,7 +160,6 @@ void showClientDialog(BuildContext context, {Client? existing}) {
               contact: contactCtrl.text.trim(),
               email: emailCtrl.text.trim(),
               phone: phoneCtrl.text.trim(),
-              totalFacture: existing?.totalFacture ?? 0,
               address: addressCtrl.text.trim(),
             );
             if (existing == null) {
@@ -268,7 +272,10 @@ Widget _clientActionMenu(BuildContext context, Client c, {bool large = false}) {
 // ── Carte client (téléphone) ──────────────────────────────
 class _ClientCard extends StatelessWidget {
   final Client client;
-  const _ClientCard({required this.client});
+  /// Chiffre d'affaires dérivé — voir `AppState.chiffreAffairesClient` —
+  /// calculé une fois par le parent, jamais stocké sur `Client`.
+  final double ca;
+  const _ClientCard({required this.client, required this.ca});
 
   @override
   Widget build(BuildContext context) {
@@ -286,8 +293,7 @@ class _ClientCard extends StatelessWidget {
         if (c.contact.isNotEmpty) ('CONTACT', CardValue(c.contact)),
         if (c.email.isNotEmpty) ('EMAIL', CardValue(c.email)),
         if (c.phone.isNotEmpty) ('TÉLÉPHONE', CardValue(c.phone)),
-        ('CA TOTAL', CardValue(
-          c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', bold: true)),
+        ('CA TOTAL', CardValue(ca > 0 ? Fmt.money(ca) : '—', bold: true)),
       ],
       onTap: () => showClientDialog(context, existing: c),
     );
@@ -296,8 +302,11 @@ class _ClientCard extends StatelessWidget {
 
 class _ClientRow extends StatefulWidget {
   final Client client;
+  /// Chiffre d'affaires dérivé — voir `AppState.chiffreAffairesClient` —
+  /// calculé une fois par le parent, jamais stocké sur `Client`.
+  final double ca;
   final bool isLast;
-  const _ClientRow({required this.client, required this.isLast});
+  const _ClientRow({required this.client, required this.ca, required this.isLast});
 
   @override
   State<_ClientRow> createState() => _ClientRowState();
@@ -341,7 +350,7 @@ class _ClientRowState extends State<_ClientRow> {
           )),
           Expanded(flex: 3, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Text(c.totalFacture > 0 ? Fmt.money(c.totalFacture) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
+            child: Text(widget.ca > 0 ? Fmt.money(widget.ca) : '—', maxLines: 1, overflow: TextOverflow.ellipsis, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1)),
           )),
           SizedBox(width: 48, child: _clientActionMenu(context, c)),
         ]),

@@ -41,7 +41,7 @@ void main() {
     final a = AppState(store: store)..viderDonnees();
     final id1 = a.nextId();
     a.addClient(Client(id: id1, initials: 'ZZ', color: const Color(0xFF123456),
-        name: 'Client', contact: '', email: '', phone: '', totalFacture: 0));
+        name: 'Client', contact: '', email: '', phone: ''));
     await a.flush();
 
     final b = AppState(store: store);

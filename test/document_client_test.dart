@@ -32,7 +32,7 @@ void main() {
     final state = AppState()..viderDonnees();
     state.addClient(const Client(
         id: 42, initials: 'AC', color: Colors.blue, name: 'ACME Fournitures',
-        contact: 'Jean', email: 'j@acme.ci', phone: '600', totalFacture: 0));
+        contact: 'Jean', email: 'j@acme.ci', phone: '600'));
     state.setDocType('proforma');
 
     await pumpEcran(tester, state);
@@ -82,7 +82,7 @@ void main() {
     final state = AppState()..viderDonnees();
     state.addClient(const Client(
         id: 15, initials: 'BT', color: Colors.teal, name: 'Beta Tech',
-        contact: 'Awa', email: 'awa@beta.ci', phone: '601', totalFacture: 0));
+        contact: 'Awa', email: 'awa@beta.ci', phone: '601'));
     state.setDocType('proforma');
 
     await pumpEcran(tester, state);

@@ -49,7 +49,7 @@ void main() {
   test('ajouter / supprimer un client journalise une activité', () {
     final s = AppState();
     s.addClient(Client(id: 999, initials: 'NC', color: const Color(0xFF112233),
-        name: 'Nouveau Client', contact: 'M. X', email: '', phone: '', totalFacture: 0));
+        name: 'Nouveau Client', contact: 'M. X', email: '', phone: ''));
     expect(s.activities.first.type, 'client');
     expect(s.activities.first.titre, contains('Nouveau Client'));
 

@@ -138,6 +138,46 @@ void main() {
       expect(r.dime, 60000); // 10 % du bénéfice
     });
 
+    // Défaut 1 (CRITIQUE, revue Lot B) : `rapport().dime` recalculait 10 % du
+    // bénéfice NETTÉ sur toute la période, au lieu de sommer la dîme de
+    // chaque mois (déjà écrêtée à 0 sur un mois en perte, comme
+    // `bilanMensuel`). Netter un mois en perte contre un mois profitable
+    // sous-estime donc TOUJOURS la dîme due.
+    //
+    // Janvier : 1 000 000 de revenu -> dîme due 100 000.
+    // Février : 400 000 de dépense, aucun revenu -> mois en perte, dîme 0.
+    // Total correct : 100 000. Le bug rendait 60 000 (10 % de 600 000 net).
+    test('dîme sur plusieurs mois = somme des dîmes mensuelles, jamais une '
+        'compensation entre un mois en perte et un mois profitable '
+        '(défaut 1, revue Lot B)', () {
+      final r = rapport(DateTime(2026, 1, 1), DateTime(2026, 2, 28),
+        engagements: [
+          facture('F1', 1000000, encaissementLe: '10/01/2026'),
+          depense(400000, DateTime(2026, 2, 5), 'Achat matériel', 'Achat'),
+        ],
+      );
+      expect(r.revenu, 1000000);
+      expect(r.depenses, 400000);
+      expect(r.benefice, 600000); // net sur la période : positif
+      expect(r.dime, 100000); // jamais 60 000 : février (perte) ne doit rien
+    });
+
+    // Sur une période où chaque mois est profitable, sommer les dîmes
+    // mensuelles et recalculer 10 % du bénéfice net doivent coïncider :
+    // aucune compensation n'entre en jeu ici, les deux formules s'accordent.
+    test('tous les mois profitables : la somme mensuelle et le bénéfice net '
+        'donnent la même dîme', () {
+      final r = rapport(DateTime(2026, 1, 1), DateTime(2026, 2, 28),
+        engagements: [
+          facture('F1', 1000000, encaissementLe: '10/01/2026'),
+          facture('F2', 500000, encaissementLe: '10/02/2026'),
+        ],
+      );
+      final sommeMensuelle = r.mois.fold(0.0, (s, m) => s + m.dime);
+      expect(r.dime, closeTo(sommeMensuelle, 0.001));
+      expect(r.dime, closeTo(150000, 0.001)); // 10 % de 1 500 000
+    });
+
     test('bénéfice négatif : pas de dîme', () {
       final r = rapport(DateTime(2026, 7, 1), DateTime(2026, 7, 31),
         engagements: [depense(400000, DateTime(2026, 7, 12), 'Achat matériel', 'Achat')],

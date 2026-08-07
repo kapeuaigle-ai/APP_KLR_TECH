@@ -3,13 +3,13 @@ import 'theme.dart';
 
 class SampleData {
   static final List<Client> clients = [
-    const Client(id: 1, initials: 'AC', color: AppColors.purple, name: 'Acme Corp', contact: 'Jean Dupont', email: 'jean@acmecorp.com', phone: '01 23 45 67 88', totalFacture: 12450000, address: '14 Rue de la Paix, 75001 Paris, France'),
-    const Client(id: 2, initials: 'GT', color: AppColors.blue, name: 'Global Tech', contact: 'Sarah Smith', email: 's.smith@globaltech.fr', phone: '06 12 34 56 78', totalFacture: 8900000, address: '45 Avenue des Champs, Lyon, France'),
-    const Client(id: 3, initials: 'DS', color: AppColors.emerald, name: 'Design Studio', contact: 'Marc Lévy', email: 'contact@designstudio.io', phone: '07 88 99 80 91', totalFacture: 3200000, address: '8 Rue Créative, Plateau, Abidjan, CI'),
-    const Client(id: 4, initials: 'IN', color: AppColors.orange, name: 'Innovate SAS', contact: 'Julie Martin', email: 'j.martin@innovate.fr', phone: '01 99 88 77 66', totalFacture: 15780000, address: '22 Boulevard de l\'Innovation, Bordeaux, France'),
-    const Client(id: 5, initials: 'UJ', color: AppColors.red, name: 'Université Jean Lorougon Guédé', contact: 'Prof. Koné', email: 'kone@ujlg.ci', phone: '07 00 11 22 33', totalFacture: 0, address: 'BP 150, Daloa, Côte d\'Ivoire'),
-    const Client(id: 6, initials: 'SA', color: AppColors.purple, name: 'Société Anonyme X', contact: 'Dir. Général', email: 'dg@sax.ci', phone: '07 44 55 66 77', totalFacture: 450000, address: 'Zone Industrielle, Yopougon, Abidjan, CI'),
-    const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', totalFacture: 3517500, address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
+    const Client(id: 1, initials: 'AC', color: AppColors.purple, name: 'Acme Corp', contact: 'Jean Dupont', email: 'jean@acmecorp.com', phone: '01 23 45 67 88', address: '14 Rue de la Paix, 75001 Paris, France'),
+    const Client(id: 2, initials: 'GT', color: AppColors.blue, name: 'Global Tech', contact: 'Sarah Smith', email: 's.smith@globaltech.fr', phone: '06 12 34 56 78', address: '45 Avenue des Champs, Lyon, France'),
+    const Client(id: 3, initials: 'DS', color: AppColors.emerald, name: 'Design Studio', contact: 'Marc Lévy', email: 'contact@designstudio.io', phone: '07 88 99 80 91', address: '8 Rue Créative, Plateau, Abidjan, CI'),
+    const Client(id: 4, initials: 'IN', color: AppColors.orange, name: 'Innovate SAS', contact: 'Julie Martin', email: 'j.martin@innovate.fr', phone: '01 99 88 77 66', address: '22 Boulevard de l\'Innovation, Bordeaux, France'),
+    const Client(id: 5, initials: 'UJ', color: AppColors.red, name: 'Université Jean Lorougon Guédé', contact: 'Prof. Koné', email: 'kone@ujlg.ci', phone: '07 00 11 22 33', address: 'BP 150, Daloa, Côte d\'Ivoire'),
+    const Client(id: 6, initials: 'SA', color: AppColors.purple, name: 'Société Anonyme X', contact: 'Dir. Général', email: 'dg@sax.ci', phone: '07 44 55 66 77', address: 'Zone Industrielle, Yopougon, Abidjan, CI'),
+    const Client(id: 7, initials: 'AD', color: AppColors.teal, name: "Advans Côte d'Ivoire", contact: 'M. Diallo', email: 'm.diallo@advans.ci', phone: '07 22 33 44 55', address: 'Cocody Les Deux Plateaux, Abidjan, CI'),
   ];
 
   // Lignes des documents d'exemple. Les montants ci-dessous sont la somme de

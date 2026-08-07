@@ -80,19 +80,28 @@ class Avancement {
     required DateTime now,
     double? physiqueForce,
   }) {
-    final actifs = engagements.where((e) => !e.annule).toList();
-    final entrants = actifs.where((e) => e.estEntrant).toList();
-    final sortants = actifs.where((e) => !e.estEntrant).toList();
+    // Même séparation que `Comptabilite._flux` (voir son commentaire) : ce
+    // qui a RÉELLEMENT eu lieu (les règlements, donc `regle`) compte quel que
+    // soit `annule`, ce qui reste seulement ATTENDU (`montant`, `reste`) ne
+    // compte que pour un engagement encore actif. Annuler un engagement
+    // retire ce qui restait à venir, jamais ce qui a déjà circulé — sans quoi
+    // un projet dont l'engagement encaissé est ensuite annulé perdrait
+    // l'argent réellement reçu (défaut 2, revue Lot B).
+    final tousEntrants = engagements.where((e) => e.estEntrant).toList();
+    final tousSortants = engagements.where((e) => !e.estEntrant).toList();
+    final entrantsActifs = tousEntrants.where((e) => !e.annule).toList();
 
-    final attendu = entrants.fold(0.0, (s, e) => s + e.montant);
-    final encaisse = entrants.fold(0.0, (s, e) => s + e.regle);
-    final depense = sortants.fold(0.0, (s, e) => s + e.regle);
+    final attendu = entrantsActifs.fold(0.0, (s, e) => s + e.montant);
+    final encaisse = tousEntrants.fold(0.0, (s, e) => s + e.regle);
+    final depense = tousSortants.fold(0.0, (s, e) => s + e.regle);
 
     // `restant` part de `e.reste`, déjà écrêté sous le centime par
     // `Engagement.reste` — jamais d'un ratio recalculé sur les sommes brutes
     // de `encaisse`, qui réintroduirait le résidu flottant IEEE-754 que la
     // Phase 1 a déjà corrigé une fois (voir le commentaire sur `reste`).
-    final restant = entrants.fold(0.0, (s, e) => s + e.reste);
+    // Comme `attendu`, restreint aux engagements actifs : un engagement
+    // annulé ne doit plus rien « rester à devoir ».
+    final restant = entrantsActifs.fold(0.0, (s, e) => s + e.reste);
     final physique = physiqueForce ?? _physique(projet, mode, proformas, now);
     final financier =
         attendu == 0 ? 0.0 : ((attendu - restant) / attendu).clamp(0.0, 1.0);
@@ -118,7 +127,7 @@ class Avancement {
       montantRestant: restant,
       statut: _statut(projet, physique, financier, attendu, finDepassee),
       enRetardLivraison: !projet.annule && finDepassee && physique < 1,
-      enRetardPaiement: entrants.any((e) => e.enRetard(now)),
+      enRetardPaiement: entrantsActifs.any((e) => e.enRetard(now)),
       finDepassee: finDepassee,
     );
   }

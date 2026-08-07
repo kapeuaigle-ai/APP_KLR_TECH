@@ -34,7 +34,7 @@ void main() {
     // Mutations variées.
     a.addClient(Client(id: 900, initials: 'ZZ', color: const Color(0xFF123456),
         name: 'Client Persistant', contact: 'M. Test', email: 't@x.ci',
-        phone: '0700', totalFacture: 42000, address: 'Abidjan'));
+        phone: '0700', address: 'Abidjan'));
     // `Expense` a disparu (tâche 2) : une dépense est un engagement sortant
     // créé ET réglé le jour même — voir `AppState.ajouterReglement`.
     a.addEngagement(Engagement(id: 901, sens: 'sortant', tiers: 'Carburant',
@@ -84,7 +84,7 @@ void main() {
     final store = MemoryStore();
     final a = AppState(store: store);
     a.addClient(Client(id: 900, initials: 'ZZ', color: const Color(0xFF123456),
-        name: 'À effacer', contact: '', email: '', phone: '', totalFacture: 0));
+        name: 'À effacer', contact: '', email: '', phone: ''));
     await a.flush();
 
     await a.resetData();

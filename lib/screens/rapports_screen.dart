@@ -297,8 +297,13 @@ class _ClientsTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final clients = context.watch<AppState>().clients;
-    final totalCA = clients.fold<double>(0, (s, c) => s + c.totalFacture);
+    final state = context.watch<AppState>();
+    final clients = state.clients;
+    // Dérivé — voir `AppState.chiffreAffairesClient` — jamais un champ
+    // stocké sur `Client` (défaut 3, revue Lot B). Calculé une seule fois par
+    // client ici, réutilisé pour le total, le tri et l'affichage ci-dessous.
+    final ca = {for (final c in clients) c.id: state.chiffreAffairesClient(c.id)};
+    final totalCA = ca.values.fold<double>(0, (s, v) => s + v);
 
     return Column(children: [
       StatGrid(cards: [
@@ -312,11 +317,12 @@ class _ClientsTab extends StatelessWidget {
         Text('Top clients par CA', style: GoogleFonts.dmSans(fontSize: 15, fontWeight: FontWeight.w700, color: AppColors.text1)),
         const SizedBox(height: 16),
         ...() {
-              final sorted = clients.where((c) => c.totalFacture > 0).toList()
-                ..sort((a, b) => b.totalFacture.compareTo(a.totalFacture));
+              final sorted = clients.where((c) => (ca[c.id] ?? 0) > 0).toList()
+                ..sort((a, b) => (ca[b.id] ?? 0).compareTo(ca[a.id] ?? 0));
               final top = sorted.take(5).toList();
               return top.map((c) {
-                final pct = totalCA > 0 ? (c.totalFacture / totalCA * 100).round() : 0;
+                final caClient = ca[c.id] ?? 0;
+                final pct = totalCA > 0 ? (caClient / totalCA * 100).round() : 0;
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 14),
                   child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -324,7 +330,7 @@ class _ClientsTab extends StatelessWidget {
                       AvatarCircle(initials: c.initials, color: c.color, size: 28, fontSize: 10),
                       const SizedBox(width: 10),
                       Expanded(child: Text(c.name, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.text1), overflow: TextOverflow.ellipsis)),
-                      Text(Fmt.money(c.totalFacture), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1)),
+                      Text(Fmt.money(caClient), style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text1)),
                       const SizedBox(width: 8),
                       SizedBox(width: 40, child: Text('$pct%', style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3), textAlign: TextAlign.right)),
                     ]),

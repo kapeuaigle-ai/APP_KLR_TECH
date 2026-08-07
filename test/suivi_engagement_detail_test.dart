@@ -151,7 +151,6 @@ void main() {
       const client = Client(
         id: 9, initials: 'AS', color: Colors.blue, name: 'Advans SA',
         contact: 'M. Koné', email: 'contact@advans.ci', phone: '0102030405',
-        totalFacture: 0,
       );
       state.addClient(client);
       state.addEngagement(_creance(clientId: client.id));
