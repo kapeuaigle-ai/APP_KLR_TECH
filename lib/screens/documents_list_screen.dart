@@ -287,9 +287,34 @@ class _DocActions {
                 child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
                   // Seule la proforma se modifie : facture et BL en sont dérivés
                   // automatiquement à la validation.
+                  //
+                  // Une proforma déjà VALIDÉE ne s'ouvre plus en édition : sa
+                  // facture, son BL et sa créance sont figés sur son contenu
+                  // (défaut critique, revue Lot D) — la modifier ici les
+                  // désynchroniserait silencieusement. Le bouton reste visible
+                  // (pas de contrôle mort) mais explique pourquoi au lieu de
+                  // naviguer ; « Dévalider », dans la fiche détail, est
+                  // l'échappatoire tant qu'aucun règlement n'est enregistré.
                   if (type == 'proforma')
                     TextButton.icon(
                       onPressed: () {
+                        if (doc.statut == 'validee') {
+                          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                            content: const Text(
+                              'Proforma validée : la facture et le BL déjà émis en '
+                              'dépendent, elle ne peut plus être modifiée. Utilisez '
+                              '« Dévalider » (tant qu\'aucun règlement n\'est '
+                              'enregistré) pour la corriger.',
+                              style: TextStyle(fontSize: 13),
+                            ),
+                            backgroundColor: AppColors.orange,
+                            duration: const Duration(seconds: 6),
+                            behavior: SnackBarBehavior.floating,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                            margin: const EdgeInsets.all(16),
+                          ));
+                          return;
+                        }
                         Navigator.of(ctx).pop();
                         context.read<AppState>().startEditProforma(doc);
                       },
@@ -383,57 +408,70 @@ class _DocActions {
             // Changement de statut : uniquement pour les proformas. Valider
             // une proforma génère la facture et le BL ; factures et BL n'ont
             // pas de statut propre.
+            //
+            // Une fois VALIDÉE, ce bloc bascule : les trois boutons rapides
+            // cours/validée/annulée disparaissent — en repartir vers 'cours'
+            // ou 'annulée' par cette voie laisserait la facture, le BL et la
+            // créance déjà générés orphelins (compounding du défaut critique,
+            // revue Lot D ; `AppState.setDocumentStatus` le refuse de toute
+            // façon, mais ne plus le PROPOSER évite de faire croire que ça
+            // marche). Seule « Dévalider » sait défaire proprement, et
+            // seulement tant qu'aucun règlement n'a bougé sur la créance.
             if (type == 'proforma') ...[
               const SizedBox(height: 8),
               const Divider(color: AppColors.border),
               const SizedBox(height: 8),
-              Text('CHANGER LE STATUT', style: AppTheme.label),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Text(
-                  'Valider une proforma génère automatiquement la facture et le bon de livraison avec le même numéro.',
-                  style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
+              if (doc.statut == 'validee')
+                _StatutValideeSection(doc: doc, outerContext: context)
+              else ...[
+                Text('CHANGER LE STATUT', style: AppTheme.label),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: Text(
+                    'Valider une proforma génère automatiquement la facture et le bon de livraison avec le même numéro.',
+                    style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
+                  ),
                 ),
-              ),
-              Row(children: [
-                for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
-                  Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: GestureDetector(
-                      onTap: () {
-                        final appState = context.read<AppState>();
-                        if (s.$1 == 'validee') {
-                          final generated = appState.validateProforma(doc.id);
-                          if (generated) {
-                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                              content: Text('Facture et Bon de livraison ${doc.numero} générés.',
-                                  style: const TextStyle(fontSize: 13)),
-                              backgroundColor: AppColors.green,
-                              behavior: SnackBarBehavior.floating,
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                              margin: const EdgeInsets.all(16),
-                            ));
+                Row(children: [
+                  for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: GestureDetector(
+                        onTap: () {
+                          final appState = context.read<AppState>();
+                          if (s.$1 == 'validee') {
+                            final generated = appState.validateProforma(doc.id);
+                            if (generated) {
+                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                content: Text('Facture et Bon de livraison ${doc.numero} générés.',
+                                    style: const TextStyle(fontSize: 13)),
+                                backgroundColor: AppColors.green,
+                                behavior: SnackBarBehavior.floating,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                margin: const EdgeInsets.all(16),
+                              ));
+                            }
+                          } else {
+                            appState.setDocumentStatus(type, doc.id, s.$1);
                           }
-                        } else {
-                          appState.setDocumentStatus(type, doc.id, s.$1);
-                        }
-                        Navigator.of(ctx).pop();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: doc.statut == s.$1 ? s.$3.withValues(alpha: 0.12) : AppColors.bg,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
+                          Navigator.of(ctx).pop();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: doc.statut == s.$1 ? s.$3.withValues(alpha: 0.12) : AppColors.bg,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
+                          ),
+                          child: Text(s.$2, style: GoogleFonts.dmSans(
+                            fontSize: 12, fontWeight: FontWeight.w600,
+                            color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
                         ),
-                        child: Text(s.$2, style: GoogleFonts.dmSans(
-                          fontSize: 12, fontWeight: FontWeight.w600,
-                          color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
                       ),
                     ),
-                  ),
-              ]),
+                ]),
+              ],
             ],
           ]),
         ),
@@ -452,6 +490,110 @@ class _DocActions {
     );
   }
 
+}
+
+// ── Bloc « proforma validée » de la fiche détail ──────────
+//
+// Remplace les boutons rapides CHANGER LE STATUT une fois la proforma
+// validée : sa facture, son BL et sa créance sont figés, il n'y a plus de
+// changement de statut « rapide » qui tienne (voir showDetails). Explique le
+// verrou, puis propose « Dévalider » — sauf si un règlement existe déjà sur
+// la créance générée, auquel cas l'argent a réellement bougé et il n'y a plus
+// d'échappatoire (`AppState.peutDevaliderProforma`).
+class _StatutValideeSection extends StatelessWidget {
+  final DocumentItem doc;
+  // Contexte de l'écran (PAS celui, éphémère, de la boîte de dialogue) : sert
+  // à ouvrir la confirmation de dévalidation APRÈS avoir fermé cette fiche —
+  // même schéma que `showFullDocument(context)` plus haut dans ce fichier.
+  final BuildContext outerContext;
+  const _StatutValideeSection({required this.doc, required this.outerContext});
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    final peut = state.peutDevaliderProforma(doc.id);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('PROFORMA VALIDÉE', style: AppTheme.label),
+      const SizedBox(height: 8),
+      Text(
+        'La facture et le bon de livraison ont été générés avec le même numéro, '
+        'et la créance correspondante figure en comptabilité : cette proforma ne '
+        'peut plus être modifiée ni changer de statut directement.',
+        style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
+      ),
+      const SizedBox(height: 10),
+      if (!peut)
+        Text(
+          'Dévalidation impossible : un règlement a déjà été enregistré sur la '
+          'créance associée. L\'argent a bougé, ce document ne peut plus être '
+          'défait — la correction se fait ailleurs (avoir, ajustement en '
+          'comptabilité).',
+          style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.red, height: 1.4),
+        )
+      else
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).pop(); // ferme cette fiche détail
+            _confirmerDevalidationProforma(outerContext, state, doc);
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.bg,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: AppColors.red),
+            ),
+            child: Text('Dévalider', style: GoogleFonts.dmSans(
+                fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.red)),
+          ),
+        ),
+    ]);
+  }
+}
+
+/// Dévalider une proforma retire la facture, le BL et la créance qu'elle a
+/// générés, et la ramène à « en cours ». Bouton non affiché si un règlement
+/// existe déjà (voir `_StatutValideeSection`), donc pas besoin de revérifier
+/// ici — mais `AppState.devaliderProforma` referait le contrôle de toute
+/// façon si jamais cet appel venait d'ailleurs. Même cérémonie que
+/// `_confirmerSuppressionProjet` dans projets_screen.dart : la confirmation
+/// nomme concrètement ce qui va disparaître.
+void _confirmerDevalidationProforma(BuildContext context, AppState state, DocumentItem doc) {
+  final gen = state.docsGeneresPourProforma(doc);
+  final parts = <String>[
+    if (gen.facture != null) 'la facture ${gen.facture!.numero}',
+    if (gen.bl != null) 'le bon de livraison ${gen.bl!.numero}',
+    if (gen.engagement != null) 'la créance de ${Fmt.money(gen.engagement!.montant)}',
+  ];
+  final message = parts.isEmpty
+      ? 'Aucune facture, aucun BL ni aucune créance n\'ont été retrouvés pour '
+        'cette proforma : elle repassera simplement en cours.'
+      : '${parts.join(', ')} seront supprimés. La proforma « ${doc.numero} » '
+        'repassera en cours.';
+
+  showDialog<void>(
+    context: context,
+    builder: (dctx) => AlertDialog(
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      title: Text('Dévalider cette proforma ?', style: GoogleFonts.dmSans(
+          fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+      content: Text(message, style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4)),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(dctx).pop(),
+          child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+        ),
+        TextButton(
+          onPressed: () {
+            state.devaliderProforma(doc.id);
+            Navigator.of(dctx).pop();
+          },
+          child: Text('Dévalider', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+        ),
+      ],
+    ),
+  );
 }
 
 // ── Carte document (téléphone) ────────────────────────────
