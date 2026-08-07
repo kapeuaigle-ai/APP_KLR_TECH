@@ -118,9 +118,17 @@ class _FinancierTab extends StatelessWidget {
   const _FinancierTab({required this.rapport});
 
   static const _palette = [
-    AppColors.primary, Color(0xFF374151), AppColors.orange,
+    AppColors.primary, AppColors.slate, AppColors.orange,
     AppColors.blue, AppColors.teal, Color(0xFFD1D5DB),
   ];
+
+  // Réutilise StatusBadge/BadgeCfg (widgets/common.dart) plutôt que de
+  // redessiner une pastille à la main — hand-roulée à trois endroits avant
+  // cette factorisation (défaut F10, Lot F).
+  static const _beneficeBadges = {
+    'positif': BadgeCfg(AppColors.green, AppColors.greenBg, 'Positif'),
+    'negatif': BadgeCfg(AppColors.red, AppColors.redBg, 'Négatif'),
+  };
 
   @override
   Widget build(BuildContext context) {
@@ -133,15 +141,9 @@ class _FinancierTab extends StatelessWidget {
         StatCard(label: 'DÉCAISSEMENTS', value: Fmt.number(rapport.depenses), unit: 'FCFA'),
         StatCard(
           label: 'BÉNÉFICE', value: Fmt.number(rapport.benefice), unit: 'FCFA',
-          badge: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: rapport.benefice >= 0 ? AppColors.greenBg : AppColors.redBg,
-              borderRadius: BorderRadius.circular(20)),
-            child: Text(rapport.benefice >= 0 ? 'Positif' : 'Négatif',
-                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700,
-                    color: rapport.benefice >= 0 ? AppColors.green : AppColors.red)),
-          ),
+          badge: StatusBadge(
+              status: rapport.benefice >= 0 ? 'positif' : 'negatif',
+              config: _beneficeBadges),
         ),
         StatCard(label: 'DÎME (10%)', value: Fmt.number(rapport.dime), unit: 'FCFA', red: true),
       ]),
@@ -186,7 +188,7 @@ class _FinancierTab extends StatelessWidget {
                 )),
                 const SizedBox(height: 8),
                 Row(children: [
-                  _Legend(color: const Color(0xFF374151), label: 'Encaissé'),
+                  _Legend(color: AppColors.slate, label: 'Encaissé'),
                   const SizedBox(width: 16),
                   _Legend(color: AppColors.primary, label: 'Bénéfice'),
                 ]),
@@ -391,10 +393,13 @@ class _ProjetsTab extends StatelessWidget {
         StatCard(label: 'TOTAL PROJETS', value: '${projets.length}'),
         StatCard(label: 'EN COURS', value: '$enCours'),
         StatCard(label: 'TERMINÉS', value: '$termines',
-          badge: Container(padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(color: AppColors.greenBg, borderRadius: BorderRadius.circular(20)),
-            child: Text(projets.isEmpty ? '0%' : '${(termines / projets.length * 100).round()}%',
-                style: GoogleFonts.dmSans(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.green)))),
+          badge: Builder(builder: (_) {
+            // Le libellé est la valeur elle-même (un pourcentage variable) :
+            // une config à une seule entrée suffit à réutiliser StatusBadge
+            // plutôt que redessiner la pastille à la main (défaut F10, Lot F).
+            final pct = projets.isEmpty ? '0%' : '${(termines / projets.length * 100).round()}%';
+            return StatusBadge(status: pct, config: {pct: BadgeCfg(AppColors.green, AppColors.greenBg, pct)});
+          })),
         StatCard(label: 'TAUX COMPLÉTION', value: '$tauxCompletion', unit: '%'),
       ]),
       const SizedBox(height: 20),
