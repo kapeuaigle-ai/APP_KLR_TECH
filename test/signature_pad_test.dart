@@ -140,6 +140,40 @@ void main() {
       expect(find.text('Signe ici'), findsOneWidget, reason: 'la boîte reste ouverte');
     });
 
+    // ── Défaut G3 (Lot G) ─────────────────────────────────
+    // « Effacer » n'a rien à effacer tant qu'aucun trait n'existe : le
+    // bouton doit être aussi inerte que « Valider » l'est déjà dans le même
+    // état, pas seulement visuellement plus discret.
+    testWidgets('sans trait, « Effacer » est inactif', (tester) async {
+      await openPad(tester);
+
+      final bouton = tester.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text('Effacer'),
+          matching: find.byType(OutlinedButton),
+        ),
+      );
+      expect(bouton.onPressed, isNull,
+          reason: 'rien à effacer sur une zone vide');
+
+      await tester.tap(find.text('Effacer'), warnIfMissed: false);
+      await tester.pumpAndSettle();
+      expect(find.text('Signe ici'), findsOneWidget, reason: 'toujours vide, sans exception');
+    });
+
+    testWidgets('après un trait, « Effacer » est actif', (tester) async {
+      await openPad(tester);
+      await drawStroke(tester);
+
+      final bouton = tester.widget<OutlinedButton>(
+        find.ancestor(
+          of: find.text('Effacer'),
+          matching: find.byType(OutlinedButton),
+        ),
+      );
+      expect(bouton.onPressed, isNotNull);
+    });
+
     testWidgets('après un trait, « Valider » est actif', (tester) async {
       await openPad(tester);
       await drawStroke(tester);

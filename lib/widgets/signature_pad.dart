@@ -143,11 +143,16 @@ class _SignaturePadDialogState extends State<_SignaturePadDialog> {
                 )),
                 const SizedBox(height: 8),
                 SizedBox(width: double.infinity, child: SecondaryBtn(
-                  label: 'Effacer', icon: Icons.refresh, onTap: _clear,
+                  label: 'Effacer', icon: Icons.refresh,
+                  // Même garde que « Valider » (défaut G3, Lot G) : sans
+                  // trait tracé, il n'y a rien à effacer — le geste ne
+                  // changerait alors rien de visible ni de mémorisé.
+                  onTap: _hasDrawing ? _clear : null,
                 )),
               ])
             : Row(children: [
-                SecondaryBtn(label: 'Effacer', icon: Icons.refresh, onTap: _clear),
+                SecondaryBtn(label: 'Effacer', icon: Icons.refresh,
+                    onTap: _hasDrawing ? _clear : null),
                 const Spacer(),
                 PrimaryBtn(
                   label: 'Valider',

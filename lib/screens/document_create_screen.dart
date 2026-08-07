@@ -599,6 +599,7 @@ class _FormPanel extends StatelessWidget {
               _LineRow(
                 key: ValueKey(i),
                 line: lines[i],
+                canRemove: lines.length > 1,
                 onRemove: () => onRemoveLine(i),
                 onChanged: onLineChanged,
               ),
@@ -626,6 +627,7 @@ class _FormPanel extends StatelessWidget {
             ...lines.asMap().entries.map((e) => _LineRow(
               key: ValueKey(e.key),
               line: e.value,
+              canRemove: lines.length > 1,
               onRemove: () => onRemoveLine(e.key),
               onChanged: onLineChanged,
             )),
@@ -789,9 +791,16 @@ class _TotalRow extends StatelessWidget {
 // ─────────────────────────────────────────────────────────
 class _LineRow extends StatefulWidget {
   final LineItem line;
+  /// Faux sur la dernière ligne restante : `onRemove` (`DocumentCreateScreen
+  /// ._removeLine`) refuse alors silencieusement de vider la dernière ligne
+  /// (une proforma doit garder au moins une ligne à remplir), donc le bouton
+  /// devient réellement inerte plutôt que de rester actif sans effet
+  /// (défaut G2, Lot G).
+  final bool canRemove;
   final VoidCallback onRemove;
   final VoidCallback onChanged;
-  const _LineRow({super.key, required this.line, required this.onRemove, required this.onChanged});
+  const _LineRow({super.key, required this.line, this.canRemove = true,
+      required this.onRemove, required this.onChanged});
 
   @override
   State<_LineRow> createState() => _LineRowState();
@@ -872,11 +881,14 @@ class _LineRowState extends State<_LineRow> {
             Text('LIGNE ${line.ref}', style: AppTheme.label),
             const Spacer(),
             IconButton(
-              tooltip: 'Retirer la ligne',
-              icon: const Icon(Icons.close, size: 18, color: AppColors.text3),
+              tooltip: widget.canRemove
+                  ? 'Retirer la ligne'
+                  : 'La proforma doit garder au moins une ligne',
+              icon: Icon(Icons.close, size: 18,
+                  color: widget.canRemove ? AppColors.text3 : AppColors.border),
               constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
               padding: EdgeInsets.zero,
-              onPressed: widget.onRemove,
+              onPressed: widget.canRemove ? widget.onRemove : null,
             ),
           ]),
           const SizedBox(height: 6),
@@ -917,7 +929,20 @@ class _LineRowState extends State<_LineRow> {
       const SizedBox(width: 8),
       SizedBox(width: 96, child: _readonlyBox(Fmt.number(line.total), align: Alignment.centerRight)),
       const SizedBox(width: 8),
-      GestureDetector(onTap: widget.onRemove, child: const Icon(Icons.close, size: 16, color: AppColors.text3)),
+      Tooltip(
+        message: widget.canRemove
+            ? 'Retirer la ligne'
+            : 'La proforma doit garder au moins une ligne',
+        // `onTap: null` sur la dernière ligne : sans quoi le curseur `click`
+        // et le tap restent actifs (le style grisé, seul, ne ferait que
+        // MENTIR sur l'état réel du contrôle — exactement le défaut visé,
+        // voir le commentaire de `canRemove`).
+        child: GestureDetector(
+          onTap: widget.canRemove ? widget.onRemove : null,
+          child: Icon(Icons.close, size: 16,
+              color: widget.canRemove ? AppColors.text3 : AppColors.border),
+        ),
+      ),
     ]));
   }
 }
