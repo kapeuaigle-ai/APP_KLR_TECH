@@ -373,13 +373,18 @@ class _EngagementsTabState extends State<_EngagementsTab> {
               borderRadius: BorderRadius.circular(10),
               border: Border.all(color: AppColors.border),
             ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
+            // `Wrap`, pas `Row` : à échelle de texte système agrandie
+            // (accessibilité, 200 %), les deux puces ne tiennent plus sur une
+            // seule ligne dans l'espace que leur laisse `Expanded` ci-dessus
+            // — `Wrap` les fait passer à la ligne au lieu de déborder
+            // (lot G, sweep H). Identique à l'écran normal : tant que les
+            // deux tiennent, `Wrap` se comporte comme `Row`.
+            child: Wrap(spacing: 4, runSpacing: 4, children: [
               AppFilterChip(
                 label: 'Créances (${creances.length})',
                 active: _estCreance,
                 onTap: () => setState(() => _sens = 'entrant'),
               ),
-              const SizedBox(width: 4),
               AppFilterChip(
                 label: 'Dettes (${dettes.length})',
                 active: !_estCreance,
@@ -407,13 +412,15 @@ class _EngagementsTabState extends State<_EngagementsTab> {
             borderRadius: BorderRadius.circular(10),
             border: Border.all(color: AppColors.border),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
+          // Même correctif que le filtre Créances/Dettes ci-dessus : `Wrap`
+          // au lieu de `Row`, pour passer à la ligne plutôt que déborder à
+          // 200 % (lot G, sweep H).
+          child: Wrap(spacing: 4, runSpacing: 4, children: [
             AppFilterChip(
               label: 'En cours (${enCours.length})',
               active: !_regle,
               onTap: () => setState(() => _regle = false),
             ),
-            const SizedBox(width: 4),
             AppFilterChip(
               label: 'Réglées (${reglees.length})',
               active: _regle,
