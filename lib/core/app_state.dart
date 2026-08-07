@@ -382,7 +382,17 @@ class AppState extends ChangeNotifier {
   DocumentItem? get editingProforma => _editingProforma;
 
   /// Ouvre l'écran document sur une proforma existante, pour la modifier.
+  ///
+  /// Refusé pour une proforma déjà validée (défaut critique, revue Lot D) :
+  /// sa facture, son BL et son engagement sont figés sur le contenu qu'elle
+  /// avait à la validation — la rouvrir en édition permettrait de les
+  /// désynchroniser silencieusement (client, montant... tout ce qu'elle
+  /// porte). L'UI ne doit de toute façon jamais offrir « Modifier » pour un
+  /// tel document (voir documents_list_screen.dart, qui explique pourquoi à
+  /// la place) ; ce garde-fou est la dernière ligne de défense, pas la
+  /// seule — voir aussi `saveOrUpdateProforma`.
   void startEditProforma(DocumentItem doc) {
+    if (doc.statut == 'validee') return;
     _editingProforma = doc;
     _creating = true;
     notifyListeners();
@@ -865,10 +875,19 @@ class AppState extends ChangeNotifier {
   /// celle déjà enregistrée dans la même session (même id) sans la dupliquer ni
   /// re-journaliser. C'est ce geste qui « consomme » le numéro du jour : générer
   /// le PDF (télécharger/imprimer) ou cliquer Enregistrer passe par ici.
+  ///
+  /// Une mise à jour visant une proforma DÉJÀ validée est refusée en silence
+  /// (défaut critique, revue Lot D) : sa facture, son BL et son engagement ont
+  /// été générés depuis son contenu à ce moment-là et restent figés dessus —
+  /// la réécrire ici (client, lignes, montant...) les désynchroniserait sans
+  /// qu'aucun des trois documents affichés au manager ne le signale. L'UI ne
+  /// doit jamais atteindre ce cas (voir `startEditProforma`), mais l'invariant
+  /// ne doit pas dépendre uniquement d'elle.
   void saveOrUpdateProforma(DocumentItem doc) {
     final list = documents['proforma']!;
     final idx = list.indexWhere((d) => d.id == doc.id);
     if (idx >= 0) {
+      if (list[idx].statut == 'validee') return; // verrouillée : voir ci-dessus
       list[idx] = doc; // même document : on rafraîchit son contenu
     } else {
       list.add(doc);
@@ -878,12 +897,24 @@ class AppState extends ChangeNotifier {
     _emit();
   }
 
+  /// Change le statut d'un document brut — utilisé par les boutons rapides
+  /// « CHANGER LE STATUT » d'une proforma.
+  ///
+  /// Sortir une proforma DÉJÀ validée de 'validee' par cette voie générique
+  /// est refusé (compounding du défaut critique, revue Lot D) : sa facture,
+  /// son BL et son engagement resteraient émis alors que la proforma
+  /// redeviendrait 'cours'/'annulee' sans eux — des documents orphelins, et
+  /// le verrou du projet (`_projetVerrouille` côté écran) se relèverait avec.
+  /// Seule `devaliderProforma` sait défaire une validation proprement ; toute
+  /// AUTRE transition (cours <-> annulee, ou vers validee — qui passe par
+  /// `validateProforma`, pas par ici) reste inchangée.
   void setDocumentStatus(String type, int id, String statut) {
     final doc = documents[type]?.where((d) => d.id == id);
-    if (doc != null && doc.isNotEmpty) {
-      doc.first.statut = statut;
-      _emit();
-    }
+    if (doc == null || doc.isEmpty) return;
+    final d = doc.first;
+    if (type == 'proforma' && d.statut == 'validee' && statut != 'validee') return;
+    d.statut = statut;
+    _emit();
   }
 
   /// Valide une proforma : elle devient une offre acceptée, et la facture
@@ -956,6 +987,89 @@ class AppState extends ChangeNotifier {
     }
     _emit();
     return !alreadyGenerated;
+  }
+
+  /// Retrouve la facture, le BL et l'engagement générés par la validation
+  /// d'une proforma — même logique d'appariement que `validateProforma` (dont
+  /// l'anti-doublon `alreadyGenerated`) : numéro décliné P→F/B, ou, pour une
+  /// proforma validée avant la refonte de la numérotation, le numéro identique
+  /// à la proforma elle-même. `null` sur chaque champ que la recherche ne
+  /// retrouve pas (sauvegarde corrompue à la main, par exemple) — l'appelant
+  /// doit s'en accommoder plutôt que planter.
+  ({DocumentItem? facture, DocumentItem? bl, Engagement? engagement}) _docsGeneres(
+      DocumentItem p) {
+    final factureNum = DocNumero.retype(p.numero, 'facture');
+    final blNum = DocNumero.retype(p.numero, 'bl');
+    DocumentItem? facture;
+    for (final d in documents['facture']!) {
+      if (d.numero == factureNum || d.numero == p.numero) { facture = d; break; }
+    }
+    DocumentItem? bl;
+    for (final d in documents['bl']!) {
+      if (d.numero == blNum || d.numero == p.numero) { bl = d; break; }
+    }
+    Engagement? engagement;
+    if (facture != null) {
+      final m = engagements.where((e) => e.documentNumero == facture!.numero);
+      if (m.isNotEmpty) engagement = m.first;
+    }
+    return (facture: facture, bl: bl, engagement: engagement);
+  }
+
+  /// Expose `_docsGeneres` à l'UI, pour que la confirmation de dévalidation
+  /// nomme concrètement ce qui va disparaître — même schéma que
+  /// `deleteProjet`/`_confirmerSuppressionProjet` dans projets_screen.dart.
+  ({DocumentItem? facture, DocumentItem? bl, Engagement? engagement})
+      docsGeneresPourProforma(DocumentItem p) => _docsGeneres(p);
+
+  /// Vrai si la proforma [id] peut être dévalidée : elle est bien 'validee',
+  /// et l'engagement qu'elle a généré (s'il est retrouvé) ne porte encore
+  /// aucun règlement. Dès qu'un règlement existe, l'argent a réellement
+  /// bougé — ce geste ne peut plus être défait sans mentir sur la
+  /// comptabilité, voir `devaliderProforma`.
+  bool peutDevaliderProforma(int id) {
+    final m = documents['proforma']!.where((d) => d.id == id);
+    if (m.isEmpty || m.first.statut != 'validee') return false;
+    final gen = _docsGeneres(m.first);
+    return gen.engagement == null || gen.engagement!.reglements.isEmpty;
+  }
+
+  /// Défait la validation d'une proforma : retire la facture, le BL et
+  /// l'engagement qu'elle avait générés, et la ramène à 'cours' — l'échappatoire
+  /// pour un manager qui a validé avec une erreur (client, lignes...) plutôt
+  /// que de le laisser sans recours (défaut critique, revue Lot D).
+  ///
+  /// Refusé (sans rien changer) si la proforma n'est pas validée, ou si son
+  /// engagement porte déjà un règlement : de l'argent a réellement bougé, ce
+  /// geste ne peut plus être défait — la correction se fait ailleurs (avoir,
+  /// ajustement en comptabilité), jamais en réécrivant l'historique.
+  ///
+  /// Le numéro de la proforma ne change pas ici : une revalidation ultérieure
+  /// (`validateProforma`) redérive donc EXACTEMENT le même numéro de facture
+  /// et de BL (P→F/B est une fonction pure du numéro de la proforma), sans
+  /// consommer de nouveau numéro auprès de `DocNumero.next` — celui-ci ne sert
+  /// qu'à la création d'une proforma, jamais à sa validation.
+  bool devaliderProforma(int id) {
+    final m = documents['proforma']!.where((d) => d.id == id);
+    if (m.isEmpty) return false;
+    final p = m.first;
+    if (p.statut != 'validee') return false;
+    final gen = _docsGeneres(p);
+    if (gen.engagement != null && gen.engagement!.reglements.isNotEmpty) return false;
+
+    if (gen.facture != null) {
+      documents['facture']!.removeWhere((d) => d.id == gen.facture!.id);
+    }
+    if (gen.bl != null) documents['bl']!.removeWhere((d) => d.id == gen.bl!.id);
+    if (gen.engagement != null) {
+      engagements.removeWhere((e) => e.id == gen.engagement!.id);
+    }
+    p.statut = 'cours';
+
+    _logActivity('facture', 'Proforma ${p.numero} dévalidée',
+        'Facture, BL et créance retirés — ${p.client}', AppColors.orange);
+    _emit();
+    return true;
   }
 
   // ── Comptabilité : versement de la dîme ────────────────
