@@ -101,7 +101,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
 }
 
 // ── Dialogue Ajouter / Modifier un client ─────────────────
-void showClientDialog(BuildContext context, {Client? existing}) {
+Future<void> showClientDialog(BuildContext context, {Client? existing}) async {
   final nameCtrl = TextEditingController(text: existing?.name ?? '');
   final contactCtrl = TextEditingController(text: existing?.contact ?? '');
   final emailCtrl = TextEditingController(text: existing?.email ?? '');
@@ -117,7 +117,7 @@ void showClientDialog(BuildContext context, {Client? existing}) {
     return (words[0][0] + words[1][0]).toUpperCase();
   }
 
-  showDialog(
+  await showDialog(
     context: context,
     builder: (ctx) => StatefulBuilder(builder: (ctx, setState) => AlertDialog(
       backgroundColor: Colors.white,
@@ -173,6 +173,18 @@ void showClientDialog(BuildContext context, {Client? existing}) {
       ],
     )),
   );
+  // Post-frame callback plutôt qu'un dispose immédiat — voir le commentaire
+  // détaillé de `_ouvrirFormulaireProjet` (projets_screen.dart) : `pop()`
+  // résout la promesse avant que la transition de sortie du dialogue ne soit
+  // terminée, et une reconstruction de TextField encore en vol à ce moment-là
+  // planterait sur un contrôleur déjà détruit.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    nameCtrl.dispose();
+    contactCtrl.dispose();
+    emailCtrl.dispose();
+    phoneCtrl.dispose();
+    addressCtrl.dispose();
+  });
 }
 
 class _DialogField extends StatelessWidget {

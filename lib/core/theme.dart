@@ -18,6 +18,10 @@ class AppColors {
   static const teal = Color(0xFF0891B2);
   static const emerald = Color(0xFF059669);
   static const indigo = Color(0xFF4F46E5);
+  /// Gris ardoise foncé — deuxième teinte des graphiques (barres, secteurs de
+  /// donut), à côté de `primary`. Nommée pour ne plus être recopiée en
+  /// `Color(0xFF374151)` à chaque nouvel usage.
+  static const slate = Color(0xFF374151);
 
   // Background tints
   static const greenBg = Color(0xFFF0FDF4);

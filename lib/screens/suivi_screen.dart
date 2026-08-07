@@ -361,26 +361,32 @@ class _EngagementsTabState extends State<_EngagementsTab> {
       // gauche, action à droite — une seule ligne au-dessus du tableau, qui
       // s'empile sur téléphone (les deux ensemble réclament 378 px).
       StackingRow(
-        left: Container(
-          padding: const EdgeInsets.all(5),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: AppColors.border),
+        // `StackingRow` donne maintenant à `left` tout l'espace restant
+        // (défaut F1) : sans cet `Align`, la pastille décorée s'étirerait
+        // sur toute cette largeur au lieu de se limiter à ses deux puces.
+        left: Align(
+          alignment: Alignment.centerLeft,
+          child: Container(
+            padding: const EdgeInsets.all(5),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              AppFilterChip(
+                label: 'Créances (${creances.length})',
+                active: _estCreance,
+                onTap: () => setState(() => _sens = 'entrant'),
+              ),
+              const SizedBox(width: 4),
+              AppFilterChip(
+                label: 'Dettes (${dettes.length})',
+                active: !_estCreance,
+                onTap: () => setState(() => _sens = 'sortant'),
+              ),
+            ]),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            AppFilterChip(
-              label: 'Créances (${creances.length})',
-              active: _estCreance,
-              onTap: () => setState(() => _sens = 'entrant'),
-            ),
-            const SizedBox(width: 4),
-            AppFilterChip(
-              label: 'Dettes (${dettes.length})',
-              active: !_estCreance,
-              onTap: () => setState(() => _sens = 'sortant'),
-            ),
-          ]),
         ),
         right: PrimaryBtn(
           label: _estCreance ? 'Nouvelle Créance' : 'Nouvelle Dette',
@@ -1837,51 +1843,91 @@ class _DimeTab extends StatelessWidget {
         StatCard(label: 'DÉJÀ VERSÉ', value: Fmt.number(totalPaye), unit: 'FCFA'),
       ]),
       const SizedBox(height: 20),
-      CardBox(padding: EdgeInsets.zero, child: HScrollTable(minWidth: 880, child: Column(children: [
-        Container(color: AppColors.bg, child: const Row(children: [
-          Expanded(flex: 3, child: ThCell('MOIS')),
-          Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
-          Expanded(flex: 3, child: ThCell('DÎME (10%)')),
-          Expanded(flex: 2, child: ThCell('STATUT')),
-          Expanded(flex: 3, child: ThCell('DATE VERSEMENT')),
-          SizedBox(width: 56),
-        ])),
-        const Divider(height: 1, color: AppColors.border),
+      // Une carte par mois sur téléphone, comme les autres sections de
+      // Suivi — le tableau de 880 px, lui, forçait un défilement horizontal
+      // pour atteindre « Marquer versée » (défaut F7, Lot F). Le Gantt, à
+      // l'inverse, garde délibérément son tableau : une frise chronologique
+      // ne se découpe pas en cartes (voir son propre commentaire).
+      if (isPhone(context)) ...[
         if (rows.isEmpty)
-          Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune activité', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          CardBox(padding: EdgeInsets.zero, child: EmptyHint('Aucune activité'))
         else
-          ...rows.map((r) => Container(
-            decoration: BoxDecoration(
-              color: (!r.dimePaid && r.dime > 0) ? const Color(0xFFFFFBEB) : Colors.white,
-              border: const Border(bottom: BorderSide(color: AppColors.border)),
-            ),
-            child: Row(children: [
-              _dcell(r.label, flex: 3, bold: true),
-              _dcell(Fmt.money(r.benefice), flex: 3, color: r.benefice < 0 ? AppColors.red : AppColors.text1),
-              _dcell(Fmt.money(r.dime), flex: 3, color: AppColors.primary, bold: true),
-              Expanded(flex: 2, child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                child: StatusBadge(status: r.dimePaid ? 'paye' : 'attente'),
-              )),
-              _dcell(r.dimeDate ?? '—', flex: 3, color: AppColors.text2),
-              SizedBox(width: 56, child: (r.dime > 0 && !r.dimePaid)
-                ? IconButton(
-                    tooltip: 'Marquer versée',
-                    icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.green),
-                    onPressed: () => state.setDimePaid(r.monthKey, true, date: _fmtDate(DateTime.now())),
-                  )
-                : (r.dimePaid
-                    ? IconButton(
-                        tooltip: 'Annuler le versement',
-                        icon: const Icon(Icons.undo, size: 16, color: AppColors.text3),
-                        onPressed: () => state.setDimePaid(r.monthKey, false),
-                      )
-                    : const SizedBox())),
-            ]),
-          )),
-      ]))),
+          ...rows.map((r) => _dimeCard(state, r)),
+      ] else
+        CardBox(padding: EdgeInsets.zero, child: HScrollTable(minWidth: 880, child: Column(children: [
+          Container(color: AppColors.bg, child: const Row(children: [
+            Expanded(flex: 3, child: ThCell('MOIS')),
+            Expanded(flex: 3, child: ThCell('BÉNÉFICE')),
+            Expanded(flex: 3, child: ThCell('DÎME (10%)')),
+            Expanded(flex: 2, child: ThCell('STATUT')),
+            Expanded(flex: 3, child: ThCell('DATE VERSEMENT')),
+            SizedBox(width: 56),
+          ])),
+          const Divider(height: 1, color: AppColors.border),
+          if (rows.isEmpty)
+            Padding(padding: const EdgeInsets.all(30), child: Center(child: Text('Aucune activité', style: GoogleFonts.dmSans(fontSize: 14, color: AppColors.text3))))
+          else
+            ...rows.map((r) => Container(
+              decoration: BoxDecoration(
+                color: (!r.dimePaid && r.dime > 0) ? const Color(0xFFFFFBEB) : Colors.white,
+                border: const Border(bottom: BorderSide(color: AppColors.border)),
+              ),
+              child: Row(children: [
+                _dcell(r.label, flex: 3, bold: true),
+                _dcell(Fmt.money(r.benefice), flex: 3, color: r.benefice < 0 ? AppColors.red : AppColors.text1),
+                _dcell(Fmt.money(r.dime), flex: 3, color: AppColors.primary, bold: true),
+                Expanded(flex: 2, child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                  child: StatusBadge(status: r.dimePaid ? 'paye' : 'attente'),
+                )),
+                _dcell(r.dimeDate ?? '—', flex: 3, color: AppColors.text2),
+                SizedBox(width: 56, child: (r.dime > 0 && !r.dimePaid)
+                  ? IconButton(
+                      tooltip: 'Marquer versée',
+                      icon: const Icon(Icons.check_circle_outline, size: 18, color: AppColors.green),
+                      onPressed: () => state.setDimePaid(r.monthKey, true, date: _fmtDate(DateTime.now())),
+                    )
+                  : (r.dimePaid
+                      ? IconButton(
+                          tooltip: 'Annuler le versement',
+                          icon: const Icon(Icons.undo, size: 16, color: AppColors.text3),
+                          onPressed: () => state.setDimePaid(r.monthKey, false),
+                        )
+                      : const SizedBox())),
+              ]),
+            )),
+        ]))),
     ]);
   }
+
+  /// Carte téléphone d'une ligne de dîme mensuelle — même action (« Marquer
+  /// versée » / « Annuler le versement ») que la ligne de tableau bureau.
+  Widget _dimeCard(AppState state, MonthlyRow r) => ListCard(
+    accent: (!r.dimePaid && r.dime > 0) ? AppColors.orange : AppColors.green,
+    background: (!r.dimePaid && r.dime > 0) ? const Color(0xFFFFFBEB) : Colors.white,
+    title: Text(r.label, style: GoogleFonts.dmSans(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.text1)),
+    trailing: (r.dime > 0 && !r.dimePaid)
+        ? IconButton(
+            tooltip: 'Marquer versée',
+            icon: const Icon(Icons.check_circle_outline, size: 20, color: AppColors.green),
+            constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+            onPressed: () => state.setDimePaid(r.monthKey, true, date: _fmtDate(DateTime.now())),
+          )
+        : (r.dimePaid
+            ? IconButton(
+                tooltip: 'Annuler le versement',
+                icon: const Icon(Icons.undo, size: 18, color: AppColors.text3),
+                constraints: const BoxConstraints(minWidth: 40, minHeight: 40),
+                onPressed: () => state.setDimePaid(r.monthKey, false),
+              )
+            : null),
+    fields: [
+      ('BÉNÉFICE', CardValue(Fmt.money(r.benefice), color: r.benefice < 0 ? AppColors.red : AppColors.text1)),
+      ('DÎME (10%)', CardValue(Fmt.money(r.dime), bold: true, color: AppColors.primary)),
+      ('STATUT', StatusBadge(status: r.dimePaid ? 'paye' : 'attente')),
+      ('DATE VERSEMENT', CardValue(r.dimeDate ?? '—')),
+    ],
+  );
 
   Widget _dcell(String text, {int flex = 1, Color color = AppColors.text1, bool bold = false}) => Expanded(
     flex: flex,

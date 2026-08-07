@@ -66,7 +66,7 @@ class DocumentPreview extends StatelessWidget {
           if (client.isEmpty && clientAddr.isEmpty) '—',
         ],
         objet: objet,
-        montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
+        montantWords: NumberToWords.montantEnLettres(montant),
         conditions: conditions,
         warranty: settings.warranty,
         footerLine: settings.footerLine,
@@ -189,7 +189,7 @@ class DocumentPreview extends StatelessWidget {
               if (isLast && montant > 0 && !_isBl) ...[
                 const SizedBox(height: 10),
                 Text(
-                  'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
+                  NumberToWords.montantEnLettres(montant),
                   style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text1, height: 1.5),
                 ),
               ],
@@ -454,7 +454,13 @@ class _PreviewTable extends StatelessWidget {
           child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
             SizedBox(width: 28, child: Text(l.ref, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2))),
             const SizedBox(width: 8),
-            Expanded(child: Text(l.designation, style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text1, height: 1.3))),
+            // `maxLines` reprend le clamp de `DocumentPagination.rowsFor`
+            // (§ défaut F4, Lot F) : le modèle de hauteur ne budgète jamais
+            // plus de 6 lignes, donc le rendu ne doit jamais en dessiner
+            // plus — sans quoi une désignation démesurément longue déborde
+            // du cadre de page mesuré par ce même modèle.
+            Expanded(child: Text(l.designation, maxLines: 6, overflow: TextOverflow.ellipsis,
+                style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text1, height: 1.3))),
             SizedBox(width: 30, child: Text('${l.qte}', style: GoogleFonts.dmSans(fontSize: 8.5, color: AppColors.text2), textAlign: TextAlign.right)),
             if (!isBl) ...[
               const SizedBox(width: 8),

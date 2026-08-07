@@ -266,7 +266,7 @@ class _BarLinePainter extends CustomPainter {
       final rect = Rect.fromLTWH(bx(i) - barW / 2, py(bars[i]), barW, H - py(bars[i]) - 4);
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(3)),
-        Paint()..color = const Color(0xFF374151).withValues(alpha: 0.75),
+        Paint()..color = AppColors.slate.withValues(alpha: 0.75),
       );
     }
 

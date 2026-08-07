@@ -107,6 +107,15 @@ class Comptabilite {
     return '${_moisFr[int.parse(p[1])]} ${p[0]}';
   }
 
+  /// Premier et dernier jour du mois `monthKey` ('yyyy-MM'). Sert à borner un
+  /// `rapport()` sur exactement un mois, pour obtenir des totaux identiques à
+  /// la ligne correspondante de `bilanMensuel` (même jeu de règlements).
+  static (DateTime debut, DateTime fin) bornesMois(String monthKey) {
+    final p = monthKey.split('-');
+    final y = int.parse(p[0]), m = int.parse(p[1]);
+    return (DateTime(y, m, 1), DateTime(y, m + 1, 0));
+  }
+
   /// Tous les règlements d'une liste d'engagements, avec leur sens.
   ///
   /// Un engagement annulé n'est PAS écarté : ses règlements ont réellement eu

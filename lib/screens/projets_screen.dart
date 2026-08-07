@@ -425,7 +425,7 @@ Widget _champDate(BuildContext context, String label, DateTime valeur, ValueChan
 // ─────────────────────────────────────────────────────────
 //  Boîte « Nouveau projet » / édition des champs de base
 // ─────────────────────────────────────────────────────────
-void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? existing}) {
+Future<void> _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? existing}) async {
   final nomCtrl = TextEditingController(text: existing?.nom ?? '');
   final typeCtrl = TextEditingController(text: existing?.type ?? '');
   int? clientId = existing?.clientId;
@@ -446,7 +446,7 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
   // un registre à maintenir — il n'y en a plus.
   final suggestions = state.suggestionsTypeProjet();
 
-  showDialog<void>(
+  await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
       backgroundColor: Colors.white,
@@ -608,6 +608,19 @@ void _ouvrirFormulaireProjet(BuildContext context, AppState state, {Projet? exis
       ],
     )),
   );
+  // `await showDialog` se résout dès l'appel à `pop()`, pas une fois le
+  // dialogue effectivement retiré de l'arbre : sa transition de sortie tient
+  // encore une frame ou deux. Taper une suggestion juste avant « Créer »
+  // programme une reconstruction du TextField (curseur/sélection) qui, si les
+  // contrôleurs sont détruits immédiatement ici, s'exécute sur un contrôleur
+  // déjà `dispose()` — « A TextEditingController was used after being
+  // disposed », reproduit par `test/projets_type_suggestions_test.dart`. Un
+  // post-frame callback laisse cette reconstruction en vol se terminer
+  // d'abord.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    nomCtrl.dispose();
+    typeCtrl.dispose();
+  });
 }
 
 // ─────────────────────────────────────────────────────────
@@ -948,13 +961,13 @@ class _JalonRow extends StatelessWidget {
   }
 }
 
-void _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet projet) {
+Future<void> _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet projet) async {
   final nomCtrl = TextEditingController();
   final poidsCtrl = TextEditingController(text: '1');
   DateTime prevue = DateTime.now();
   var erreur = false;
 
-  showDialog<void>(
+  await showDialog<void>(
     context: context,
     builder: (ctx) => StatefulBuilder(builder: (ctx, setLocal) => AlertDialog(
       backgroundColor: Colors.white,
@@ -1004,6 +1017,14 @@ void _ouvrirFormulaireJalon(BuildContext context, AppState state, Projet projet)
       ],
     )),
   );
+  // Un post-frame callback plutôt qu'un dispose immédiat (§ commentaire de
+  // `_ouvrirFormulaireProjet`) : la fermeture du dialogue peut encore avoir
+  // une reconstruction en vol juste après le `pop()`, qui planterait sur un
+  // contrôleur déjà détruit.
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    nomCtrl.dispose();
+    poidsCtrl.dispose();
+  });
 }
 
 // ── Mode manuel : un curseur, rien d'autre. Aucun contrôle possible sur la

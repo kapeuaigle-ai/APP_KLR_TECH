@@ -58,7 +58,7 @@ class PdfGenerator {
   // ce type (`PREFIX-{L}01-JJMMAAAA`). En pratique les écrans passent toujours
   // le vrai numéro ; ce repli garde juste un format cohérent.
   static String _numero(AppSettings s, String type) =>
-      DocNumero.next(s.prefix, type, const [], DateTime.now());
+      DocNumero.next(s.prefix, type, const [], DateTime.now(), startNum: s.startNum);
 
   static String _dateStr() {
     const m = ['Janvier','Février','Mars','Avril','Mai','Juin',
@@ -197,7 +197,10 @@ class PdfGenerator {
           child: pw.Row(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
             pw.SizedBox(width: 28, child: pw.Text(l.ref, style: _ts(8.5, color: _grey2))),
             pw.SizedBox(width: 8),
-            pw.Expanded(child: pw.Text(l.designation, style: _ts(8.5))),
+            // Même clamp que l'aperçu (`document_preview.dart`) et que le
+            // modèle de hauteur (`DocumentPagination.rowsFor`) : 6 lignes au
+            // plus, sinon le tableau déborderait silencieusement la page.
+            pw.Expanded(child: pw.Text(l.designation, maxLines: 6, overflow: pw.TextOverflow.clip, style: _ts(8.5))),
             pw.SizedBox(width: 30, child: pw.Text('${l.qte}', style: _ts(8.5, color: _grey2), textAlign: pw.TextAlign.right)),
             if (!isBl) ...[
               pw.SizedBox(width: 8),
@@ -360,7 +363,7 @@ class PdfGenerator {
         if (client.isEmpty && clientAddr.isEmpty) '—',
       ],
       objet: objet,
-      montantWords: 'Arrêté la présente facture à la somme de : ${NumberToWords.convert(montant)} FRANCS CFA.',
+      montantWords: NumberToWords.montantEnLettres(montant),
       conditions: conditions,
       warranty: settings.warranty,
       footerLine: settings.footerLine,
@@ -418,8 +421,7 @@ class PdfGenerator {
                 if (isLast && montant > 0 && type != 'bl') ...[
                   pw.SizedBox(height: 10),
                   pw.Text(
-                    'Arrêté la présente facture à la somme de : '
-                    '${NumberToWords.convert(montant)} FRANCS CFA.',
+                    NumberToWords.montantEnLettres(montant),
                     style: _ts(8.5),
                   ),
                 ],
