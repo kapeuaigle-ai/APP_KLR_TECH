@@ -82,7 +82,8 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
   // en sont dérivés à la validation (voir DocNumero).
   String _numeroFor(AppState state) =>
       _committedNumero ??
-      DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], DateTime.now());
+      DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], DateTime.now(),
+          startNum: state.settings.startNum);
 
   // Fige numéro + date + id pour la session (sans encore enregistrer), pour que
   // le PDF et l'enregistrement portent le même numéro.
@@ -91,8 +92,9 @@ class _DocumentCreateScreenState extends State<DocumentCreateScreen> {
     final now = DateTime.now();
     _docId = state.nextId();
     _committedDate = Fmt.jour(now);
-    _committedNumero =
-        DocNumero.next(state.settings.prefix, _type, state.documents['proforma'] ?? [], now);
+    _committedNumero = DocNumero.next(
+        state.settings.prefix, _type, state.documents['proforma'] ?? [], now,
+        startNum: state.settings.startNum);
   }
 
   // Enregistre (ou met à jour) la proforma dans l'app avec le contenu courant.

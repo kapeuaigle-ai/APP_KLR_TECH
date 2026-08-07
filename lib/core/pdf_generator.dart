@@ -58,7 +58,7 @@ class PdfGenerator {
   // ce type (`PREFIX-{L}01-JJMMAAAA`). En pratique les écrans passent toujours
   // le vrai numéro ; ce repli garde juste un format cohérent.
   static String _numero(AppSettings s, String type) =>
-      DocNumero.next(s.prefix, type, const [], DateTime.now());
+      DocNumero.next(s.prefix, type, const [], DateTime.now(), startNum: s.startNum);
 
   static String _dateStr() {
     const m = ['Janvier','Février','Mars','Avril','Mai','Juin',

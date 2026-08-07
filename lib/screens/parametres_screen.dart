@@ -476,7 +476,11 @@ class _DonneesTab extends StatelessWidget {
 class _SettingField extends StatelessWidget {
   final String label;
   final TextEditingController ctrl;
-  const _SettingField({required this.label, required this.ctrl});
+  /// Précision affichée sous le champ — sert notamment à dire ce que fait
+  /// vraiment « Numéro de départ » (défaut F5, Lot F : sans elle, rien ne
+  /// distingue un plancher journalier d'un compteur qui ne repart jamais).
+  final String? hint;
+  const _SettingField({required this.label, required this.ctrl, this.hint});
 
   @override
   Widget build(BuildContext context) {
@@ -495,6 +499,10 @@ class _SettingField extends StatelessWidget {
           isDense: true,
         ),
       ),
+      if (hint != null) ...[
+        const SizedBox(height: 4),
+        Text(hint!, style: GoogleFonts.dmSans(fontSize: 11, color: AppColors.text3)),
+      ],
     ]);
   }
 }
@@ -550,7 +558,8 @@ class _FacturationTabState extends State<_FacturationTab> {
         LayoutBuilder(builder: (context, constraints) {
           final fields = [
             _SettingField(label: 'PRÉFIXE DOCUMENTS', ctrl: _prefix),
-            _SettingField(label: 'NUMÉRO DE DÉPART', ctrl: _startNum),
+            _SettingField(label: 'NUMÉRO DE DÉPART', ctrl: _startNum,
+                hint: 'Numéro du premier document de chaque jour.'),
             Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('EXEMPLE DE NUMÉROTATION', style: AppTheme.label),
               const SizedBox(height: 6),
@@ -558,7 +567,18 @@ class _FacturationTabState extends State<_FacturationTab> {
                 height: 38, padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(color: AppColors.bg, borderRadius: BorderRadius.circular(8), border: Border.all(color: AppColors.border)),
                 alignment: Alignment.centerLeft,
-                child: Text('${_prefix.text}-${_startNum.text}-010126', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary)),
+                // `AnimatedBuilder` sur les deux contrôleurs : sans lui, rien
+                // ne déclenche de reconstruction pendant la frappe et l'exemple
+                // reste figé sur sa valeur d'ouverture (défaut F6, Lot F).
+                child: AnimatedBuilder(
+                  animation: Listenable.merge([_prefix, _startNum]),
+                  builder: (context, _) {
+                    final depart = int.tryParse(_startNum.text.trim());
+                    final n = (depart == null || depart < 1) ? 1 : depart;
+                    return Text('${_prefix.text}-P${n.toString().padLeft(2, '0')}-010126',
+                        style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.primary));
+                  },
+                ),
               ),
             ]),
           ];

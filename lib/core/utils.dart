@@ -11,12 +11,24 @@ class DocNumero {
 
   /// Numéro d'un nouveau document. [sameType] = les documents DÉJÀ existants du
   /// MÊME type (l'appelant passe `documents[type]`) : NN = ceux du jour + 1, ce
-  /// qui donne le reset quotidien automatique (aucun doc du jour → repart à 01).
-  static String next(String prefix, String type, List<DocumentItem> sameType, DateTime now) {
+  /// qui donne le reset quotidien automatique (aucun doc du jour → repart à
+  /// `startNum`).
+  ///
+  /// [startNum] est le numéro du PREMIER document du jour (défaut 1) — c'est
+  /// la seule lecture de « numéro de départ » qui tient à côté d'un compteur
+  /// remis à zéro chaque jour : un compteur qui ne repart jamais de zéro,
+  /// lui, ne se « démarre » qu'une fois dans la vie de l'app, ce qu'aucune
+  /// donnée persistée ne distingue d'un jour ordinaire (défaut F5, Lot F).
+  /// Une valeur absente ou invalide retombe sur 1, jamais sur 0 : le premier
+  /// document ne peut pas porter le numéro « 00 ».
+  static String next(String prefix, String type, List<DocumentItem> sameType, DateTime now,
+      {String startNum = '1'}) {
     final dd = now.day.toString().padLeft(2, '0');
     final mm = now.month.toString().padLeft(2, '0');
     final today = '$dd/$mm/${now.year}';
-    final count = sameType.where((d) => d.date == today).length + 1;
+    final depart = int.tryParse(startNum.trim());
+    final floor = (depart == null || depart < 1) ? 1 : depart;
+    final count = sameType.where((d) => d.date == today).length + floor;
     final letter = _letters[type] ?? '';
     return '$prefix-$letter${count.toString().padLeft(2, '0')}-$dd$mm${now.year}';
   }

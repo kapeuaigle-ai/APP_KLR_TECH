@@ -284,7 +284,15 @@ class _DocActions {
               const Divider(height: 1, color: AppColors.border),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                // `Wrap` plutôt que `Row` (défaut F8, Lot F) : Modifier /
+                // Imprimer / Télécharger PDF réunis débordaient de ~71 px à
+                // 360 px de large. Sur bureau, où les trois tiennent sur une
+                // ligne, le rendu ne change pas — `Wrap` ne passe à la ligne
+                // que si nécessaire.
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 4, runSpacing: 4,
+                  children: [
                   // Seule la proforma se modifie : facture et BL en sont dérivés
                   // automatiquement à la validation.
                   //
@@ -433,41 +441,42 @@ class _DocActions {
                     style: GoogleFonts.dmSans(fontSize: 11.5, color: AppColors.text3, height: 1.4),
                   ),
                 ),
-                Row(children: [
+                // `Wrap` (et non `Row`) pour la même raison que la rangée
+                // d'actions de `showFullDocument` plus bas dans ce fichier
+                // (défaut F8, Lot F) : trois pilules non bornées débordent à
+                // 360 px, la largeur de ce dialogue sur téléphone.
+                Wrap(spacing: 8, runSpacing: 8, children: [
                   for (final s in [('cours', 'En cours', AppColors.orange), ('validee', 'Validée', AppColors.green), ('annulee', 'Annulée', AppColors.text2)])
-                    Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          final appState = context.read<AppState>();
-                          if (s.$1 == 'validee') {
-                            final generated = appState.validateProforma(doc.id);
-                            if (generated) {
-                              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                                content: Text('Facture et Bon de livraison ${doc.numero} générés.',
-                                    style: const TextStyle(fontSize: 13)),
-                                backgroundColor: AppColors.green,
-                                behavior: SnackBarBehavior.floating,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                margin: const EdgeInsets.all(16),
-                              ));
-                            }
-                          } else {
-                            appState.setDocumentStatus(type, doc.id, s.$1);
+                    GestureDetector(
+                      onTap: () {
+                        final appState = context.read<AppState>();
+                        if (s.$1 == 'validee') {
+                          final generated = appState.validateProforma(doc.id);
+                          if (generated) {
+                            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                              content: Text('Facture et Bon de livraison ${doc.numero} générés.',
+                                  style: const TextStyle(fontSize: 13)),
+                              backgroundColor: AppColors.green,
+                              behavior: SnackBarBehavior.floating,
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                              margin: const EdgeInsets.all(16),
+                            ));
                           }
-                          Navigator.of(ctx).pop();
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: doc.statut == s.$1 ? s.$3.withValues(alpha: 0.12) : AppColors.bg,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
-                          ),
-                          child: Text(s.$2, style: GoogleFonts.dmSans(
-                            fontSize: 12, fontWeight: FontWeight.w600,
-                            color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
+                        } else {
+                          appState.setDocumentStatus(type, doc.id, s.$1);
+                        }
+                        Navigator.of(ctx).pop();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: doc.statut == s.$1 ? s.$3.withValues(alpha: 0.12) : AppColors.bg,
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: doc.statut == s.$1 ? s.$3 : AppColors.border),
                         ),
+                        child: Text(s.$2, style: GoogleFonts.dmSans(
+                          fontSize: 12, fontWeight: FontWeight.w600,
+                          color: doc.statut == s.$1 ? s.$3 : AppColors.text2)),
                       ),
                     ),
                 ]),

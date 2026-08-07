@@ -353,6 +353,26 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
+    testWidgets('Suivi / Dîme : cartes sur téléphone, tableau sur bureau (défaut F7, Lot F)',
+        (tester) async {
+      await pumpApp(tester, size: phone, screen: NavScreen.suivi);
+      await tester.tap(find.text('Dîme'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HScrollTable), findsNothing,
+          reason: 'le tableau de 880 px forçait un défilement horizontal jusqu\'à « Marquer versée »');
+      expect(find.byType(ListCard), findsWidgets);
+      expect(find.byTooltip('Marquer versée'), findsWidgets);
+      expect(tester.takeException(), isNull);
+
+      await pumpApp(tester, size: desktop, screen: NavScreen.suivi);
+      await tester.tap(find.text('Dîme'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(HScrollTable), findsOneWidget);
+      expect(find.byType(ListCard), findsNothing);
+    });
+
     testWidgets('Gantt garde son défilement horizontal', (tester) async {
       // Décision produit : une frise chronologique se lit en défilant, elle
       // ne se découpe pas en cartes. Le Gantt est désormais alimenté par les
