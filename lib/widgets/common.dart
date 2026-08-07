@@ -276,17 +276,30 @@ class PrimaryBtn extends StatelessWidget {
 // ── Secondary Button ──────────────────────────────────────
 class SecondaryBtn extends StatelessWidget {
   final String label;
-  final VoidCallback onTap;
+  // Nullable comme `PrimaryBtn.onTap` : un `SecondaryBtn` doit pouvoir se
+  // désactiver (grisé, réellement inerte) exactement de la même façon quand
+  // son geste ne peut rien changer dans l'état courant — voir
+  // `signature_pad.dart` (« Effacer » sans trait dessiné, défaut G3, Lot G).
+  final VoidCallback? onTap;
   final IconData? icon;
   const SecondaryBtn({super.key, required this.label, required this.onTap, this.icon});
 
   @override
   Widget build(BuildContext context) {
+    // Icône et texte fixent leur propre couleur (nécessaire pour rester
+    // lisibles sur ce fond clair), ce qui les soustrait au grisé automatique
+    // que `OutlinedButton` applique d'ordinaire à son enfant quand
+    // `onPressed` est nul. Sans ce calcul explicite, un `SecondaryBtn`
+    // désactivé resterait interactif ET aurait l'air actif — précisément le
+    // défaut visé (défaut G2/G3, Lot G) : un contrôle qui a l'air de
+    // marcher mais ne fait rien.
+    final disabled = onTap == null;
+    final fg = disabled ? AppColors.text3 : AppColors.text2;
     return OutlinedButton(
       onPressed: onTap,
       style: OutlinedButton.styleFrom(
         foregroundColor: AppColors.text1,
-        side: const BorderSide(color: AppColors.border),
+        side: BorderSide(color: disabled ? AppColors.bg : AppColors.border),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
         elevation: 0,
@@ -294,8 +307,8 @@ class SecondaryBtn extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (icon != null) ...[Icon(icon, size: 14, color: AppColors.text2), const SizedBox(width: 6)],
-          Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.text2)),
+          if (icon != null) ...[Icon(icon, size: 14, color: fg), const SizedBox(width: 6)],
+          Text(label, style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w500, color: fg)),
         ],
       ),
     );
