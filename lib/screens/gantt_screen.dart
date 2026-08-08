@@ -153,10 +153,20 @@ class _GanttRow extends StatelessWidget {
 
     return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
       SizedBox(width: 220, child: Row(children: [
-        Expanded(child: Text(projet.nom,
-            style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600,
-                color: avancement.enRetardLivraison ? AppColors.red : AppColors.text1),
-            overflow: TextOverflow.ellipsis)),
+        // La colonne fait 220 px : un nom un peu long est forcément coupé
+        // (`ellipsis`). Le survol le redonne en entier, avec le client — sans
+        // quoi deux projets d'un même client, dont seule la fin du nom
+        // diffère, restent indiscernables dans cette colonne.
+        Expanded(child: Tooltip(
+          message: projet.client.isEmpty
+              ? projet.nom
+              : '${projet.nom}\n${projet.client}',
+          waitDuration: const Duration(milliseconds: 300),
+          child: Text(projet.nom,
+              style: GoogleFonts.dmSans(fontSize: 12.5, fontWeight: FontWeight.w600,
+                  color: avancement.enRetardLivraison ? AppColors.red : AppColors.text1),
+              overflow: TextOverflow.ellipsis),
+        )),
         if (avancement.enRetardPaiement) ...[
           const SizedBox(width: 6),
           Tooltip(

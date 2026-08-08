@@ -9,6 +9,19 @@ import 'persistence.dart';
 import 'migration.dart';
 import 'avancement.dart';
 
+/// Issue d'une demande de suppression de document (voir
+/// `AppState.supprimerDocument`). L'UI a besoin de savoir POURQUOI un refus,
+/// pas seulement qu'il a eu lieu : les deux motifs ci-dessous se réparent de
+/// la même façon (dévalider la proforma), encore faut-il le dire.
+enum SuppressionDocument {
+  ok,
+  introuvable,
+  /// La proforma visée est validée : facture, BL et créance en dépendent.
+  proformaValidee,
+  /// La facture ou le BL visé a été généré par une proforma encore validée.
+  genereParProforma,
+}
+
 class AppState extends ChangeNotifier {
   NavScreen _screen = NavScreen.dashboard;
   String _docType = 'proforma';
@@ -979,6 +992,60 @@ class AppState extends ChangeNotifier {
           '${doc.client} — ${Fmt.money(doc.montant)}', AppColors.primary);
     }
     _emit();
+  }
+
+  /// Supprime définitivement un document de sa liste.
+  ///
+  /// Refusé pour tout document qu'une validation encore en vigueur relie à
+  /// d'autres : une proforma 'validee' (sa facture, son BL et sa créance en
+  /// dépendent), et symétriquement la facture ou le BL générés par une telle
+  /// proforma — les effacer isolément laisserait la proforma affirmer qu'ils
+  /// existent, et la créance sans pièce justificative. `devaliderProforma`
+  /// est la seule voie qui défait l'ensemble proprement ; une fois dévalidée,
+  /// la proforma se supprime comme n'importe quel brouillon.
+  ///
+  /// La confirmation qui doit précéder cet appel est la responsabilité de
+  /// l'appelant, pas de `AppState` — même partage que `deleteEngagement`.
+  SuppressionDocument supprimerDocument(String type, int id) {
+    final liste = documents[type];
+    if (liste == null) return SuppressionDocument.introuvable;
+    final m = liste.where((d) => d.id == id);
+    if (m.isEmpty) return SuppressionDocument.introuvable;
+    final doc = m.first;
+
+    if (type == 'proforma') {
+      if (doc.statut == 'validee') return SuppressionDocument.proformaValidee;
+    } else if (_proformaSourceDe(type, doc) != null) {
+      return SuppressionDocument.genereParProforma;
+    }
+
+    liste.removeWhere((d) => d.id == id);
+    const labels = {'proforma': 'Proforma', 'facture': 'Facture', 'bl': 'Bon de livraison'};
+    _logActivity(
+      'document',
+      // Formulation neutre : « supprimé » s'accorderait mal avec « Facture »
+      // et « Proforma » si le type entrait dans le titre.
+      'Document supprimé — ${doc.numero}',
+      '${labels[type] ?? type} · ${doc.client}'
+      '${doc.montant > 0 ? ' — ${Fmt.money(doc.montant)}' : ''}',
+      AppColors.red,
+    );
+    _emit();
+    return SuppressionDocument.ok;
+  }
+
+  /// La proforma VALIDÉE dont [doc] (une facture ou un BL) est issu, `null`
+  /// sinon. Même appariement que `_docsGeneres`, pris dans l'autre sens :
+  /// numéro décliné P→F/B, ou numéro identique pour les proformas validées
+  /// avant la refonte de la numérotation.
+  DocumentItem? _proformaSourceDe(String type, DocumentItem doc) {
+    for (final p in documents['proforma']!) {
+      if (p.statut != 'validee') continue;
+      if (DocNumero.retype(p.numero, type) == doc.numero || p.numero == doc.numero) {
+        return p;
+      }
+    }
+    return null;
   }
 
   /// Change le statut d'un document brut — utilisé par les boutons rapides

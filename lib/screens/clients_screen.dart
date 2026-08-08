@@ -22,12 +22,24 @@ class _ClientsScreenState extends State<ClientsScreen> {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final clients = state.clients;
+    // Chiffre d'affaires dérivé — voir `AppState.chiffreAffairesClient`.
+    // Calculé une seule fois par client ici : il sert au tri ET à chaque
+    // ligne du tableau, qui le recalculait auparavant pour son propre compte.
+    final ca = {for (final c in clients) c.id: state.chiffreAffairesClient(c.id)};
     final filtered = clients.where((c) =>
       _search.isEmpty ||
       c.name.toLowerCase().contains(_search.toLowerCase()) ||
       c.contact.toLowerCase().contains(_search.toLowerCase()) ||
       c.email.toLowerCase().contains(_search.toLowerCase())
-    ).toList();
+    ).toList()
+      // Les plus gros clients en tête : c'est l'ordre qu'on cherche des yeux
+      // dans un portefeuille. À CA égal — notamment tous ceux à 0, qui
+      // n'ont encore rien réglé — le nom départage, pour que la liste reste
+      // stable d'un affichage à l'autre.
+      ..sort((a, b) {
+        final parCa = (ca[b.id] ?? 0).compareTo(ca[a.id] ?? 0);
+        return parCa != 0 ? parCa : a.name.toLowerCase().compareTo(b.name.toLowerCase());
+      });
 
     return SingleChildScrollView(
       padding: pagePadding(context),
@@ -63,7 +75,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
               if (filtered.isEmpty)
                 const CardBox(padding: EdgeInsets.zero, child: EmptyHint('Aucun client trouvé'))
               else
-                ...filtered.map((c) => _ClientCard(client: c, ca: state.chiffreAffairesClient(c.id)))
+                ...filtered.map((c) => _ClientCard(client: c, ca: ca[c.id] ?? 0))
             else
               CardBox(
                 padding: EdgeInsets.zero,
@@ -85,7 +97,7 @@ class _ClientsScreenState extends State<ClientsScreen> {
                       const Divider(height: 1, color: AppColors.border),
                       ...filtered.asMap().entries.map((e) => _ClientRow(
                         client: e.value,
-                        ca: state.chiffreAffairesClient(e.value.id),
+                        ca: ca[e.value.id] ?? 0,
                         isLast: e.key == filtered.length - 1,
                       )),
                     ]),

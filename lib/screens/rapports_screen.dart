@@ -243,11 +243,17 @@ class _FinancierTab extends StatelessWidget {
             Text('${rapport.mouvements.length}',
                 style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.text3)),
           ]),
-          const SizedBox(height: 4),
-          Text('Créances en cours (restant dû) : ${Fmt.money(rapport.creancesEnCours)}',
-              style: GoogleFonts.dmSans(fontSize: 12.5, color: AppColors.text3)),
           const SizedBox(height: 12),
-          for (final m in rapport.mouvements.take(20))
+          // Tous les mouvements, sans plafond : cette page sert à présenter
+          // l'activité de l'entreprise sur une période — à un investisseur,
+          // ou comme appui de négociation. Une liste tronquée à 20 lignes
+          // renvoyant au PDF cassait précisément cet usage.
+          //
+          // La ligne « Créances en cours » qui figurait ici a été retirée :
+          // c'est une situation à date (de l'argent PAS encore reçu), pas un
+          // mouvement de la période — elle contredisait le titre de la carte.
+          // Le PDF la garde, mais dans sa propre section « Situation à date ».
+          for (final m in rapport.mouvements)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: Row(children: [
@@ -265,12 +271,6 @@ class _FinancierTab extends StatelessWidget {
                     style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w700,
                         color: m.entree ? AppColors.green : AppColors.red)),
               ]),
-            ),
-          if (rapport.mouvements.length > 20)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('… et ${rapport.mouvements.length - 20} autres — tous figurent dans le PDF.',
-                  style: GoogleFonts.dmSans(fontSize: 12, color: AppColors.text3)),
             ),
         ])),
       ],

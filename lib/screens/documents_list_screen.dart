@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../core/theme.dart';
 import '../core/models.dart';
 import '../core/app_state.dart';
+import '../core/comptabilite.dart';
 import '../core/pdf_generator.dart';
 import '../core/utils.dart';
 import '../widgets/common.dart';
@@ -38,6 +39,22 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
       final matchFilter = _filter == 'tous' || d.statut == _filter;
       return matchSearch && matchFilter;
     }).toList();
+
+    // Le plus récent en tête. Sans ce tri, la liste suivait l'ordre
+    // d'insertion dans `AppState.documents` : un document créé à l'instant
+    // atterrissait tout en bas, là où on le cherche le moins.
+    //
+    // `date` (jj/mm/aaaa) est la date de CRÉATION, pas celle imprimée sur le
+    // document (`dateAffichee`, librement saisie) : c'est bien l'ordre
+    // d'arrivée qu'on veut. À date égale, l'id tranche — il est strictement
+    // croissant (`AppState.nextId`), donc fidèle à l'ordre de création dans
+    // la journée ; il sert aussi de repli si une date est illisible.
+    filtered.sort((a, b) {
+      final da = Comptabilite.parseJour(a.date);
+      final db = Comptabilite.parseJour(b.date);
+      if (da != null && db != null && da != db) return db.compareTo(da);
+      return b.id.compareTo(a.id);
+    });
 
     // Compteurs par statut, affichés directement dans les filtres.
     // Un compteur à 0 n'est pas montré (inutile d'encombrer).
@@ -375,6 +392,76 @@ class _DocActions {
     }
   }
 
+  // ── Suppression ────────────────────────────────────────
+  //
+  // [context] doit être celui de l'ÉCRAN, jamais celui d'une boîte de
+  // dialogue qu'on vient de fermer — même schéma que `showFullDocument` et
+  // que la dévalidation plus bas dans ce fichier.
+  void confirmerSuppression(BuildContext context) {
+    const typeLabels = _typeLabels;
+    showDialog<void>(
+      context: context,
+      builder: (dctx) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        title: Text('Supprimer ce document ?', style: GoogleFonts.dmSans(
+            fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.text1)),
+        content: Text(
+          '« ${doc.numero} » — ${typeLabels[type] ?? type} de ${doc.client} — '
+          'sera définitivement retiré de la liste. Cette action est irréversible.',
+          style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2, height: 1.4),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dctx).pop(),
+            child: Text('Annuler', style: GoogleFonts.dmSans(fontSize: 13, color: AppColors.text2)),
+          ),
+          TextButton(
+            onPressed: () {
+              final res = context.read<AppState>().supprimerDocument(type, doc.id);
+              Navigator.of(dctx).pop();
+              if (!context.mounted) return;
+              _resultatSuppression(context, res);
+            },
+            child: Text('Supprimer', style: GoogleFonts.dmSans(
+                fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.red)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Traduit le verdict de `AppState.supprimerDocument` en message.
+  ///
+  /// Les deux refus possibles se réparent de la même façon — dévalider la
+  /// proforma — mais depuis deux endroits différents : sa propre fiche pour
+  /// une proforma, la fiche de la proforma SOURCE pour une facture ou un BL.
+  /// Le message nomme donc explicitement le document à ouvrir.
+  void _resultatSuppression(BuildContext context, SuppressionDocument res) {
+    final (message, couleur) = switch (res) {
+      SuppressionDocument.ok => ('Document ${doc.numero} supprimé.', AppColors.green),
+      SuppressionDocument.introuvable => (
+        'Ce document n\'existe plus.', AppColors.text2),
+      SuppressionDocument.proformaValidee => (
+        'Proforma validée : sa facture, son bon de livraison et sa créance en '
+        'dépendent. Ouvrez sa fiche, utilisez « Dévalider », puis supprimez-la.',
+        AppColors.orange),
+      SuppressionDocument.genereParProforma => (
+        'Ce document a été généré par la validation de la proforma '
+        '${DocNumero.retype(doc.numero, 'proforma')}. Dévalidez-la : sa facture, '
+        'son bon de livraison et sa créance seront retirés ensemble.',
+        AppColors.orange),
+    };
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+      content: Text(message, style: const TextStyle(fontSize: 13)),
+      backgroundColor: couleur,
+      duration: Duration(seconds: res == SuppressionDocument.ok ? 3 : 6),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      margin: const EdgeInsets.all(16),
+    ));
+  }
+
   void _pdfError(BuildContext context, Object e) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text('Erreur PDF : $e', style: const TextStyle(fontSize: 13)),
@@ -485,6 +572,14 @@ class _DocActions {
           ]),
         ),
         actions: [
+          // Seul point d'entrée de la suppression, au doigt comme à la souris :
+          // la liste n'en porte pas, sa rangée d'actions n'ouvre que cette
+          // fiche.
+          TextButton.icon(
+            onPressed: () { Navigator.of(ctx).pop(); confirmerSuppression(context); },
+            icon: const Icon(Icons.delete_outline, size: 16, color: AppColors.red),
+            label: Text('Supprimer', style: GoogleFonts.dmSans(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.red)),
+          ),
           TextButton.icon(
             onPressed: () { Navigator.of(ctx).pop(); showFullDocument(context); },
             icon: const Icon(Icons.description_outlined, size: 16, color: AppColors.primary),
@@ -698,6 +793,9 @@ class _DocRowState extends State<_DocRow> {
               padding: const EdgeInsets.symmetric(horizontal: 20),
               child: StatusBadge(status: doc.statut),
             )),
+          // Une seule icône : la suppression vit dans la fiche détail qu'elle
+          // ouvre (voir `showDetails`), où elle est déjà accessible en un clic
+          // de plus — inutile de la dupliquer ici.
           SizedBox(width: 60, child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
             IconButton(
               tooltip: 'Voir le document',

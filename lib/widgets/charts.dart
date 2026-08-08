@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../core/theme.dart';
@@ -66,8 +67,21 @@ class _DonutPainter extends CustomPainter {
     }
   }
 
+  // Même correctif que `_BarLinePainter.shouldRepaint` : les segments changent
+  // avec la période choisie, et `false` en dur figeait le donut sur la
+  // première répartition dessinée. `DonutSegment` n'a pas d'`==`, on compare
+  // donc champ par champ (le libellé n'est pas peint, il ne compte pas).
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _DonutPainter old) {
+    if (old.segments.length != segments.length) return true;
+    for (var i = 0; i < segments.length; i++) {
+      if (old.segments[i].pct != segments[i].pct ||
+          old.segments[i].color != segments[i].color) {
+        return true;
+      }
+    }
+    return false;
+  }
 }
 
 // ── Line / Area Chart (interactif : survol + infobulle) ───
@@ -245,14 +259,26 @@ class _BarLinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final W = size.width, H = size.height - 20, pad = 10.0;
-    final maxV = bars.reduce(max) * 1.1;
+    if (bars.isEmpty) return;
+    // Bande du bas réservée aux libellés de mois.
+    const axeH = 20.0;
+    final W = size.width, H = size.height - axeH, pad = 10.0;
+    // Une période sans aucun encaissement donnerait `maxV == 0`, donc des
+    // divisions par zéro et un tracé en NaN (rien à l'écran, sans erreur).
+    final maxBar = bars.reduce(max);
+    final maxV = maxBar > 0 ? maxBar * 1.1 : 1.0;
     final n = bars.length;
     final bw = (W - pad * 2) / n;
-    final barW = bw * 0.35;
+    // Largeur plafonnée. Sans ce plafond, un seul mois affiché (le cas normal
+    // de la période « Ce mois ») donnait une barre de 35 % de la carte : un
+    // gros carré gris qui ne se lisait plus comme un histogramme.
+    final barW = min(bw * 0.35, 28.0);
+    final baseline = H - 4;
 
     double bx(int i) => pad + i * bw + bw / 2;
-    double py(double v) => H - (v / maxV) * (H - 16) - 4;
+    // Bornée à la zone de tracé : le bénéfice peut être négatif, et la ligne
+    // sortirait alors de la carte par le bas.
+    double py(double v) => (H - (v / maxV) * (H - 16) - 4).clamp(0.0, baseline);
 
     // Grid lines
     for (final f in [0.25, 0.5, 0.75, 1.0]) {
@@ -263,14 +289,27 @@ class _BarLinePainter extends CustomPainter {
 
     // Bars
     for (var i = 0; i < bars.length; i++) {
-      final rect = Rect.fromLTWH(bx(i) - barW / 2, py(bars[i]), barW, H - py(bars[i]) - 4);
+      final top = py(bars[i]);
+      final rect = Rect.fromLTWH(bx(i) - barW / 2, top, barW, max(baseline - top, 0.0));
       canvas.drawRRect(
         RRect.fromRectAndRadius(rect, const Radius.circular(3)),
         Paint()..color = AppColors.slate.withValues(alpha: 0.75),
       );
     }
 
+    // Libellés de mois. `labels` était reçu mais jamais dessiné : avec une
+    // seule barre, plus rien n'indiquait de quel mois le graphique parlait.
+    for (var i = 0; i < n && i < labels.length; i++) {
+      final tp = TextPainter(
+        text: TextSpan(text: labels[i], style: GoogleFonts.dmSans(
+            fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.text3)),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      tp.paint(canvas, Offset(bx(i) - tp.width / 2, H + 5));
+    }
+
     // Net line
+    if (line.isEmpty) return;
     final linePts = [for (var i = 0; i < line.length; i++) Offset(bx(i), py(line[i]))];
     final linePath = Path();
     linePath.moveTo(linePts[0].dx, linePts[0].dy);
@@ -290,6 +329,13 @@ class _BarLinePainter extends CustomPainter {
     }
   }
 
+  // `false` en dur ne tenait pas : le painter est recréé à chaque build, mais
+  // avec le même `runtimeType`, `RenderCustomPaint` s'en remet uniquement à
+  // cette réponse — changer de période reconstruisait donc le widget en
+  // laissant le graphique sur les chiffres de la période précédente.
   @override
-  bool shouldRepaint(covariant CustomPainter old) => false;
+  bool shouldRepaint(covariant _BarLinePainter old) =>
+      !listEquals(old.bars, bars) ||
+      !listEquals(old.line, line) ||
+      !listEquals(old.labels, labels);
 }
